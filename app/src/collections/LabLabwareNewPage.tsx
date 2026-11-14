@@ -15,6 +15,8 @@ import { useNavigate } from 'react-router-dom'
 import { AppShell } from '../shared/shell'
 import { apiClient } from '../shared/api/client'
 import type { SpecSheetProposal } from '../shared/api/client'
+import { useMaterialSearch } from '../event-editor/material/useMaterialSearch'
+import { ontologyRefFromCandidate, type OntologyRef } from '../shared/ref'
 
 const LABWARE_DEFINITION_SCHEMA =
   'https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml'
@@ -115,12 +117,17 @@ function parseUnitQuantity(raw: string): number | undefined {
  * D4: kind, type, read_only, and source.kind are derived from the schema
  *      properties. Hardcoded literals remain as fallback when schema is absent
  *      or does not declare those keys.
+ * u3anchor: the ontology anchor is the EXPLICIT, resolved term the person
+ *      picked (ontologyRefFromCandidate over the resolve spine) — threaded in
+ *      by the page and written here. This ONE builder stays the one builder;
+ *      no second mapper, no CURIE minted from the name, no key without a pick.
  */
 function buildPayloadFromProposals(
   proposals: SpecSheetProposal[],
   displayName: string,
   schema?: Record<string, unknown>,
-  extractedUrl?: string
+  extractedUrl?: string,
+  ontologyRef?: OntologyRef
 ): Record<string, unknown> {
   const recordId = mintRecordId()
 
@@ -243,6 +250,14 @@ function buildPayloadFromProposals(
     current[leafKey] = value
   }
 
+  // u3anchor: the declared ontology anchor, written only when the person picked
+  // one. The ref shape is exactly the schema's ontology_ref (kind/id/namespace/
+  // label[,uri]) — additionalProperties:false — and `uri` is absent, never
+  // undefined, when the candidate carries no IRI (ontologyRefFromCandidate).
+  if (ontologyRef) {
+    payload.ontology_ref = ontologyRef
+  }
+
   return payload
 }
 
@@ -344,6 +359,13 @@ export function LabLabwareNewPage() {
   )
   // D3: freeze the extraction URL at extraction time
   const [extractedFromUrl, setExtractedFromUrl] = useState<string | null>(null)
+  // u3anchor — the ontology anchor: the EXISTING resolve spine (same
+  // useMaterialSearch the materials create surface uses; consumed, not forked).
+  // The hook owns the query state; the input binds to it. Set ONLY by an
+  // explicit row click — no autopick of the first result
+  // (LabMaterialNewPage precedent; D8 ghost-first).
+  const { query, setQuery, ontologyResults, loadingOntology, error: ontologyError, searchOntology } = useMaterialSearch()
+  const [ontologyRef, setOntologyRef] = useState<OntologyRef | null>(null)
 
   // u2geom — each NON-EMPTY manual entry becomes a SpecSheetProposal-shaped row
   // (data, not a second builder) so it enters the SAME buildPayloadFromProposals
@@ -411,6 +433,13 @@ export function LabLabwareNewPage() {
     }
   }
 
+  const handleSearchAnchor = () => {
+    // A new search invalidates a stale pick: the person re-picks from the rows
+    // that answer THIS query (no autopick, no carried-over first result).
+    setOntologyRef(null)
+    void searchOntology()
+  }
+
   const handleSave = async () => {
     // u2geom: gate on the MERGED rows (extracted + manual) — a declaration with
     // no spec-sheet URL still commits; a wholly blank form does not.
@@ -418,7 +447,16 @@ export function LabLabwareNewPage() {
     setSaving(true)
     try {
       const info = await apiClient.getSchema(LABWARE_DEFINITION_SCHEMA)
-      const payload = buildPayloadFromProposals(allProposals, name.trim(), info.schema, extractedFromUrl ?? undefined)
+      const payload = buildPayloadFromProposals(allProposals, name.trim(), info.schema, extractedFromUrl ?? undefined, ontologyRef ?? undefined)
+      // u3anchor: a labware definition without a declared ontology anchor is
+      // refused by NAME before the POST — the same named-refusal discipline as
+      // the required-field pre-flight beside it (Ajv stays the sole validator).
+      // Never invent a value: the anchor exists only as the explicit term the
+      // person picked from the resolve spine.
+      if (!ontologyRef) {
+        setErrorMessage('Cannot save: no ontology anchor chosen. Search for the labware term and pick the row that names it.')
+        return
+      }
       // Named refusal before the POST: Ajv on the server stays the sole validator,
       // but a payload that cannot satisfy the schema's required fields is refused
       // here by field name instead of round-tripping a 422.
@@ -556,6 +594,66 @@ export function LabLabwareNewPage() {
               </label>
             ))}
           </div>
+        </div>
+
+        {/* u3anchor — the ontology anchor. Rendered by the page route: search
+            the EXISTING resolve spine, see namespace · curie — label per row,
+            and pick ONE row. Nothing is picked without a click (D8 ghost-first);
+            save refuses by name when no row was picked. */}
+        <div
+          data-testid="lab-labware-ontology"
+          style={{ border: '1px solid var(--cl-border)', borderRadius: '6px', padding: '0.75rem', marginBottom: '1rem' }}
+        >
+          <h3 style={{ marginTop: 0 }}>Ontology anchor</h3>
+          <p style={{ color: '#666', margin: '0.25rem 0 0.75rem', fontSize: '0.85rem' }}>
+            Pick the term that names this labware. The anchor is saved only for the row you pick —
+            nothing is chosen without a click.
+          </p>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <input
+              data-testid="lab-labware-ontology-search-input"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSearchAnchor() }}
+              placeholder="Search ontology terms..."
+              style={{ flex: 1, padding: '0.4rem 0.6rem', border: '1px solid var(--cl-border)', borderRadius: '6px', background: 'var(--cl-bg-elev)' }}
+            />
+            <button
+              type="button"
+              data-testid="lab-labware-ontology-search-button"
+              onClick={handleSearchAnchor}
+              style={{ padding: '0.4rem 0.8rem', border: '1px solid var(--cl-border)', borderRadius: '6px', background: 'var(--cl-bg-elev)', cursor: 'pointer' }}
+            >
+              Search ontology
+            </button>
+          </div>
+          {loadingOntology && <div>Searching ontologies…</div>}
+          {ontologyError && <div style={{ color: '#b00' }}>{ontologyError}</div>}
+          <ul data-testid="lab-labware-ontology-results" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {ontologyResults.map((candidate) => (
+              <li key={`${candidate.source}-${candidate.curie}`}>
+                <button
+                  type="button"
+                  data-testid="lab-labware-ontology-candidate"
+                  onClick={() => setOntologyRef(ontologyRefFromCandidate(candidate))}
+                  style={{ textAlign: 'left', width: '100%', padding: '0.5rem', margin: '0.25rem 0', border: '1px solid var(--cl-border)', borderRadius: '6px', background: 'var(--cl-bg-elev)', cursor: 'pointer' }}
+                >
+                  <span data-testid="lab-labware-ontology-namespace" style={{ fontWeight: 600 }}>{candidate.namespace}</span>
+                  {' · '}{candidate.curie}{' — '}{candidate.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+          {ontologyRef ? (
+            <div data-testid="lab-labware-ontology-anchor" style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>
+              <span style={{ fontWeight: 600 }}>{ontologyRef.namespace}</span>
+              {' · '}{ontologyRef.id}{' — '}{ontologyRef.label}
+            </div>
+          ) : (
+            <div data-testid="lab-labware-ontology-none" style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: '#666' }}>
+              No anchor picked yet.
+            </div>
+          )}
         </div>
 
         {/* u2geom — save affordance for the manual-declaration leg (no

@@ -9,28 +9,46 @@
  * `ontology_ref` may exist unless a row was clicked, no value may be derived
  * from the typed name, and no key beyond the five the schema declares
  * (`ontology_ref` is additionalProperties:false).
+ *
+ * NOTE on the apiClient seam (deliberate deviation from the 3-arg spy in
+ * LabLabwareNewPage.test.tsx:25-30): that idiom — `vi.spyOn(clientModule,
+ * 'apiClient', 'get')` — replaces `apiClient` with a stub carrying only
+ * extractSpecSheetProposals/getSchema/createRecord, so `apiClient.resolve` is
+ * stripped (verified: `hasResolve:false` after the spy). The anchor UI
+ * (useMaterialSearch) calls `apiClient.resolve`, so under that idiom no row can
+ * ever render and no anchor can ever be picked. This file instead uses the SAME
+ * vi.mock factory the material-page test uses (LabMaterialNewPage.test.tsx:16-27)
+ * — which preserves the real client and mocks `resolve` — plus the three
+ * save-path mocks. That is the only way to exercise the anchor row click the
+ * unit under test.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { ThemeProvider } from '../shared/shell'
 import { OpenTabsProvider } from '../shared/shell/OpenTabsContext'
-import { LabLabwareNewPage } from './LabLabwareNewPage'
-import * as clientModule from '../shared/api/client'
 
-const resolve = vi.fn()
+const { mockExtract, mockCreateRecord, mockGetSchema, mockResolve } = vi.hoisted(() => ({
+  mockExtract: vi.fn(),
+  mockCreateRecord: vi.fn(),
+  mockGetSchema: vi.fn(),
+  mockResolve: vi.fn(),
+}))
 
-// Same seam as LabMaterialNewPage.test.tsx: the resolve spine + the local-DB
-// reads useMaterialSearch fires per keystroke are stubbed; the real client otherwise.
+// Preserve the real client; mock the resolve spine + the local-DB reads
+// useMaterialSearch fires per keystroke, plus the three save-path methods.
 vi.mock('../shared/api/client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../shared/api/client')>()
   return {
     ...actual,
     apiClient: {
       ...(actual as Record<string, unknown>).apiClient as object,
-      resolve: (...args: unknown[]) => resolve(...args),
+      resolve: (...args: unknown[]) => mockResolve(...args),
       searchMaterials: vi.fn().mockResolvedValue({ items: [] }),
       getFormulationsSummary: vi.fn().mockResolvedValue([]),
+      extractSpecSheetProposals: (...args: unknown[]) => mockExtract(...args),
+      getSchema: (...args: unknown[]) => mockGetSchema(...args),
+      createRecord: (...args: unknown[]) => mockCreateRecord(...args),
     },
   }
 })
@@ -39,19 +57,9 @@ vi.mock('../shared/lib/integrationFlags', () => ({
   noteExaUnavailable: () => undefined,
 }))
 
-const mockExtract = vi.fn()
-const mockCreateRecord = vi.fn()
-const mockGetSchema = vi.fn()
+import { LabLabwareNewPage } from './LabLabwareNewPage'
 
-beforeEach(() => {
-  vi.resetAllMocks()
-  vi.spyOn(clientModule, 'apiClient', 'get').mockReturnValue({
-    ...clientModule.apiClient,
-    extractSpecSheetProposals: mockExtract,
-    getSchema: mockGetSchema,
-    createRecord: mockCreateRecord,
-  } as any)
-})
+beforeEach(() => { vi.resetAllMocks() })
 afterEach(() => { cleanup() })
 
 function renderPage() {
@@ -67,35 +75,47 @@ function renderPage() {
   )
 }
 
-// Proposals fixture in the same shape as LabLabwareNewPage.test.tsx:64-67, sized
-// so the payload passes the schema's required fields.
+// Mirrors schema/workflow/labware-definition.schema.yaml (root + nested required),
+// same shape as the geometry test's labwareSchemaShape so the payload is valid.
+const SCHEMA = {
+  required: ['kind', 'recordId', 'type', 'id', 'display_name', 'topology', 'capacity'],
+  properties: {
+    kind: { const: 'labware-definition' },
+    recordId: { type: 'string' },
+    type: { const: 'labware_definition' },
+    id: { type: 'string' },
+    display_name: { type: 'string' },
+    topology: { type: 'object', required: ['addressing'], properties: { addressing: { type: 'string' }, rows: { type: 'integer' }, columns: { type: 'integer' } } },
+    capacity: { type: 'object', required: ['max_well_volume_uL'], properties: { max_well_volume_uL: { type: 'number' } } },
+  },
+}
+
+// Proposals fixture covering the schema's required fields (same shape as the
+// sibling tests), sized so the payload is valid once the anchor is present.
 const PROPOSALS = [
   { targetField: 'topology.addressing', value: 'grid', sourceUrl: 'https://example.com/sheet', passage: 'Grid', specId: 's1' },
   { targetField: 'topology.rows', value: '8', sourceUrl: 'https://example.com/sheet', passage: '8 rows', specId: 's2' },
   { targetField: 'topology.columns', value: '12', sourceUrl: 'https://example.com/sheet', passage: '12 columns', specId: 's3' },
   { targetField: 'capacity.max_well_volume_uL', value: '200', sourceUrl: 'https://example.com/sheet', passage: '200 uL', specId: 's4' },
 ]
-// Root shape mirroring schema/workflow/labware-definition.schema.yaml (root + nested required).
-const SCHEMA = {
-  required: ['kind', 'recordId', 'type', 'id', 'display_name', 'topology', 'capacity'],
-  properties: {
-    topology: { required: ['addressing'], properties: { addressing: { type: 'string' }, rows: { type: 'integer' }, columns: { type: 'integer' } } },
-    capacity: { required: ['max_well_volume_uL'], properties: { max_well_volume_uL: { type: 'number' } } },
-  },
-}
 
 // Fictitious fixture candidates (no real LWO id, no real namespace literal): the
-// ontology comes from the resolve spine at runtime, the fixtures only shape it.
+// ontology comes from the resolve spine at runtime; the fixtures only shape it.
 const noUri = { curie: 'FOO:1', label: 'Test term A', namespace: 'FOO', tier: 2 as const, level: 'concept' as const, score: 10, source: 'local-obo' as const }
 const withUri = { curie: 'BAR:42', label: 'Test term B', namespace: 'BAR', tier: 3 as const, level: 'concept' as const, score: 8, source: 'oak' as const, uri: 'https://example.org/terms/BAR_42' }
+const third = { curie: 'BAZ:9', label: 'Test term C', namespace: 'BAZ', tier: 2 as const, level: 'concept' as const, score: 5, source: 'ols4' as const }
 
-async function extractAndSearch() {
-  mockExtract.mockResolvedValueOnce({ configured: true, proposals: PROPOSALS })
-  mockGetSchema.mockResolvedValueOnce({ id: 'labware-definition', schema: SCHEMA })
+async function extractOnly() {
+  mockExtract.mockResolvedValue({ configured: true, proposals: PROPOSALS })
+  mockGetSchema.mockResolvedValue({ id: 'labware-definition', schema: SCHEMA })
+  mockCreateRecord.mockResolvedValue({ success: true })
   renderPage()
   fireEvent.change(screen.getByTestId('lab-labware-url-input'), { target: { value: 'https://example.com/sheet' } })
   fireEvent.click(screen.getByTestId('lab-labware-propose-button'))
   await waitFor(() => expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument())
+}
+
+async function searchAndReturnRows() {
   fireEvent.change(screen.getByTestId('lab-labware-ontology-search-input'), { target: { value: 'test term' } })
   fireEvent.click(screen.getByTestId('lab-labware-ontology-search-button'))
   return screen.findAllByTestId('lab-labware-ontology-candidate')
@@ -103,8 +123,7 @@ async function extractAndSearch() {
 
 describe('LabLabwareNewPage ontology anchor (L2-P1-CREATE-DOOR-1 u3anchor)', () => {
   it('(a) proposals present, NO anchor picked → named refusal naming the ontology anchor, createRecord ZERO times', async () => {
-    resolve.mockResolvedValue({ candidates: [noUri] })
-    await extractAndSearch()
+    await extractOnly()
     fireEvent.click(screen.getByTestId('lab-labware-save-button'))
     await waitFor(() => expect(screen.getByTestId('lab-labware-error')).toBeInTheDocument())
     expect(screen.getByTestId('lab-labware-error').textContent).toContain('ontology anchor')
@@ -112,19 +131,22 @@ describe('LabLabwareNewPage ontology anchor (L2-P1-CREATE-DOOR-1 u3anchor)', () 
   })
 
   it('(b) clicked row → captured POST body carries ontology_ref deep-equal to {kind,id,namespace,label[,uri]}', async () => {
-    resolve.mockResolvedValue({ candidates: [noUri, withUri] })
-    await extractAndSearch()
-    fireEvent.click(screen.getAllByTestId('lab-labware-ontology-candidate')[0]!)
+    mockResolve.mockResolvedValue({ candidates: [noUri] })
+    await extractOnly()
+    const rows = await searchAndReturnRows()
+    fireEvent.click(rows[0]!)
     fireEvent.click(screen.getByTestId('lab-labware-save-button'))
     await waitFor(() => expect(mockCreateRecord).toHaveBeenCalledTimes(1))
     const body = mockCreateRecord.mock.calls[0][1] as Record<string, any>
     expect(body.ontology_ref).toEqual({ kind: 'ontology', id: 'FOO:1', namespace: 'FOO', label: 'Test term A' })
     expect('uri' in body.ontology_ref).toBe(false) // ABSENT, never undefined
+
     // uri arm — a candidate that carries one
     cleanup()
-    resolve.mockResolvedValue({ candidates: [withUri] })
-    await extractAndSearch()
-    fireEvent.click(screen.getAllByTestId('lab-labware-ontology-candidate')[0]!)
+    mockResolve.mockResolvedValue({ candidates: [withUri] })
+    await extractOnly()
+    const rows2 = await searchAndReturnRows()
+    fireEvent.click(rows2[0]!)
     fireEvent.click(screen.getByTestId('lab-labware-save-button'))
     await waitFor(() => expect(mockCreateRecord).toHaveBeenCalledTimes(2))
     const body2 = mockCreateRecord.mock.calls[1][1] as Record<string, any>
@@ -133,9 +155,9 @@ describe('LabLabwareNewPage ontology anchor (L2-P1-CREATE-DOOR-1 u3anchor)', () 
   })
 
   it('(c) three candidates → nothing selected (no autopick, ghost-first without guessing); no POST until a row is clicked', async () => {
-    const third = { curie: 'BAZ:9', label: 'Test term C', namespace: 'BAZ', tier: 2 as const, level: 'concept' as const, score: 5, source: 'ols4' as const }
-    resolve.mockResolvedValue({ candidates: [noUri, withUri, third] })
-    const rows = await extractAndSearch()
+    mockResolve.mockResolvedValue({ candidates: [noUri, withUri, third] })
+    await extractOnly()
+    const rows = await searchAndReturnRows()
     expect(rows.length).toBe(3)
     expect(screen.queryByTestId('lab-labware-ontology-anchor')).toBeNull() // nothing chosen
     fireEvent.click(screen.getByTestId('lab-labware-save-button')) // save before any click
@@ -145,21 +167,21 @@ describe('LabLabwareNewPage ontology anchor (L2-P1-CREATE-DOOR-1 u3anchor)', () 
     fireEvent.click(rows[1]!)
     fireEvent.click(screen.getByTestId('lab-labware-save-button'))
     await waitFor(() => expect(mockCreateRecord).toHaveBeenCalledTimes(1))
-    const body = mockCreateRecord.mock.calls[0][1] as Record<string, any>
-    expect(body.ontology_ref.id).toBe('BAR:42')
+    expect((mockCreateRecord.mock.calls[0][1] as Record<string, any>).ontology_ref.id).toBe('BAR:42')
   })
 
-  it('(d) negative: ontology_ref.id is the clicked candidate\'s CURIE — no name-derived value, no 6th key', async () => {
-    resolve.mockResolvedValue({ candidates: [withUri] })
-    await extractAndSearch()
-    fireEvent.click(screen.getAllByTestId('lab-labware-ontology-candidate')[0]!)
+  it('(d) negative: ontology_ref.id is the clicked candidate CURIE — no name-derived value, no 6th key', async () => {
+    mockResolve.mockResolvedValue({ candidates: [withUri] })
+    await extractOnly()
+    const rows = await searchAndReturnRows()
+    fireEvent.click(rows[0]!)
     fireEvent.click(screen.getByTestId('lab-labware-save-button'))
     await waitFor(() => expect(mockCreateRecord).toHaveBeenCalledTimes(1))
     const ref = (mockCreateRecord.mock.calls[0][1] as Record<string, any>).ontology_ref
     // The clicked candidate's CURIE — never a slug of the typed name 'Test Plate'
     expect(ref.id).toBe('BAR:42')
     expect(ref.id.toLowerCase()).not.toContain('test-plate')
-    // Exactly the schema-declared keys (additionalProperties:false): no source/score/tier/level
+    // Exactly the schema-declared keys (additionalProperties:false)
     expect(Object.keys(ref).sort()).toEqual(['id', 'kind', 'label', 'namespace', 'uri'])
     expect(ref).not.toHaveProperty('source')
     expect(ref).not.toHaveProperty('score')

@@ -13,16 +13,7 @@ import { useNavigate } from 'react-router-dom'
 import { AppShell } from '../shared/shell'
 import { useMaterialSearch } from '../event-editor/material/useMaterialSearch'
 import { VendorProductBuilderModal } from '../editor/material/VendorProductBuilderModal'
-import type { OntologyRef } from '../shared/ref'
-import type { ResolveCandidate } from '../shared/api/client'
-
-/** Map a resolve-spine candidate onto the ref shape the builder declares. */
-function candidateToOntologyRef(c: ResolveCandidate): OntologyRef {
-  return {
-    kind: 'ontology', id: c.curie, namespace: c.namespace, label: c.label,
-    ...(c.uri ? { uri: c.uri } : {}),
-  }
-}
+import { ontologyRefFromCandidate, type OntologyRef } from '../shared/ref'
 
 export function LabMaterialNewPage() {
   const navigate = useNavigate()
@@ -56,7 +47,7 @@ export function LabMaterialNewPage() {
           {ontologyResults.map((candidate) => (
             <li key={`${candidate.source}-${candidate.curie}`}>
               <button type="button" data-testid="lab-material-ontology-candidate"
-                onClick={() => setOntologyRef(candidateToOntologyRef(candidate))}
+                onClick={() => setOntologyRef(ontologyRefFromCandidate(candidate))}
                 style={{ textAlign: 'left', width: '100%', padding: '0.5rem', margin: '0.25rem 0' }}>
                 <span data-testid="lab-material-candidate-namespace" style={{ fontWeight: 600 }}>{candidate.namespace}</span>
                 {' · '}{candidate.curie}{' — '}{candidate.label}
