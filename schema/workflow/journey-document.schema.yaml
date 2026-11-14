@@ -88,6 +88,15 @@ properties:
           properties:
             alternative_id: { type: string, pattern: "^[a-z][a-z0-9_.-]*$" }
             summary: { type: string, minLength: 1 }
+            # L2-JOURNEY-NOUN-CREATE-1 (unit altports): the option's wiring. The
+            # capability it invokes (catalogue id pattern, one-for-one with
+            # steps[].capability_ref) and the work surface the person lands on
+            # (the descriptor's surfaces id pattern). Intentionally ABSENT from
+            # `required`: a summary-only option stays legal (the shipped
+            # labware-definition declaration carries only alternative_id +
+            # summary), and membership — not shape — is the lint's rule (v).
+            capability_ref: { type: string, pattern: "^[a-z][a-z0-9_.-]*$" }
+            surface: { type: string, pattern: "^[a-z][a-z0-9_.-]*$" }
       selection_authority: { type: string, enum: [user, declared_policy] }
   return_contract:
     type: object

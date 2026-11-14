@@ -22,6 +22,12 @@
  * automatic step may not, the contract's surface must be declared by the
  * registry, and its selectable_kinds must be a subset of that surface's
  * registry selectableKinds (the registry is the authority, never this pass).
+ * (v) ALTERNATIVE WIRING (L2-JOURNEY-NOUN-CREATE-1, unit altports) — an
+ * alternative option may declare the capability it invokes and the work
+ * surface the person lands on; the option's capability_ref must be in the
+ * admitted catalogue, and when the caller passes the registry the option's
+ * surface must resolve through SurfacesRegistry.get (the registry is the
+ * authority, never a literal list in this pass).
  *
  * A step port is a CLOSED vocabulary shape (journey-port.schema.yaml) with no
  * port_type of its own; its type is the $def it validates against, decided by the
@@ -42,6 +48,8 @@ import type { SurfacesRegistry } from '../../surfaces/surfaces.js';
 export const RULE_SCHEMA = 'journey_document_schema';
 export const RULE_CAPABILITY_NOT_IN_CATALOGUE = 'journey_capability_not_in_catalogue';
 export const RULE_PORT_MISSING_PRODUCER = 'journey_port_missing_producer';
+export const RULE_ALTERNATIVE_CAPABILITY_NOT_IN_CATALOGUE = 'journey_alternative_capability_not_in_catalogue';
+export const RULE_ALTERNATIVE_SURFACE_UNKNOWN = 'journey_alternative_surface_unknown';
 // Re-exported so callers name the human-task rules from the lint's own module:
 export { RULE_HUMAN_TASK_MISSING, RULE_HUMAN_TASK_UNEXPECTED, RULE_HUMAN_TASK_SURFACE_UNKNOWN, RULE_HUMAN_TASK_KIND_NOT_SELECTABLE };
 export interface JourneyDocumentLintDiagnostic {
@@ -61,6 +69,14 @@ interface ShapedStep {
   // when present is human-task.schema.yaml, added to the SAME Ajv below so the
   // document's relative $ref resolves (schema gate first, semantic rules after).
   human_task?: { surface: string; selectable_kinds: string[] };
+}
+/** The shaped view of an alternative option once the schema gate has proved it:
+ * both wiring fields are OPTIONAL — ABSENT OR VALUE, never undefined
+ * (exactOptionalPropertyTypes) — so a summary-only option stays shaped. */
+interface ShapedOption {
+  alternative_id: string;
+  capability_ref?: string;
+  surface?: string;
 }
 const SCHEMA_DIR = join(fileURLToPath(new URL('.', import.meta.url)), '../../../../schema/workflow');
 /** One Ajv for the whole pass: the port vocabulary is added first, so both the
@@ -114,6 +130,25 @@ export function lintJourneyDocument(document: unknown, catalogue: CapabilityDesc
   // Runs after the capability-membership loop, before the port chaining.
   if (surfaces !== undefined) {
     for (const step of steps) diagnostics.push(...validateHumanTaskContract(step, surfaces));
+  }
+  // (v) ALTERNATIVE WIRING — the option's declared capability must be in the
+  // admitted catalogue (membership, like the step rule); the surface rule is
+  // registry-gated for the same reason the human-task rule is: a caller
+  // without a registry has no authority to judge where the person lands.
+  const options = (document as { alternatives?: { options: ShapedOption[] } }).alternatives?.options ?? [];
+  for (const option of options) {
+    if (option.capability_ref !== undefined && !admitted.has(option.capability_ref)) {
+      diagnostics.push({
+        rule: RULE_ALTERNATIVE_CAPABILITY_NOT_IN_CATALOGUE,
+        message: `alternative ${option.alternative_id} references capability_ref '${option.capability_ref}', which is not in the admitted capability catalogue`,
+      });
+    }
+    if (option.surface !== undefined && surfaces !== undefined && surfaces.get(option.surface) === null) {
+      diagnostics.push({
+        rule: RULE_ALTERNATIVE_SURFACE_UNKNOWN,
+        message: `alternative ${option.alternative_id} declares surface '${option.surface}', which the work-surface registry does not declare`,
+      });
+    }
   }
   for (let n = 0; n + 1 < steps.length; n++) {
     const producerStep = steps[n]!;

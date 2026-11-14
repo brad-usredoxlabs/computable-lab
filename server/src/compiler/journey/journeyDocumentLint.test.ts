@@ -8,8 +8,9 @@
  * schema gate runs first. Fixtures use literals; the product module may not.
  */
 import { describe, it, expect } from 'vitest';
-import { lintJourneyDocument } from './journeyDocumentLint.js';
+import { lintJourneyDocument, RULE_ALTERNATIVE_CAPABILITY_NOT_IN_CATALOGUE, RULE_ALTERNATIVE_SURFACE_UNKNOWN } from './journeyDocumentLint.js';
 import type { CapabilityDescriptor } from './capabilityCatalogue.js';
+import { SurfacesRegistry } from '../../surfaces/surfaces.js';
 
 const CATALOGUE: CapabilityDescriptor[] = [
   { capability_id: 'transfer', implementation: { handler_kind: 'builtin', handler_ref: 'transfer' } },
@@ -46,6 +47,18 @@ function port(name: string): Record<string, unknown> {
     case 'StagedDraftReference': return { version: 'v1', draft_id: 'DRAFT-1' };
     default: throw new Error(`unknown port $def ${name}`);
   }
+}
+/** A surfaces document mirroring the SHIPPED registry's record-create surface
+ * (data, not the live file — the registry, never the test, is the authority). */
+const SURFACES_DOC = {
+  version: 1,
+  surfaces: [
+    { id: 'find', label: 'Find', path: '/find', objectTypes: ['run'], selectableKinds: [] },
+    { id: 'record-create', label: 'Record create', path: '/record/new/:nodeType', params: { nodeType: 'record' }, objectTypes: ['record'], selectableKinds: [] },
+  ],
+};
+function surfacesRegistry(): SurfacesRegistry {
+  return new SurfacesRegistry(SURFACES_DOC as never);
 }
 /** Step 1 emits StagedDraftReference; step 2's input at the same index requires CommittedRecordReference. */
 function unchained(): Record<string, unknown> {
@@ -115,5 +128,34 @@ describe('lintJourneyDocument', () => {
     expect(result.ok).toBe(false);
     expect(result.diagnostics.length).toBeGreaterThan(0);
     expect(result.diagnostics[0]!.rule).toBe('journey_document_schema');
+  });
+  it('refuses an alternative option whose capability_ref is absent from the admitted catalogue, naming the alternative and the capability', () => {
+    const result = lintJourneyDocument(doc({
+      alternatives: { options: [{ alternative_id: 'alt-a', summary: 'declare the record', capability_ref: 'not-in-catalogue', surface: 'record-create' }], selection_authority: 'user' },
+    }), CATALOGUE);
+    expect(result.ok).toBe(false);
+    const d = result.diagnostics.find((x) => x.rule === RULE_ALTERNATIVE_CAPABILITY_NOT_IN_CATALOGUE);
+    expect(d).toBeDefined();
+    expect(d!.message).toContain('alt-a');
+    expect(d!.message).toContain('not-in-catalogue');
+  });
+  it('refuses an alternative option whose surface the registry does not declare, naming the alternative and the surface', () => {
+    const result = lintJourneyDocument(doc({
+      alternatives: { options: [{ alternative_id: 'alt-a', summary: 'declare the record', capability_ref: 'transfer', surface: 'not-in-registry' }], selection_authority: 'user' },
+    }), CATALOGUE, surfacesRegistry());
+    expect(result.ok).toBe(false);
+    const d = result.diagnostics.find((x) => x.rule === RULE_ALTERNATIVE_SURFACE_UNKNOWN);
+    expect(d).toBeDefined();
+    expect(d!.message).toContain('alt-a');
+    expect(d!.message).toContain('not-in-registry');
+    expect(d!.message).not.toContain('record-create'); // the offending id, not the fixture's known id
+  });
+  it('a surface-bearing alternative produces no surface diagnostic when the registry argument is omitted (registry-gated)', () => {
+    const plan = doc({
+      alternatives: { options: [{ alternative_id: 'alt-a', summary: 'declare the record', capability_ref: 'transfer', surface: 'record-create' }], selection_authority: 'user' },
+    });
+    const result = lintJourneyDocument(plan, CATALOGUE);
+    expect(result.ok).toBe(true);
+    expect(result.diagnostics).toEqual([]);
   });
 });
