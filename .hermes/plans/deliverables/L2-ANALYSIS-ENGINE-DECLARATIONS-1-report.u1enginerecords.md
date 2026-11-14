@@ -215,3 +215,5 @@ Restore proven byte-identical by sha256 before and after:
 - AC(3) e2e leg is item-level debt: a follow-up may add the AnalysisRunner e2e provenance
   assertion against the seed record (owner: item orchestrator; resume condition: unit 2 or a
   dedicated e2e dispatch with the budget to duplicate the GC-7 harness).
+
+L2-ANALYSIS-ENGINE-DECLARATIONS-1-u1enginerecords UNIT L2-ANALYSIS-ENGINE-DECLARATIONS-1-u1enginerecords DONE d36825fa0cccca62e382939617ca2ececb9c2532
