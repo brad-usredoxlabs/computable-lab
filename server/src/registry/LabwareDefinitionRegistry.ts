@@ -33,6 +33,7 @@ export const LabwareDefinitionSchema = z.object({
   vendor: z.string().optional(),
   platform_aliases: z.array(PlatformAlias).optional(),
   read_only: z.boolean().optional(),
+  offerable: z.boolean().optional(),
   source: z
     .object({
       kind: z.enum(['imported', 'curated', 'user']).optional(),
