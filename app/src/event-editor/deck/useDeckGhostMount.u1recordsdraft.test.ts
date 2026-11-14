@@ -1,20 +1,12 @@
 /**
  * L2-P1-CREATE-RECORD-LANDS-1 u1recordsdraft — RED-first: a create_record turn
- * that carries ONLY recordCreations (zero events) must reach the deck's
- * proposal review surface as a staged preview, not dead-end in the events-only
- * emptiness guard (gate PROMPT1-GATE-20261114T051016Z, finding R1-13): the done
- * result carries recordCreations (AgentOrchestrator.ts:3610) yet the deck shows
- * the amber wall "Draft produced no events — it delivered only records to
- * create" beside the bubble "AI completed the task but did not propose any
- * changes." The draft never reaches the surface because (1) the universal chat
- * hands a draft to onProposalDrafted ONLY on event-bearing turns, (2) the
- * ghost mount hard-codes recordCreations: [], (3) it early-returns when the
- * preview has no placements/events. The fix is ONE data path (draft -> preview
- * -> modal): carry result.recordCreations verbatim onto the AiProposalDraft,
- * through buildPreviewFromDraft (already forwarded, draftPreview.ts:487).
- * ProposedGraphModal.tsx:152 already lists preview.recordCreations — no
- * re-derivation, no second proposal channel. "Proposal != commitment": this
- * unit only STAGES the preview; Accept is still the one write path.
+ * carrying ONLY recordCreations (zero events) must reach the deck's proposal
+ * review surface as a staged preview, not dead-end in the events-only
+ * emptiness guard (gate PROMPT1-GATE-20261114T051016Z, finding R1-13). ONE data
+ * path (draft -> preview -> modal): carry result.recordCreations verbatim
+ * (buildPreviewFromDraft already forwards them, draftPreview.ts:487;
+ * ProposedGraphModal.tsx:152 already lists them — no re-derivation, no second
+ * channel). "Proposal != commitment": this unit only STAGES the preview.
  */
 import { renderHook, waitFor } from '@testing-library/react'
 import type { AiContext } from '../../types/aiContext'
@@ -93,18 +85,12 @@ describe('useAiChat — a records-only done hands recordCreations to the draft a
   it('done with recordCreations + zero events: the draft carries them verbatim; no wall, no bubble', async () => {
     const { streamAssist } = await import('../../shared/api/aiClient')
     const onProposalDrafted = vi.fn()
-    // Same mocked-streamAssist idiom as useAiChat.recordDraft.empty.test.ts:
-    // one done frame — success, ZERO events, recordCreations only.
+    // Same mocked-streamAssist idiom as useAiChat.recordDraft.empty.test.ts.
     ;(streamAssist as ReturnType<typeof vi.fn>).mockImplementation(async function* () {
       yield { type: 'done', result: { success: true, events: [], notes: [], recordCreations: [A58941] } }
     })
     const { result } = renderHook(() =>
-      useAiChat({
-        aiContext,
-        onAcceptEvent: vi.fn(),
-        onAddLabwareFromRecord: vi.fn(),
-        onProposalDrafted,
-      }),
+      useAiChat({ aiContext, onAcceptEvent: vi.fn(), onAddLabwareFromRecord: vi.fn(), onProposalDrafted }),
     )
     void result.current.sendPrompt('Create the A58941 deepwell')
     // (a) the draft reaches the deck surface carrying the creations VERBATIM.
