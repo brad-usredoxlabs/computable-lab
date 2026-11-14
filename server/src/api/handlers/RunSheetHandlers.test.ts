@@ -228,6 +228,50 @@ describe('POST /acquisition-packages/register (the attach glue, D4)', () => {
     expect(r.status()).toBe(400);
   });
 
+  // u1matbind (RUN-IS-THE-PROVENANCE-RECORD, BRAD RULING 2026-11-14): an
+  // acquisition can bind to the MATERIAL that went in, so the
+  // instrument-sequence entry stops being mandatory. RED-first per the
+  // brief: case (a) returns the `entryRef is required` 400 TODAY.
+  it('u1matbind: materialRef with NO entryRef registers (NOT a 400) and stamps the material ref (AC1/AC3)', async () => {
+    const c = await ctx();
+    const key = await writeFullDotD(c.mountRoot, 'MATONLY.D');
+    const entriesBefore = (await c.app.store.list({ kind: 'instrument-sequence-entry', limit: 100000 })).length;
+    const r = mockReply();
+    const body = await c.handlers.register(
+      req({
+        deviceId: DEVICE_ID,
+        directoryKey: key,
+        materialRef: { kind: 'record', id: 'MAT-RSH-TEST', type: 'material' },
+      }),
+      r.reply,
+    );
+    // Not the old guard's 400: the material binding is a legitimate scope.
+    expect(r.status()).toBe(200);
+    expect(body).toMatchObject({ packageRecordId: expect.stringMatching(/^ACQP-/) });
+    // AC1: the returned packagePayload names the material that went in.
+    const payload = (body as { packagePayload: Record<string, unknown> }).packagePayload;
+    expect(payload.materialRef).toEqual({ kind: 'record', id: 'MAT-RSH-TEST', type: 'material' });
+    // AC3: NO instrument-sequence entry is conjured to satisfy a validator —
+    // entryRecordId is absent AND the entry-record count is unchanged.
+    expect('entryRecordId' in body).toBe(false);
+    const entriesAfter = (await c.app.store.list({ kind: 'instrument-sequence-entry', limit: 100000 })).length;
+    expect(entriesAfter).toBe(entriesBefore);
+  });
+
+  it('u1matbind: NEITHER entryRef nor materialRef is refused with the named token MATERIAL_OR_ENTRY_REQUIRED (AC2)', async () => {
+    const c = await ctx();
+    const r = mockReply();
+    const body = await c.handlers.register(req({ deviceId: DEVICE_ID, directoryKey: 'x.D' }), r.reply);
+    expect(r.status()).toBe(400);
+    // A STABLE NAMED token (distinct from the storage/mount token
+    // PACKAGE_DEVICE_MISSING) — never a generic validation string.
+    expect((body as { error: string }).error).toBe('MATERIAL_OR_ENTRY_REQUIRED');
+    // The message says WHAT to supply (§2.15: a refusal with a reason).
+    const message = (body as { message: string }).message;
+    expect(message).toContain('materialRef');
+    expect(message).toContain('entryRef');
+  });
+
   it('returns 404 NOT_FOUND when the target entry does not resolve (the register succeeded; the attach cannot)', async () => {
     const c = await ctx();
     await writeFullDotD(c.mountRoot, 'ORPHAN.D');
