@@ -293,8 +293,34 @@ describe('validateDeclaredInputs — OQ-3 named skip + W4 rejection set', () => 
       trace: { kind: 'record', id: 'MSR-TEST-1', type: 'measurement' },
     })).rejects.toMatchObject({
       code: 'INPUT_DATAKIND_INCOMPATIBLE',
-      message: expect.stringContaining("declared dataKind 'signal'"),
-      message: expect.stringContaining("resolves to dataKind 'measurement'"),
+      // ONE object literal, ONE message key. The earlier two `message:` keys
+      // meant only the SECOND was ever evaluated — the first (:296) was a dead
+      // assertion. Collapse to a single string that contains BOTH halves so
+      // both the declared and the resolved kind stay live (typed ports).
+      message: expect.stringContaining("declared dataKind 'signal' but the bound record resolves to dataKind 'measurement'"),
+    });
+  });
+
+  it('refuses a protocol record (no payload.dataKind) bound as type:measurement into a measurement slot — the client ref.type label has NO authority (INPUT_DATAKIND_INCOMPATIBLE naming protocol, not measurement)', async () => {
+    // u1measkindfix1 D2 negative control: the two authorities DISAGREE. The
+    // store record's OWN kind is 'protocol' (its payload carries no dataKind);
+    // the run-create body's ref.type label says 'measurement'. The gate must
+    // resolve the kind from the RECORD (payload.kind), never from the
+    // client-supplied ref.type — so it refuses, naming the record's real kind.
+    // At base (payload.dataKind ?? ref.type) the label says 'measurement', so
+    // this is ADMITTED — RED. (PRT-TEST-1 assertion rides step 3 / D4.)
+    const store = storeWith({
+      'PRT-TEST-1': { kind: 'protocol', id: 'PRT-TEST-1', title: 'x' },
+    });
+    const payload = {
+      kind: 'analysis-revision', id: 'ANREV-TEST-GC',
+      inputs: [{ name: 'chromatogram', dataKind: 'measurement', required: true, acceptsKinds: ['measurement'] }],
+    };
+    await expect(validateDeclaredInputs(store, payload, {
+      chromatogram: { kind: 'record', id: 'PRT-TEST-1', type: 'measurement' },
+    })).rejects.toMatchObject({
+      code: 'INPUT_DATAKIND_INCOMPATIBLE',
+      message: expect.stringContaining("resolves to dataKind 'protocol'"),
     });
   });
 
