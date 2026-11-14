@@ -664,6 +664,12 @@ export interface MeasurementUploadResponse {
   path: string
   fileName: string
   size: number
+  /** sha256 hex of the stored bytes — present only for binary (device-stored) uploads. */
+  sha256?: string
+  /** Data-reference record id (DREF-######) anchoring the bytes — binary uploads only. */
+  dataReferenceId?: string
+  /** 'text' = git-inbox path (today's behavior); 'binary' = unchanged bytes on the storage device. */
+  mode?: 'text' | 'binary'
 }
 
 /** Match info for a record that matched in a study search result. */
@@ -3426,7 +3432,7 @@ export const apiClient = {
     })
   },
 
-  async uploadRawMeasurementFile(body: { runId?: string; fileName: string; contentBase64: string }): Promise<MeasurementUploadResponse> {
+  async uploadRawMeasurementFile(body: { runId?: string; fileName: string; contentBase64: string; binary?: boolean }): Promise<MeasurementUploadResponse> {
     return request('/measurements/upload-raw', {
       method: 'POST',
       body: JSON.stringify(body),
