@@ -151,6 +151,14 @@ export function ProposedGraphModal({
   // written until Accept, which is why they are listed separately from what is placed.
   const creations = preview.recordCreations ?? []
 
+  // The header must state what Accept will do (gate defect 5, prompt-1): a labware
+  // the draft creates is labware even when it is never placed, so the header's
+  // labware count is placed non-equipment labware PLUS labware-kind creations.
+  // (Material-kind creations are still listed under New records; the header makes no
+  // material clause and must not claim a count of them.)
+  const labwareCount =
+    labwarePlacements.length + creations.filter((c) => c.kind === 'labware').length
+
   const bindings = preview.ontologyBindings ?? []
   const decisionNeeded = useMemo(() => bindings.filter(bindingNeedsDecision), [bindings])
   const readOnly = useMemo(
@@ -195,7 +203,7 @@ export function ProposedGraphModal({
         <header className="ee-dialog__header">
           <span className="ee-dialog__title">Proposed changes</span>
           <span className="ee-dialog__context">
-            {labwarePlacements.length} labware · {equipmentPlacements.length} equipment ·{' '}
+            {labwareCount} labware · {equipmentPlacements.length} equipment ·{' '}
             {events.length} event{events.length === 1 ? '' : 's'}
           </span>
           <button className="ee-dialog__close" onClick={onClose} aria-label="Close">×</button>
