@@ -57,6 +57,10 @@ properties:
       url:
         type: string
 
+  definitionRecordId:
+    type: string
+    description: "For a vendor-product record: the recordId of the labware DEFINITION record this product points at. Optional; absent on definition records themselves."
+
   tags:
     type: array
     items: { type: string }
