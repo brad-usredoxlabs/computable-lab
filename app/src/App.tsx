@@ -247,6 +247,14 @@ export function App() {
               <Route path="/registry" element={<DeferredRoute><RegistryHostPage /></DeferredRoute>} />
               <Route path="/settings" element={<DeferredRoute><SettingsRoute /></DeferredRoute>} />
               <Route path="/labware-editor" element={<DeferredRoute><LabwareEditorRoutePage /></DeferredRoute>} />
+              {/* u1resultsroute: the editor's own mode switcher (LabwareEventEditor.tsx:6267)
+                  navigates to /runs/<runId>/editor/<mode> for every mode, but no such route was
+                  registered, so it fell through to the 404 catch-all. Register the ONE missing
+                  route — the SAME LabwareEditorRoutePage as /labware-editor (no second routing
+                  mechanism, no copy of the Attach capability) — so results/readouts/biology/...
+                  are reachable. The editor reads its mode from the :mode param and ?id= from the
+                  query string, which this route preserves. */}
+              <Route path="/runs/:runId/editor/:mode" element={<DeferredRoute><LabwareEditorRoutePage /></DeferredRoute>} />
               {/* Phase 7: retired legacy URLs do not redirect. */}
               <Route path="*" element={<NotFoundRoute />} />
               </Routes>

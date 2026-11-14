@@ -9,7 +9,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { EventEditorProvider } from '../event-editor/EventEditorContext'
 import { WorkspaceProvider } from '../event-editor/workspace/WorkspaceContext'
 import { HarnessChatPane } from '../agent/HarnessChatPane'
@@ -44,6 +44,9 @@ import '../event-editor/styles/eventEditor.css'
 export function RunWorkspacePage() {
   const { studyId: urlStudyId, runId } = useParams<{ studyId?: string; runId: string }>()
   const { mode, setMode } = useModeToggle()
+  // u1resultsroute: carried across into the editor results route so ?id=<eventGraphId>
+  // (and any other query) survives the navigation from the run surface.
+  const [workspaceSearchParams] = useSearchParams()
   const [resolvedStudyId, setResolvedStudyId] = useState<string | null>(urlStudyId ?? null)
   const [resolvedEventGraphId, setResolvedEventGraphId] = useState<string | undefined>(undefined)
   const [runTitle, setRunTitle] = useState<string | null>(null)
@@ -229,6 +232,16 @@ export function RunWorkspacePage() {
                 viewerToolbar={
                   <div className="run-workspace-toolbar">
                     <ModeToggle mode={mode} onChange={setMode} />
+                    {/* u1resultsroute: the ONE toolbar entry that makes the editor's
+                        `results` mode reachable from the run surface. It is a link into the
+                        SAME editor route (no second presentation owning the Attach capability)
+                        and carries the current search string so ?id=<eventGraphId> survives. */}
+                    <a
+                      className="run-bindings-link"
+                      href={`/runs/${runId}/editor/results${workspaceSearchParams.size ? `?${workspaceSearchParams.toString()}` : ''}`}
+                    >
+                      Results
+                    </a>
                     <RunProtocolList runId={runId} />
                     <RunPlanGraphBuild runId={runId} />
                     <DeckToolbar tab={deckTab} breadcrumb={runBreadcrumb} />
