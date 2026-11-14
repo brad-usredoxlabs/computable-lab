@@ -280,6 +280,8 @@ the one-line citation edit).
   → `Tests 14 passed (14)` (48.74s, 13:48:40) — unchanged from baseline (14/14).
 - `git status --short` clean; `git diff --stat aaf617ab8..HEAD` = 3 files (test +48,
   two YAMLs ±1 line each).
+- Final run AFTER this report commit (post-report typecheck: 6 pre-existing error lines,
+  0 in files this unit touched — same 6 as baseline): `Tests 4 passed (4)` (13:53:30).
 
 ### Commits (u1fix1)
 
@@ -294,4 +296,4 @@ the one-line citation edit).
   assertion against the seed record (owner: item orchestrator; resume condition: unit 2 or a
   dedicated e2e dispatch with the budget to duplicate the GC-7 harness).
 
-L2-ANALYSIS-ENGINE-DECLARATIONS-1-u1enginerecords UNIT L2-ANALYSIS-ENGINE-DECLARATIONS-1-u1enginerecords DONE d36825fa0cccca62e382939617ca2ececb9c2532
+L2-ANALYSIS-ENGINE-DECLARATIONS-1-u1fix1 UNIT u1fix1 DONE 36c65fc6c6dfcef5ebd999195f12c3ae4a5df464
