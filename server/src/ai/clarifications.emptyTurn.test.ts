@@ -27,7 +27,7 @@ function stubLookup() {
     /Thermo Optical-Quality Imaging Plate/i.test(hint) ? [] : [{ recordId: 'LAB-x', title: 'X' }];
 }
 
-describe('L2-P1-EMPTY-TURN-CARD-2 u1emptycard — empty-turn named absence', () => {
+describe('L2-P1-EMPTY-TURN-CARD-2 u1emptycard - empty-turn named absence', () => {
   it('manifest sentence: the ZERO-match labware noun becomes the ONE absence request', async () => {
     const reqs = await emptyTurnAbsenceRequests(MANIFEST, stubLookup());
     expect(reqs).toHaveLength(1);
