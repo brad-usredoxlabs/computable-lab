@@ -62,12 +62,22 @@ steps:
       on_defer: keep_journey_active
 alternatives:
   options:
+    # capability_ref is the ACCEPT'S write, not the search path: every summary
+    # below names journey.material-create as what mints the noun on accept, and
+    # GOVERNED-WRITE-ADMISSION admits each alternative as a landing place for
+    # ONE admitted write (records.create) — never a handler this document invents.
     - alternative_id: add-from-vendor-or-ontology
       summary: "add the noun from a vendor or ontology: the person lands on the ingestion surface; the path searches through journey.vendor-web-search and journey.ontology-lookup; the accept mints the noun through journey.material-create"
+      capability_ref: journey.material-create
+      surface: ingestion
     - alternative_id: local-formulation
       summary: "author the noun as a local formulation: the person lands on the record-create surface; the accept mints the formulation through journey.material-create"
+      capability_ref: journey.material-create
+      surface: record-create
     - alternative_id: local-product-or-sample
       summary: "create the noun as a local product or sample: the person lands on the record-create surface; the accept mints it through journey.material-create"
+      capability_ref: journey.material-create
+      surface: record-create
   selection_authority: user
 return_contract:
   checkpoint_ref: cp-journey-noun-create
