@@ -2,7 +2,8 @@
 
 Lane 2 worktree: /home/brad/cl-wt/L2-JOURNEY-CONSERVATION-1-condecl-lane2
 Branch: cl/lane2-journey-conservation-condecl-0409; base 4589d64da8ca3924a5124fd43463bec66a4ccc4e.
-Commit: e787bd3b142d129e4d4840bb263a17c8c906a7e2 (tree clean at that commit).
+Commit: e787bd3b142d129e4d4840bb263a17c8c906a7e2 (the three product files; tree clean).
+Report commit: 2866f4cf00114896ac4c24c2b1d019f782d0aea6 (this file).
 
 ## Scope delivered
 - schema/sequence-analysis/conservation-analysis.schema.yaml (NEW, 90 lines, Draft 2020-12,
@@ -107,3 +108,5 @@ Implementation complete (implementation ≠ acceptance). Owner: orchestrator →
 compute/interval/rendition legs are units 2-4). YAML change: no lane-stack reload needed for
 review of this unit (nothing reads the schema at runtime yet by design — the reader is the first
 consumer).
+
+L2-JOURNEY-CONSERVATION-1-condecl UNIT condecl DONE 2866f4cf00114896ac4c24c2b1d019f782d0aea6 (report contained at this sha; marker finalised in follow-up commit)
