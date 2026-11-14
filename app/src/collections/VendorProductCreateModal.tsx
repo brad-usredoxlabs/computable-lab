@@ -19,6 +19,16 @@ import { labModalStyles } from './labModalStyles'
 const LABWARE_SCHEMA =
   'https://computable-lab.com/schema/computable-lab/labware.schema.yaml'
 
+/** Mint an LW-<8 hex uppercase> recordId */
+function mintRecordId(): string {
+  const bytes = new Uint8Array(4)
+  crypto.getRandomValues(bytes)
+  const hex = Array.from(bytes)
+    .map((b) => b.toString(16).toUpperCase().padStart(2, '0'))
+    .join('')
+  return `LW-${hex}`
+}
+
 interface Props {
   definitions: RecordEnvelope[]
   isOpen: boolean
@@ -56,12 +66,22 @@ export function VendorProductCreateModal({
       setError('Select a definition to point at')
       return
     }
+    const picked = definitions.find((d) => d.recordId === definitionId)
+    const pickedLabwareType = (picked?.payload as Record<string, unknown> | undefined)?.labwareType
+    if (!picked || typeof pickedLabwareType !== 'string') {
+      // Never fabricate a labwareType — the server's Ajv is the sole validator
+      // (schema/lab/labware.schema.yaml requires it).
+      setError('Selected definition has no labwareType; refusing to fabricate one')
+      return
+    }
 
     setSaving(true)
     try {
       const payload: Record<string, unknown> = {
+        recordId: mintRecordId(),
         kind: 'labware',
         name: `${trimmedVendor} ${trimmedCatalog}`,
+        labwareType: pickedLabwareType,
         manufacturer: {
           name: trimmedVendor,
           catalogNumber: trimmedCatalog,
