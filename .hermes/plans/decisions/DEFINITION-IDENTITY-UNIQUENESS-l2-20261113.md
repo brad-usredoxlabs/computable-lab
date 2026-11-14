@@ -41,3 +41,22 @@ wrong end state: two resolvable ids for one thing is the "second authority" defe
 
 No general alias table, no id migration tool for arbitrary records, and no renaming of store records that
 runs, event graphs or instances already point at.
+
+## AMENDMENT — Brad's decision (2026-11-13, in session) and the registry/store question answered
+
+Brad: "my decision: a. doesnt a missing labware simply fire the add labware loop, which we are in the
+process of finalizing?" — Yes, and that is what makes (a) correct rather than merely cheaper. Adopted as
+option (a), with one routing rule that makes his sentence literally true.
+
+1. **Offered means it exists.** A registry entry may be OFFERED as bindable labware only when its id is a
+   store recordId. That is the set-relation test: every OFFERABLE registry id appears in the store.
+2. **Not bindable is a create-door prefill, never an option.** An entry with no record (the 19 generic
+   shapes) is declared non-bindable and cannot be selected as a definition. Selecting it instead OPENS THE
+   CREATE PATH with its name prefilled — the same creation journey the corpus exercises. The catalogue then
+   never pretends the lab owns a beaker; it offers to help the lab acquire one.
+   This is what makes "a missing labware fires the create journey" true on the PICKER path as well as the
+  chat path; a blank or disabled row would be the dishonest version.
+3. **No 19 new records.** The lab's stock does not grow to satisfy a vocabulary. Store records are created
+   when a person creates one, through the governed write, with provenance.
+4. **The test is scoped, not weakened:** assert (i) every offerable registry id ∈ store recordIds, and
+   (ii) every non-offerable entry carries the declared flag. Two directions, both mechanical.
