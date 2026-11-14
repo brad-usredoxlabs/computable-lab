@@ -19,6 +19,34 @@ import type { SpecSheetProposal } from '../shared/api/client'
 const LABWARE_DEFINITION_SCHEMA =
   'https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml'
 
+/**
+ * u2geom — the manual geometry section: the EXACT schema fields a person can
+ * declare by hand when no spec-sheet URL was extracted (schema/workflow/
+ * labware-definition.schema.yaml). Every input starts as the EMPTY STRING:
+ * a blank entry contributes no manual row, hence no key in the payload.
+ * "Never invent a value" (CLAUDE.md Hard Boundary) — there are no defaults
+ * anywhere in this list.
+ */
+const MANUAL_GEOMETRY_FIELDS: Array<{
+  testid: string
+  label: string
+  targetField: string
+  kind: 'select' | 'text'
+  options?: string[]
+}> = [
+  { testid: 'addressing', label: 'Addressing', targetField: 'topology.addressing', kind: 'select', options: ['grid', 'linear', 'single'] },
+  { testid: 'rows', label: 'Rows', targetField: 'topology.rows', kind: 'text' },
+  { testid: 'columns', label: 'Columns', targetField: 'topology.columns', kind: 'text' },
+  { testid: 'linear-count', label: 'Linear count', targetField: 'topology.linear_count', kind: 'text' },
+  { testid: 'well-pitch', label: 'Well pitch (mm)', targetField: 'topology.well_pitch_mm', kind: 'text' },
+  { testid: 'row-pitch', label: 'Row pitch (mm)', targetField: 'topology.row_pitch_mm', kind: 'text' },
+  { testid: 'col-pitch', label: 'Column pitch (mm)', targetField: 'topology.col_pitch_mm', kind: 'text' },
+  { testid: 'max-volume', label: 'Max well volume (µL)', targetField: 'capacity.max_well_volume_uL', kind: 'text' },
+  { testid: 'min-volume', label: 'Min working volume (µL)', targetField: 'capacity.min_working_volume_uL', kind: 'text' },
+  { testid: 'length', label: 'Overall length (mm)', targetField: 'physical_geometry.overall_dimensions_mm.length', kind: 'text' },
+  { testid: 'width', label: 'Overall width (mm)', targetField: 'physical_geometry.overall_dimensions_mm.width', kind: 'text' },
+]
+
 /** Mint a LW-<8 hex uppercase> recordId */
 function mintRecordId(): string {
   const bytes = new Uint8Array(4)
@@ -309,8 +337,29 @@ export function LabLabwareNewPage() {
   const [noProposalsInfo, setNoProposalsInfo] = useState<{ url: string; reason: string } | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  // u2geom: the person's manual geometry declarations — the EXACT fields the
+  // schema declares, every value seeded to '' (no defaults, no invented values)
+  const [manualGeometry, setManualGeometry] = useState<Record<string, string>>(() =>
+    Object.fromEntries(MANUAL_GEOMETRY_FIELDS.map((f) => [f.targetField, ''])),
+  )
   // D3: freeze the extraction URL at extraction time
   const [extractedFromUrl, setExtractedFromUrl] = useState<string | null>(null)
+
+  // u2geom — each NON-EMPTY manual entry becomes a SpecSheetProposal-shaped row
+  // (data, not a second builder) so it enters the SAME buildPayloadFromProposals
+  // loop: one mapping path, one coercion site. A blank entry produces no row,
+  // hence no key in the payload.
+  const manualRows: SpecSheetProposal[] = MANUAL_GEOMETRY_FIELDS.flatMap((f) => {
+    const value = (manualGeometry[f.targetField] ?? '').trim()
+    return value === ''
+      ? []
+      : [{ targetField: f.targetField, value, sourceUrl: '', passage: '', specId: 'manual-geometry' }]
+  })
+  const extractedRows: SpecSheetProposal[] = proposals ?? []
+  // One last-writer-wins loop downstream: extracted rows first, manual rows
+  // after — a field the person typed keeps their value; nothing is deleted.
+  const allProposals: SpecSheetProposal[] = [...extractedRows, ...manualRows]
+  const mergedSaveReady: boolean = allProposals.length > 0
 
   const handleExtract = async () => {
     if (!sheetUrl.trim()) return
@@ -363,11 +412,13 @@ export function LabLabwareNewPage() {
   }
 
   const handleSave = async () => {
-    if (saving || !proposals || proposals.length === 0) return
+    // u2geom: gate on the MERGED rows (extracted + manual) — a declaration with
+    // no spec-sheet URL still commits; a wholly blank form does not.
+    if (saving || !mergedSaveReady) return
     setSaving(true)
     try {
       const info = await apiClient.getSchema(LABWARE_DEFINITION_SCHEMA)
-      const payload = buildPayloadFromProposals(proposals, name.trim(), info.schema, extractedFromUrl ?? undefined)
+      const payload = buildPayloadFromProposals(allProposals, name.trim(), info.schema, extractedFromUrl ?? undefined)
       // Named refusal before the POST: Ajv on the server stays the sole validator,
       // but a payload that cannot satisfy the schema's required fields is refused
       // here by field name instead of round-tripping a 422.
@@ -393,8 +444,9 @@ export function LabLabwareNewPage() {
       <div style={{ padding: '1rem' }} data-testid="lab-labware-new-page">
         <h2>Add a labware definition</h2>
         <p>
-          Enter a name and a spec-sheet URL, then propose fields from the sheet.
-          Only fields extracted from the sheet will be saved.
+          Enter a name and a spec-sheet URL, then propose fields from the sheet. Without a sheet,
+          declare the geometry you know below — only fields you fill in are saved; blank fields
+          are left out of the record.
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1rem' }}>
@@ -457,6 +509,70 @@ export function LabLabwareNewPage() {
             <p>URL: {noProposalsInfo.url}</p>
           </div>
         )}
+
+        {/* u2geom — the manual geometry section. Always rendered: with or
+            without an extraction, the person declares what they know here and
+            blank entries stay out of the payload (never an invented value). */}
+        <div
+          data-testid="lab-labware-geometry"
+          style={{ border: '1px solid var(--cl-border)', borderRadius: '6px', padding: '0.75rem', marginBottom: '1rem' }}
+        >
+          <h3 style={{ marginTop: 0 }}>Declare the geometry you know</h3>
+          <p style={{ color: '#666', margin: '0.25rem 0 0.75rem', fontSize: '0.85rem' }}>
+            No spec sheet, or the sheet did not state a field? Fill in only what you know.
+            Blank fields are left out of the record.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
+            {MANUAL_GEOMETRY_FIELDS.map((field) => (
+              <label
+                key={field.testid}
+                style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', fontSize: '0.85rem' }}
+              >
+                {field.label}
+                {field.kind === 'select' ? (
+                  <select
+                    data-testid={`lab-labware-geometry-${field.testid}`}
+                    value={manualGeometry[field.targetField]}
+                    onChange={(e) =>
+                      setManualGeometry((m) => ({ ...m, [field.targetField]: e.target.value }))
+                    }
+                    style={{ padding: '0.4rem 0.6rem', border: '1px solid var(--cl-border)', borderRadius: '6px', background: 'var(--cl-bg-elev)' }}
+                  >
+                    <option value="">—</option>
+                    {field.options?.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    data-testid={`lab-labware-geometry-${field.testid}`}
+                    value={manualGeometry[field.targetField]}
+                    onChange={(e) =>
+                      setManualGeometry((m) => ({ ...m, [field.targetField]: e.target.value }))
+                    }
+                    style={{ padding: '0.4rem 0.6rem', border: '1px solid var(--cl-border)', borderRadius: '6px', background: 'var(--cl-bg-elev)' }}
+                  />
+                )}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* u2geom — save affordance for the manual-declaration leg (no
+            extraction, or extraction with no rows). The extracted-leg button
+            lives with the proposals block; exactly one is rendered. */}
+        {!(state === 'success' && proposals !== null && proposals.length > 0) &&
+          mergedSaveReady && (
+            <button
+              type="button"
+              data-testid="lab-labware-save-button"
+              onClick={() => void handleSave()}
+              disabled={saving}
+              style={{ padding: '0.4rem 0.8rem', border: '1px solid var(--cl-border)', borderRadius: '6px', background: 'var(--cl-bg-elev)', cursor: 'pointer' }}
+            >
+              {saving ? 'Saving…' : 'Save labware definition'}
+            </button>
+          )}
 
         {state === 'success' && proposals && proposals.length > 0 && (
           <div data-testid="lab-labware-proposals">
