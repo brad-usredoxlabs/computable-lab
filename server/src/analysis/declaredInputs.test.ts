@@ -270,6 +270,66 @@ describe('validateDeclaredInputs — OQ-3 named skip + W4 rejection set', () => 
     })).rejects.toMatchObject({ code: 'INPUT_DATAKIND_INCOMPATIBLE' });
   });
 
+  // L2-GC-ANALYSIS-BIND-1 (u1measkind) — a parsed MEASUREMENT record carries no
+  // payload.dataKind (schema/lab/measurement.schema.yaml declares only
+  // const: "measurement" as its kind). The gate must fall back to the bound
+  // record's own TYPE, so a measurement either matches a slot typed for it or
+  // is refused by name — never silently admitted (typed ports,
+  // architect-context-l2.md §2.9; SUBPROTOCOL-GRAPH-SHAPE D8.4).
+  it('refuses a measurement record (no payload.dataKind) bound into a signal-declared slot — the kind falls back to the record TYPE (INPUT_DATAKIND_INCOMPATIBLE, not a silent pass)', async () => {
+    // The hole at base: the (vii) arm read only payload.dataKind and SKIPPED
+    // the comparison when it was absent — so this body resolved to NO kind and
+    // passed. The measurement record's TYPE is its own kind (measurement.schema
+    // const); that name is the ONLY source for the resolved kind (no TS string
+    // table, no client re-derivation).
+    const store = storeWith({
+      'MSR-TEST-1': { kind: 'measurement', recordId: 'MSR-TEST-1', title: 'GC run 1', assayType: 'gc_ms', data: [] },
+    });
+    const payload = {
+      kind: 'analysis-revision', id: 'ANREV-TEST-GC',
+      inputs: [{ name: 'trace', dataKind: 'signal', required: true, acceptsKinds: ['measurement'] }],
+    };
+    await expect(validateDeclaredInputs(store, payload, {
+      trace: { kind: 'record', id: 'MSR-TEST-1', type: 'measurement' },
+    })).rejects.toMatchObject({
+      code: 'INPUT_DATAKIND_INCOMPATIBLE',
+      message: expect.stringContaining("declared dataKind 'signal'"),
+      message: expect.stringContaining("resolves to dataKind 'measurement'"),
+    });
+  });
+
+  it('passes a measurement record into a measurement-declared slot (the resolved record-type kind MATCHES the declaration — typed by name, not by omission)', async () => {
+    // Same record, a slot typed for it: the kind the schema now admits
+    // (dataKind: 'measurement' on the slot) matches the record's TYPE — the
+    // typed-port pass, end to end.
+    const store = storeWith({
+      'MSR-TEST-1': { kind: 'measurement', recordId: 'MSR-TEST-1', title: 'GC run 1', assayType: 'gc_ms', data: [] },
+    });
+    const payload = {
+      kind: 'analysis-revision', id: 'ANREV-TEST-GC',
+      inputs: [{ name: 'chromatogram', dataKind: 'measurement', required: true, acceptsKinds: ['measurement'] }],
+    };
+    await expect(validateDeclaredInputs(store, payload, {
+      chromatogram: { kind: 'record', id: 'MSR-TEST-1', type: 'measurement' },
+    })).resolves.toBeUndefined();
+  });
+
+  it('keeps the "absent ⇒ skip" rule for a record that resolves to NO kind at all (payload.dataKind and the record-type fallback both undefined ⇒ no comparison, byte-identical to base)', async () => {
+    // The fallback may resolve a kind from the record TYPE only. A record with
+    // no payload.dataKind AND a type that resolves to no kind still gets the
+    // named skip — no invented default kind, no new rejection.
+    const store = storeWith({
+      'REC-TEST-NOKIND': { kind: 'some-kind', recordId: 'REC-TEST-NOKIND' },
+    });
+    const payload = {
+      kind: 'analysis-revision', id: 'ANREV-TEST-GC',
+      inputs: [{ name: 'any', dataKind: 'table', required: true, acceptsKinds: ['some-kind'] }],
+    };
+    await expect(validateDeclaredInputs(store, payload, {
+      any: { kind: 'record', id: 'REC-TEST-NOKIND', type: 'some-kind' },
+    })).resolves.toBeUndefined();
+  });
+
   it('passes a fully satisfied body (the declared contract is met end-to-end)', async () => {
     const store = storeWith({
       'DREF-TEST-1': { kind: 'data-reference', id: 'DREF-TEST-1', dataKind: 'table' },
