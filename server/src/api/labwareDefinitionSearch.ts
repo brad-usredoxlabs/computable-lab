@@ -13,6 +13,11 @@
  *
  * Tokenization folds `×`→x (glyph labels like "(5×16)" match "5x16") plus the
  * existing hyphen/underscore fold; every query token must appear.
+ *
+ * The response also reports `storeTier`: a search that could not read source 2
+ * (not wired, or `list()` threw) says so, so a registry-only list is never
+ * presented as the lab's whole answer. A failed source still leaves the
+ * vendored tier rendering — degraded, and labelled as degraded.
  */
 import { getLabwareDefinitionRegistry } from '../registry/LabwareDefinitionRegistry.js';
 import { lookupLabwareClass } from '../resolve/bindings/labwareTypeBinding.js';
@@ -52,6 +57,21 @@ export interface LabwareDefinitionSearchOptions {
   store?: Pick<RecordStore, 'list'> | null | undefined;
   q?: string | undefined;
   limit?: number | undefined;
+}
+
+/**
+ * Whether source 2 (the record store) was actually read. Discriminated so
+ * `reason` exists exactly when the status says the tier is unavailable —
+ * exactOptionalPropertyTypes forbids building `{ status, reason: undefined }`.
+ */
+export type LabwareDefinitionStoreTier =
+  | { status: 'searched' }
+  | { status: 'unavailable'; reason: string };
+
+export interface LabwareDefinitionSearchResult {
+  hits: LabwareDefinitionSearchHit[];
+  total: number;
+  storeTier: LabwareDefinitionStoreTier;
 }
 
 const fold = (s: string): string =>
@@ -104,7 +124,7 @@ function toHit(def: DefinitionLike, fallbackRecordId?: string): LabwareDefinitio
 
 export async function searchLabwareDefinitions(
   options: LabwareDefinitionSearchOptions,
-): Promise<{ hits: LabwareDefinitionSearchHit[]; total: number }> {
+): Promise<LabwareDefinitionSearchResult> {
   const rawQ = (options.q ?? '').trim().toLowerCase();
   const limit = Math.min(Math.max(options.limit ?? 12, 1), 50);
 
@@ -112,16 +132,27 @@ export async function searchLabwareDefinitions(
   const registryCandidates: DefinitionLike[] = getLabwareDefinitionRegistry().list() as unknown as DefinitionLike[];
 
   // Source 2: record-store labware-definition records (seeded + lab-authored).
+  // Whether that source was actually read is part of the answer: a caller that
+  // passes no store (or a store that throws) gets a named status, never a
+  // registry-only list that reads as complete.
   let recordCandidates: DefinitionLike[] = [];
-  if (options.store) {
+  let storeTier: LabwareDefinitionStoreTier;
+  if (!options.store) {
+    storeTier = { status: 'unavailable', reason: 'no-store' };
+  } else {
     try {
       const envelopes = await options.store.list({ kind: 'labware-definition' });
       recordCandidates = envelopes
         .map((env) => (env.payload ?? {}) as DefinitionLike)
         .filter((p) => p && typeof p === 'object');
-    } catch {
-      // A broken record store must not blank the vendored tier.
+      storeTier = { status: 'searched' };
+    } catch (error) {
+      // A broken record store must not blank the vendored tier — but it must
+      // not be silent either: the response reports the tier as unavailable.
       recordCandidates = [];
+      const reason =
+        error instanceof Error ? error.message || error.name : String(error);
+      storeTier = { status: 'unavailable', reason };
     }
   }
 
@@ -157,5 +188,5 @@ export async function searchLabwareDefinitions(
     .map((def) => toHit(def))
     .filter((h): h is LabwareDefinitionSearchHit => h !== null);
 
-  return { hits, total: matches.length };
+  return { hits, total: matches.length, storeTier };
 }

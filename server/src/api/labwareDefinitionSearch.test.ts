@@ -8,7 +8,9 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import Fastify from 'fastify';
 import { parse as parseYaml } from 'yaml';
+import type { RecordStore } from '../store/types.js';
 import { loadSchemasFromContent } from '../schema/SchemaLoader.js';
 import { createValidator } from '../validation/AjvValidator.js';
 import {
@@ -52,6 +54,59 @@ function fixture(recordId: string, displayName: string, legacy?: string[]) {
     id: `fixture/${recordId}@v1`,
     display_name: displayName,
     ...(legacy ? { legacy_labware_types: legacy } : {}),
+  };
+}
+
+/**
+ * Payloads mirroring the SHIPPED seed records (records/seed/labware-definition/):
+ * lbw-def-generic-12-reservoir.yaml and
+ * lbw-def-opentrons-nest-12-reservoir-22ml-v1.yaml. Mirrored, not read from
+ * records/, so this test pins the READ PATH and the data repo stays untouched.
+ */
+const SEED_SHAPED_PAYLOADS: Array<Record<string, unknown>> = [
+  {
+    kind: 'labware-definition',
+    recordId: 'lbw-def-generic-12-reservoir',
+    type: 'labware_definition',
+    id: 'generic/reservoir_12@v1',
+    display_name: 'Generic 12-Channel Reservoir',
+    source: 'generic',
+    specificity: 'generic',
+    legacy_labware_types: ['reservoir_12'],
+    topology: { addressing: 'linear', linear_count: 12, linear_axis: 'x' },
+    capacity: { max_well_volume_uL: 25000, min_working_volume_uL: 500 },
+    render_hints: { profile: 'reservoir', linear_well_style: 'trough' },
+  },
+  {
+    kind: 'labware-definition',
+    recordId: 'lbw-def-opentrons-nest-12-reservoir-22ml-v1',
+    type: 'labware_definition',
+    id: 'opentrons/nest_12_reservoir_22ml@v1',
+    display_name: '12-Channel Reservoir',
+    vendor: 'Opentrons',
+    read_only: true,
+    legacy_labware_types: ['reservoir_12'],
+    topology: { addressing: 'linear', linear_count: 12, linear_axis: 'x' },
+    capacity: { max_well_volume_uL: 22000, min_working_volume_uL: 1000 },
+    render_hints: { profile: 'reservoir', linear_well_style: 'trough' },
+  },
+];
+
+/** ROUTE-level stub, copied from InventoryShelfHandlers.test.ts:67-81. */
+function stubRouteOptions(store: RecordStore) {
+  const noop = async () => ({});
+  return {
+    recordHandlers: {
+      listRecords: noop, listDanglingReferences: noop, listRevisions: noop,
+      draftCopy: noop, acceptGraph: noop,
+      getRecord: noop, createRecord: noop, updateRecord: noop, deleteRecord: noop,
+      listClaims: noop, checkClaimDuplicates: noop,
+    } as never,
+    schemaHandlers: { listSchemas: noop, getSchema: noop, getSchemaByPath: noop } as never,
+    validationHandlers: { validate: noop, lint: noop, validateFull: noop } as never,
+    schemaCount: () => 0,
+    ruleCount: () => 0,
+    recordStore: store,
   };
 }
 
@@ -119,5 +174,92 @@ describe('labwareType -> ontology class bindings', () => {
     const { hits } = await searchLabwareDefinitions({ store, q: 'fixture slide carrier' });
     expect(hits).toHaveLength(1);
     expect('lwoClass' in hits[0]!).toBe(false);
+  });
+});
+
+describe('labware-definition search: the record store is the second source', () => {
+  // F2 (PROMPT1-GATE-20261114T034254Z): 41 labware-definition records existed
+  // while POST /labware-definitions/search answered 0 hits, because the caller
+  // never wired the store. These cases pin the read of that second source.
+  it('returns the shipped 12-channel records by recordId, and says it searched the store', async () => {
+    const store = storeWith(SEED_SHAPED_PAYLOADS);
+
+    const byChannel = await searchLabwareDefinitions({ store, q: '12-channel' });
+    expect(byChannel.storeTier).toEqual({ status: 'searched' });
+    const channelIds = byChannel.hits.map((h) => h.recordId);
+    expect(channelIds).toContain('lbw-def-generic-12-reservoir');
+    expect(channelIds).toContain('lbw-def-opentrons-nest-12-reservoir-22ml-v1');
+    expect(
+      byChannel.hits.find((h) => h.recordId === 'lbw-def-opentrons-nest-12-reservoir-22ml-v1')?.label,
+    ).toBe('12-Channel Reservoir');
+
+    const byVendor = await searchLabwareDefinitions({ store, q: 'opentrons' });
+    expect(byVendor.storeTier).toEqual({ status: 'searched' });
+    expect(byVendor.hits.map((h) => h.recordId)).toContain(
+      'lbw-def-opentrons-nest-12-reservoir-22ml-v1',
+    );
+  });
+
+  it('route: POST /labware-definitions/search reaches the store through registerRoutes', async () => {
+    const app = Fastify();
+    const store = storeWith(SEED_SHAPED_PAYLOADS) as unknown as RecordStore;
+    // routes.ts pulls the compiler graph, which resolves its vocabulary as
+    // `join(process.cwd(), 'schema', ...)`. This suite is run from server/, so
+    // point cwd at the repo root for the import; the search module itself
+    // needs no cwd, and the stub is restored in the finally below.
+    const realCwd = process.cwd;
+    process.cwd = () => resolve(__dirname, '../../..');
+    try {
+      const { registerRoutes } = await import('./routes.js');
+      registerRoutes(app, stubRouteOptions(store));
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/labware-definitions/search',
+        payload: { q: 'opentrons' },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as {
+        hits: { recordId: string }[];
+        storeTier: { status: string };
+      };
+      expect(body.storeTier.status).toBe('searched');
+      expect(body.hits.map((h) => h.recordId)).toContain(
+        'lbw-def-opentrons-nest-12-reservoir-22ml-v1',
+      );
+    } finally {
+      process.cwd = realCwd;
+    }
+    await app.close();
+  });
+
+  it('AC2: no store is reported, not hidden, and the registry tier still renders', async () => {
+    const { hits, storeTier } = await searchLabwareDefinitions({ q: '' });
+    expect(storeTier).toEqual({ status: 'unavailable', reason: 'no-store' });
+    expect(hits.length).toBeGreaterThan(0);
+  });
+
+  it('AC2: a store whose list() throws is reported, and the registry tier still renders', async () => {
+    const store = {
+      list: async () => {
+        throw new Error('store offline');
+      },
+    } as unknown as LabwareDefinitionSearchOptions['store'];
+    const { hits, storeTier } = await searchLabwareDefinitions({ store, q: '' });
+    expect(storeTier.status).toBe('unavailable');
+    expect(storeTier.status === 'unavailable' ? storeTier.reason : '').toBe('store offline');
+    expect(hits.length).toBeGreaterThan(0);
+  });
+
+  // No unit harness can observe server.ts's inline routeOpts (built inside the
+  // boot closure), so the caller wiring gets a textual pin: deleting
+  // `recordStore: ctx.store,` from the routeOpts literal makes this go RED.
+  // It proves presence, not runtime behaviour — the live probe proves that.
+  it('wiring: server.ts routeOpts hands ctx.store to the search route', () => {
+    const source = readFileSync(resolve(__dirname, '../server.ts'), 'utf8');
+    const start = source.indexOf("const routeOpts: import('./api/routes.js').RouteOptions = {");
+    expect(start).toBeGreaterThan(-1);
+    const block = source.slice(start, source.indexOf('    };', start));
+    expect(block).toMatch(/recordStore:\s*ctx\.store,/);
   });
 });
