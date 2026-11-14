@@ -110,3 +110,47 @@ describe('ProposedGraphModal — the draft term manifest lives here (not the AI 
     expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ label: 'DMEM', existingTermId: 'mint:DMEM' }))
   })
 })
+
+// Gate defect 5 (PROMPT1-GATE-20261114T193636Z, 302-D4-view-changes.png): the header
+// said "0 labware" while the New records section below listed one new labware record.
+// The header must state truthfully what Accept will do — a labware-kind creation is
+// labware, even when nothing is placed.
+describe('ProposedGraphModal — header counts what Accept will do', () => {
+  it('counts a labware-kind record creation as labware when nothing is placed', () => {
+    const preview: EventEditorPreview = {
+      previewLabwares: {},
+      previewPlacements: [],
+      previewEvents: [],
+      recordCreations: [
+        {
+          kind: 'labware',
+          name: 'Thermo Optical-Quality Imaging Plate, 384-well, black-walled, clear bottom',
+          source: 'user-description',
+        },
+      ],
+    }
+    const { container } = render(<ProposedGraphModal preview={preview} onClose={() => undefined} />)
+    const header = container.querySelector('.ee-dialog__context')
+    expect(header).toBeTruthy()
+    expect(header?.textContent).toContain('1 labware')
+    expect(header?.textContent).not.toContain('0 labware')
+    // The creation is still listed where it always was — the header now matches it.
+    expect(screen.getByTestId('proposed-records-section')).toBeTruthy()
+  })
+
+  it('does not count a material-kind creation as labware', () => {
+    const preview: EventEditorPreview = {
+      previewLabwares: {},
+      previewPlacements: [],
+      previewEvents: [],
+      recordCreations: [{ kind: 'material', name: 'fenofibrate', domain: 'chemical', source: 'user-description' }],
+    }
+    const { container } = render(<ProposedGraphModal preview={preview} onClose={() => undefined} />)
+    const header = container.querySelector('.ee-dialog__context')
+    expect(header?.textContent).toContain('0 labware')
+    // The material is still listed — the header makes no material clause, so it
+    // must not claim zero of it.
+    expect(screen.getByTestId('proposed-records-section')).toBeTruthy()
+    expect(screen.getByTestId('proposed-record-row').textContent).toContain('fenofibrate')
+  })
+})
