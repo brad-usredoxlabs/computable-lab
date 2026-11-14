@@ -57,3 +57,30 @@ invisible, and Accept writes it. Two gates graded this; both called it an empty 
 - Deleting a surface component can no longer silently drop a channel: coverage fails first.
 - "Empty turn" becomes a message that names what the turn delivered, which is what the legacy wall did
   and what gate 6 and gate 7 both asked for.
+
+## Amendment 2026-11-14 — the acceptance invariant (from integration guidance §2)
+
+`test-prompts/integration-guidance-20261114.md` sharpens this into a guarantee, and it is adopted here:
+
+> **Every effect that acceptance can commit must be represented in the reviewed proposal. Anything the
+> interface cannot present must remain explicitly blocked.**
+
+Consequences that bind the implementation:
+
+1. **Acceptance is gated on presentation, not on parse.** If a turn carries a channel with treatment
+   `wall` (i.e. the surface cannot present it), the proposal may still be SHOWN, but Accept must refuse
+   to commit that channel's effects — a blocked state naming the channel, never a silent partial write.
+   This closes the gate-7 state exactly: a record proposal under an invisible bar that Accept wrote.
+2. **Mixed turns are judged as a whole.** A turn proposing a material, a labware placement and events
+   must present all three before any of them can be committed. Presenting the events alone and applying
+   the rest is the defect, not a partial success.
+3. **Three declarations, three jobs, connected — never merged.** A CAPABILITY declares an operation with
+   typed inputs/outputs; a CHANNEL declares an output requiring presentation; a SURFACE declares where a
+   person can inspect, supply, revise or accept. They reference each other; none redefines the workflow.
+   A capability that hides a journey is still a defect; a channel that has no surface treatment is a
+   blocked state; a surface that invents its own channel list is a second authority.
+
+Tripwire additions (both directions, in `L2-AI-CHANNEL-COVERAGE-TRIPWIRE-1`): a `wall`-treated channel
+must make Accept refuse its effects, and that refusal must be asserted by test; and a `card`/`mount`
+channel must appear in the proposal the person sees before commit is possible.
+
