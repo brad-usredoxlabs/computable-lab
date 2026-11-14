@@ -342,7 +342,8 @@ export interface UseAiChatReturn {
    * `switchThread`'s read resolves empty, CLEARED when a read resolves with
    * messages and on every thread reset (switch / new / re-key / fresh send).
    * A fresh mint resolving empty is a NEW conversation (honest blank pane),
-   * NOT a named reason (the predicate is mint-exempt via userSwitchRef).
+   * NOT a named reason (mint-exempt: the flag is set ONLY by `switchThread`
+   * and cleared on every non-user activation — mount/scope mint, `newThread`).
    * Optional (absent-not-undefined, exactOptionalPropertyTypes) so hand-rolled
    * stub literals that predate it keep typechecking; the REAL hook always
    * supplies the key (null when no reason) — a consumer never sees it missing
@@ -970,6 +971,11 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
     // L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render: the named-reason belongs to the
     // read that produced it — a wipe (switch / new / re-key) drops it.
     setThreadUnreadable(null)
+    // L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render2: the named-reason RODE the
+    // honest-wall channel (its text is in paneRelevantSignature — the bump
+    // that re-renders the SIBLING pane); the wipe drops it too, the same
+    // idiom as the recovery marker above it.
+    setHonestWall(null)
     persistedIdsRef.current = new Set()
     hydratedRef.current = false
     // LEG F: a USER-initiated wipe (switchThread / newThread) also drops the
@@ -1001,6 +1007,10 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
     if (!endpoint) return
     if (scopeStatusRef.current === 'provisional') return
     const id = mintTabThreadEntry(scope)
+    // L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render2: a fresh mint is a NEW
+    // conversation — its empty read must stay an honest blank pane, never a
+    // stale "could not read" reason from a prior unreadable selection.
+    userSwitchRef.current = false
     resetChatState()
     setActiveThread({ scope: scope ?? '', id })
   }, [endpoint, scope, resetChatState])
@@ -1036,6 +1046,13 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
     // (keyed on activeThread) does not re-run (no double-fetch).
     const prev = activeThreadRef.current
     if (prev && prev.scope === next.scope && prev.id === next.id) return
+    // L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render2: this activation is NOT a
+    // user-initiated switchThread (mount mint, scope-change mint, settle
+    // re-run) — its empty read is a new conversation (honest blank pane),
+    // never a "could not read" named reason. Cleared on the activation, not
+    // before the stable-pair early return, so a same-pair settle re-run
+    // cannot drop an in-flight user switch's flag.
+    userSwitchRef.current = false
     setActiveThread(next)
   }, [endpoint, scope, scopeStatus])
 

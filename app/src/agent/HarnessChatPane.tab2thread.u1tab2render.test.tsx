@@ -252,4 +252,41 @@ describe('HarnessChatPane — a second tab selects a listed thread (L2-P1-TAB2-T
     expect(screen.queryByTestId('thread-unreadable')).toBeNull()
     expect(screen.getByRole('log')).toBeInTheDocument()
   })
+
+  it('NAMED-REASON (step 3, u1tab2render2): a fresh mint after an unreadable selection stays an honest blank pane (no stale reason)', async () => {
+    threadContents[FIXTURE_TID] = FIXTURE
+    listedExtra['tid-vanished'] = { title: 'Add a 96-well deepwell plate to the deck.', messageCount: 6 }
+    render(
+      <AiPanelProvider>
+        <Host />
+      </AiPanelProvider>,
+    )
+    await waitSelectEnabled()
+    const options = () => Array.from(select().options)
+    await waitFor(() => expect(options().some((o) => o.value === 'tid-vanished')).toBe(true))
+    // Select the unreadable thread: the read resolves empty -> the named
+    // state renders. Its user-switch mark is still live here.
+    fireEvent.change(select(), { target: { value: 'tid-vanished' } })
+    const notice = await screen.findByTestId('thread-unreadable')
+    expect(notice.textContent).toContain('tid-vanished')
+    // New thread via the picker's OWN button (the reachable path): a fresh
+    // mint is a NEW conversation — its empty read must NOT inherit the
+    // prior selection's named reason or its honest-wall ride.
+    fireEvent.click(screen.getByTestId('thread-picker-new'))
+    const minted = readMap()['']!
+    expect(minted).not.toBe('tid-vanished')
+    await waitFor(() => expect(getThreadCalls().some((c) => c.headers['x-cl-thread-id'] === minted)).toBe(true))
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)) })
+    expect(screen.queryByTestId('thread-unreadable')).toBeNull()
+    expect(screen.queryByText(/could not read/)).toBeNull()
+    expect(logMessages()).toHaveLength(0)
+    // The honest blank pane is still LIVE: a send renders its answer with
+    // no prior-read reason anywhere.
+    const input = screen.getByRole('textbox') as HTMLTextAreaElement
+    fireEvent.change(input, { target: { value: 'Fresh thread question.' } })
+    fireEvent.click(screen.getByRole('button', { name: /send/i }))
+    await waitFor(() => expect(logMessages()).toHaveLength(2))
+    expect(screen.queryByTestId('thread-unreadable')).toBeNull()
+    expect(screen.queryByText(/could not read/)).toBeNull()
+  })
 })
