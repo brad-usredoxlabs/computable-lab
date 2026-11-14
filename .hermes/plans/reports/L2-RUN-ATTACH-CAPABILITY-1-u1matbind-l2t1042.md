@@ -164,3 +164,5 @@ so the honest fix is out of this unit's scope by the schema half alone.
 
 - No product commits (tree at base was clean and stays clean of code changes; the only commit is
   this report). Scratch dir `/home/brad/.matbind-scratch/` deleted at exit.
+
+Marker: L2-RUN-ATTACH-CAPABILITY-1-u1matbind UNIT L2-RUN-ATTACH-CAPABILITY-1-u1matbind BLOCKED schema/knowledge/acquisition-package.schema.yaml lacks materialRef (top-level unevaluatedProperties:false) so a stamped materialRef fails store validation (probe: valid=false, 500 end-to-end); schema/** PROHIBITED to this unit; honest fix measured at 5-6 files/~45 lines
