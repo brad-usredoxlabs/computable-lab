@@ -290,6 +290,98 @@ describe('resolveLabware', () => {
   })
 })
 
+describe('L2-P1-BIND-ID-1 recbyid — a Definition row is offered only with a recordId this lab holds', () => {
+  // The picker must never offer a mention id no record has (recon R1-2/R1-3:
+  // the vendored-registry-only copy `lbw-def-generic-96-well-deepwell-plate`
+  // GETs 404 while the lab's record is `lbw-def-generic-96-well-deep-plate`,
+  // same display_name). Identity is a record id, never a name: the fix is at
+  // the mention consumer, so a catalogue-only definition surfaces as a
+  // DISABLED diagnostic naming the missing id — never a selectable row.
+  it('offers a Definition row only when its recordId is in this lab; a catalogue-only id becomes ONE disabled diagnostic naming it', async () => {
+    mockSearchResponse([{ recordId: 'LBW-96', kind: 'labware', label: '96-well plate' }])
+    // searchLabwareDefinitions: two hits with the SAME display_name — one is a
+    // real lab record, the other is the vendored-registry-only copy.
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        hits: [
+          { recordId: 'lbw-def-generic-96-well-deep-plate', label: 'Generic 96-Well Deep Well Plate', kind: 'labware-definition' },
+          { recordId: 'lbw-def-generic-96-well-deepwell-plate', label: 'Generic 96-Well Deep Well Plate', kind: 'labware-definition' },
+        ],
+        total: 2,
+      }),
+    } as Response)
+    // listRecordsByKind('labware-definition'): the lab holds exactly the deep-plate record.
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        records: [
+          {
+            recordId: 'lbw-def-generic-96-well-deep-plate',
+            schemaId: 'https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml',
+            payload: {
+              kind: 'labware-definition',
+              recordId: 'lbw-def-generic-96-well-deep-plate',
+              display_name: 'Generic 96-Well Deep Well Plate',
+            },
+          },
+        ],
+        total: 1,
+      }),
+    } as Response)
+
+    const out = await resolveLabware('deepwell', ctx({ onUpdate: () => {} }))
+
+    // recordId PRESENT in the lab's records → the existing selectable
+    // Definition row, unchanged.
+    const held = out.find((s) => s.key === 'labware:lbw-def-generic-96-well-deep-plate')
+    expect(held).toBeDefined()
+    expect(held?.badge).toBe('Definition')
+    expect(held?.disabled).toBeUndefined()
+    expect(held?.mention).toMatchObject({ type: 'labware', id: 'lbw-def-generic-96-well-deep-plate' })
+
+    // recordId ABSENT → NO selectable row. Instead ONE disabled diagnostic
+    // row naming the missing id (visible to the person, not silently dropped).
+    const unavailable = out.filter((s) => s.badge === 'Unavailable')
+    expect(unavailable).toHaveLength(1)
+    expect(unavailable[0]?.disabled).toBe(true)
+    expect(unavailable[0]?.label).toBe("Not in this lab's records: Generic 96-Well Deep Well Plate")
+    expect(unavailable[0]?.subtitle).toBe('lbw-def-generic-96-well-deepwell-plate')
+    expect(unavailable[0]?.mention).toMatchObject({
+      type: 'labware',
+      id: 'lbw-def-generic-96-well-deepwell-plate',
+    })
+
+    // The channel is closed by construction, not by luck: NO enabled row may
+    // carry a mention id the lab's records do not hold.
+    const enabled = out.filter((s) => !s.disabled)
+    for (const row of enabled) {
+      if (row.badge === 'Definition') {
+        expect(row.mention).toMatchObject({ type: 'labware', id: 'lbw-def-generic-96-well-deep-plate' })
+      }
+      expect(row.mention).not.toMatchObject({
+        type: 'labware',
+        id: 'lbw-def-generic-96-well-deepwell-plate',
+      })
+    }
+  })
+
+  it('keeps offering the Definition rows (today behaviour) when listRecordsByKind throws, and does not fail the menu', async () => {
+    mockSearchResponse([])
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        hits: [{ recordId: 'lbw-def-x-plate', label: 'X plate', kind: 'labware-definition' }],
+        total: 1,
+      }),
+    } as Response)
+    fetchSpy.mockRejectedValueOnce(new Error('records API down'))
+
+    const out = await resolveLabware('x', ctx({ onUpdate: () => {} }))
+    expect(out.find((s) => s.key === 'labware:lbw-def-x-plate')?.badge).toBe('Definition')
+  })
+})
+
 
 describe('resolveEquipment', () => {
   it('maps local equipment records to equipment suggestions', async () => {
