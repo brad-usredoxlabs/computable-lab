@@ -119,3 +119,4 @@ narration string; the named-cause error is byte-identical to before.
   thread; expect cardCount>0 with prefill 'Thermo Optical-Quality Imaging
   Plate'). Resume condition: merge landed + stack healthy.
 - Independent browser reviewer owns acceptance per the lane rules.
+L2-P1-EMPTY-TURN-CARD-2 UNIT L2-P1-EMPTY-TURN-CARD-2 DONE 790dcd5f7656ba26b78044c1ff73d4276b96ba95
