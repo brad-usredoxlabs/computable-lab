@@ -64,8 +64,25 @@ function isIntensityLikeCell(cell: string): boolean {
 
 function splitCells(line: string): string[] {
   if (line.includes(',')) return splitCsvLine(line);
-  const tabbed = line.split('\t').map((cell) => cell.trim()).filter((cell) => cell.length > 0);
+  // Tab split is POSITIONAL: cells are trimmed but never filtered, so an
+  // empty cell keeps its column (it is refused by the caller, not shifted
+  // away). Fall back to splitCsvLine only when the tab split yields a
+  // single cell (no tab, or a single untabbed cell).
+  const tabbed = line.split('\t').map((cell) => cell.trim());
   return tabbed.length > 1 ? tabbed : splitCsvLine(line);
+}
+
+// Strict numeric acceptance: trim, reject empty, accept plain/decimal/
+// scientific notation with an optional leading +/- — and nothing else.
+// Unlike Number.parseFloat this never takes a prefix, so "1.2.3" and
+// "45abc" refuse; "Infinity" and the like refuse too. NaN is returned for
+// anything the caller must reject.
+function strictNumber(cell: string): number {
+  const trimmed = cell.trim();
+  if (trimmed.length === 0 || !/^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(trimmed)) {
+    return Number.NaN;
+  }
+  return Number(trimmed);
 }
 
 // Candidate lines: blank lines and # / // comment lines are dropped; every
@@ -188,11 +205,11 @@ export const agilent6890Parser: MeasurementParser = {
       if (t === undefined || t.length === 0 || y === undefined || y.length === 0) {
         throw malformedRow(entry, 'missing the time or intensity cell', header);
       }
-      const timeMin = Number.parseFloat(t);
+      const timeMin = strictNumber(t);
       if (!Number.isFinite(timeMin)) {
         throw malformedRow(entry, 'the time cell is not a number', header);
       }
-      const value = Number.parseFloat(y);
+      const value = strictNumber(y);
       if (!Number.isFinite(value)) {
         throw malformedRow(entry, 'the intensity cell is not a number', header);
       }
