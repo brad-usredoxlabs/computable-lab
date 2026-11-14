@@ -3,7 +3,7 @@
 Lane 2 worktree: /home/brad/cl-wt/L2-JOURNEY-CONSERVATION-1-concompute-lane2
 Branch: cl/lane2-journey-conservation-concompute-0512; base 04e8276e5aec315c2795fb8c59bb47ccb1976618.
 Product commit: a3dbfff91c75ccd9a6a720194f0feca6adad5876 (the three product files; tree clean at that commit).
-Report commit: <filled by the marker commit>.
+Report commit: f1355194990dfab703f107c1f05ece8e75312054 (this file).
 
 ## Scope delivered (exactly the three owned files)
 - schema/sequence-analysis/conservation-interval.schema.yaml (NEW, 121 lines, Draft 2020-12,
@@ -195,3 +195,5 @@ Implementation complete (implementation ≠ acceptance). Owner: orchestrator →
 adversarial review + precheck + merge; acceptance waived for this unit per the
 brief (no route, no engine op, no UI — units 3-4). Lane-stack reload not needed
 for review (nothing reads the interval schema at runtime yet by design).
+
+L2-JOURNEY-CONSERVATION-1-concompute UNIT concompute DONE f1355194990dfab703f107c1f05ece8e75312054
