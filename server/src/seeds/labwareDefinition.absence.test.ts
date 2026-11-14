@@ -27,11 +27,19 @@ import { LABWARE_DEFINITIONS } from '../../../app/src/types/labwareDefinition';
 // stock" catalogue tier; it is not seeded and is not app-catalogue
 // stock, so it is out of scope here.
 const DEEPWELL_96 = 'deepwell_96';
+// L2-P1-SEED-ENTRY-1 (unit seedreg): the surviving store record's recordId —
+// the ONE identity for the 96-well deepwell concept (see the registry guard
+// below). The registry's deepwell entry must carry THIS recordId, never a
+// slug minted from the display name.
+const DEEPWELL_CANONICAL = 'lbw-def-generic-96-well-deep-plate';
 
 const here = fileURLToPath(import.meta.url);
 // server/src/seeds/ -> server/src -> server -> repoRoot
 const repoRoot = resolve(here, '..', '..', '..', '..');
 const defsDir = resolve(repoRoot, 'records', 'seed', 'labware-definition');
+// The vendored catalogue tier the seed-reg unit opens: the registry that
+// seeddefs2 left with the deepwell slug still on it.
+const registryDir = resolve(repoRoot, 'schema', 'registry', 'labware-definitions');
 
 describe('labware-definition seed absence (prompt-1 entry state, seeddefs2)', () => {
   it('no seeded labware-definition carries the 96-well deepwell legacy type', () => {
@@ -50,5 +58,48 @@ describe('labware-definition seed absence (prompt-1 entry state, seeddefs2)', ()
       d.legacy_labware_types.includes(DEEPWELL_96)
     );
     expect(offering.map((d) => d.id), 'deepwell_96 offered by the app catalogue').toEqual([]);
+  });
+
+  // L2-P1-SEED-ENTRY-1 (unit seedreg) — the registry half of the identity
+  // ruling (DEFINITION-IDENTITY-UNIQUENESS-l2-20261113): "A registry may not
+  // invent an identity. If the registry needs an entry for a store record,
+  // that entry's id IS the store recordId." Test the registry tier as a set
+  // relation, not a spot check: the surviving store record's recordId
+  // (DEEPWELL_CANONICAL) is claimed by EXACTLY ONE registry file — the
+  // surviving deepwell geometry reference — and no registry file mints a
+  // recordId a second time. The slug identity must not survive here either;
+  // this guard is keyed on the surviving recordId and the definition id, so
+  // it fails loudly the moment a slug twin or a second claimant appears.
+  it('the registry carries the surviving deepwell recordId exactly once (no second identity, no slug minting)', () => {
+    const files = readdirSync(registryDir).filter((f) => f.endsWith('.yaml'));
+    const entries = files.map((f) => {
+      const r = yamlLoad(readFileSync(resolve(registryDir, f), 'utf8')) as {
+        id?: unknown;
+        recordId?: unknown;
+      };
+      return { file: f, id: r.id, recordId: r.recordId };
+    });
+    // No slug minting: every registry recordId is distinct.
+    const recordIds = entries.map((e) => e.recordId);
+    const mintedTwice = recordIds.filter((rid, i) => recordIds.indexOf(rid) !== i);
+    expect(
+      mintedTwice,
+      `registry recordId minted more than once: ${[...new Set(mintedTwice)].join(', ')}`,
+    ).toEqual([]);
+    // The surviving identity is claimed by exactly one registry file.
+    const claimants = entries.filter((e) => e.recordId === DEEPWELL_CANONICAL);
+    expect(
+      claimants.map((e) => e.file),
+      `recordId ${DEEPWELL_CANONICAL} claimed by: ${claimants.map((e) => e.file).join(', ') || '(nobody)'}`,
+    ).toHaveLength(1);
+    // …and that claimant is the surviving deepwell geometry reference
+    // (definition id 96-well-deepwell-plate) carrying the surviving store
+    // recordId — never a slug minted from the display name.
+    const deepwell = entries.find((e) => e.id === '96-well-deepwell-plate');
+    expect(deepwell, 'registry file with definition id 96-well-deepwell-plate is missing').toBeDefined();
+    expect(
+      deepwell?.recordId,
+      'the registry deepwell entry does not carry the surviving store recordId (it still carries a slug identity)',
+    ).toBe(DEEPWELL_CANONICAL);
   });
 });

@@ -291,22 +291,24 @@ describe('resolveLabware', () => {
 })
 
 describe('L2-P1-BIND-ID-1 recbyid — a Definition row is offered only with a recordId this lab holds', () => {
-  // The picker must never offer a mention id no record has (recon R1-2/R1-3:
-  // the vendored-registry-only copy `lbw-def-generic-96-well-deepwell-plate`
-  // GETs 404 while the lab's record is `lbw-def-generic-96-well-deep-plate`,
-  // same display_name). Identity is a record id, never a name: the fix is at
-  // the mention consumer, so a catalogue-only definition surfaces as a
-  // DISABLED diagnostic naming the missing id — never a selectable row.
+  // The picker must never offer a mention id no record has. Identity is a
+  // record id, never a name: the fix is at the mention consumer, so a
+  // catalogue-only definition (a registry recordId this lab's record store
+  // does not hold) surfaces as a DISABLED diagnostic naming the missing id —
+  // never a selectable row. After the seedreg rename the 96-well deepwell
+  // registry entry carries the surviving store recordId (held here), so the
+  // catalogue-only case is exercised with a genuinely registry-only id (the
+  // 25 mL beaker: vendored in the registry, never seeded into this lab).
   it('offers a Definition row only when its recordId is in this lab; a catalogue-only id becomes ONE disabled diagnostic naming it', async () => {
     mockSearchResponse([{ recordId: 'LBW-96', kind: 'labware', label: '96-well plate' }])
-    // searchLabwareDefinitions: two hits with the SAME display_name — one is a
-    // real lab record, the other is the vendored-registry-only copy.
+    // searchLabwareDefinitions: one hit is a real lab record, the other is a
+    // registry-only catalogue id (vendored in the registry, never seeded).
     fetchSpy.mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         hits: [
           { recordId: 'lbw-def-generic-96-well-deep-plate', label: 'Generic 96-Well Deep Well Plate', kind: 'labware-definition' },
-          { recordId: 'lbw-def-generic-96-well-deepwell-plate', label: 'Generic 96-Well Deep Well Plate', kind: 'labware-definition' },
+          { recordId: 'lbw-def-generic-beaker-25ml', label: '25 mL Beaker', kind: 'labware-definition' },
         ],
         total: 2,
       }),
@@ -345,11 +347,11 @@ describe('L2-P1-BIND-ID-1 recbyid — a Definition row is offered only with a re
     const unavailable = out.filter((s) => s.badge === 'Unavailable')
     expect(unavailable).toHaveLength(1)
     expect(unavailable[0]?.disabled).toBe(true)
-    expect(unavailable[0]?.label).toBe("Not in this lab's records: Generic 96-Well Deep Well Plate")
-    expect(unavailable[0]?.subtitle).toBe('lbw-def-generic-96-well-deepwell-plate')
+    expect(unavailable[0]?.label).toBe("Not in this lab's records: 25 mL Beaker")
+    expect(unavailable[0]?.subtitle).toBe('lbw-def-generic-beaker-25ml')
     expect(unavailable[0]?.mention).toMatchObject({
       type: 'labware',
-      id: 'lbw-def-generic-96-well-deepwell-plate',
+      id: 'lbw-def-generic-beaker-25ml',
     })
 
     // The channel is closed by construction, not by luck: NO enabled row may
@@ -361,7 +363,7 @@ describe('L2-P1-BIND-ID-1 recbyid — a Definition row is offered only with a re
       }
       expect(row.mention).not.toMatchObject({
         type: 'labware',
-        id: 'lbw-def-generic-96-well-deepwell-plate',
+        id: 'lbw-def-generic-beaker-25ml',
       })
     }
   })
