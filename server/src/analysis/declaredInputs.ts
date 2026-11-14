@@ -327,12 +327,22 @@ export async function validateDeclaredInputs(
       if (ref.type === ARTIFACT_KIND) {
         resolvedKind = payload.dataKind ?? (payload.dataReferenceRef as { dataKind?: string } | undefined)?.dataKind;
       } else {
-        resolvedKind = payload.dataKind;
+        // L2-GC-ANALYSIS-BIND-1 (u1measkindfix1): the bound record carries its
+        // OWN kind — schema/lab/measurement.schema.yaml:21 REQUIRES `kind`
+        // (const: "measurement") and the store hands it back on env.payload
+        // (RecordStoreImpl.ts:636 reads payload.kind). The resolved kind is
+        // read FROM THE RECORD (payload.kind), never from the client's
+        // ref.type (a field of the run-create body): the caller's label has no
+        // authority over what the record IS — never a client re-derivation,
+        // never an invented default, never a silent skip of the comparison.
+        // The "absent ⇒ skip" rule below still governs: an artifact-typed ref
+        // may still resolve to no kind at all.
+        resolvedKind = payload.dataKind ?? payload.kind;
       }
       if (resolvedKind !== undefined && resolvedKind !== slot.dataKind) {
         throw new AnalysisServiceError(
           'INPUT_DATAKIND_INCOMPATIBLE',
-          `input '${key}' is declared dataKind '${slot.dataKind}' but the bound record resolves to dataKind '${String(resolvedKind)}'`,
+          `input '${key}' is declared dataKind '${slot.dataKind}' but the bound record resolves to dataKind '${String(resolvedKind)}' (bound record '${ref.id}')`,
         );
       }
     }
