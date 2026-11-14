@@ -1,16 +1,20 @@
 /**
- * conpersist (L2-JOURNEY-CONSERVATION-1, unit 3 of 3) — persisting the computed
- * conservation intervals. RED-first suite: legs (a)-(d) must fail before the
- * product code exists. The service-level leg runs on the house harness
- * (SequenceService.test.ts:18-22 shape): the artifact is built directly through
- * the REAL store — the operation's rows and coordinates come ONLY from the
- * pinned artifact's own snapshot, never from the request body; the declaration
- * is validated ONLY through the compute's own reader call; the record id is
- * deterministic in (declaration id+version, pinned artifact revision, region).
+ * conpersist (L2-JOURNEY-CONSERVATION-1, unit u3persist) — the PURE
+ * conservation-interval planner. The four pure legs (a)-(c2) assert that
+ * alignmentRowsFromSnapshot + planConservationIntervals hold the artifact
+ * snapshot as the only row authority (the per-sequence mapping is the row's
+ * own shipped coordinateMap — read and copied, never re-derived); the four
+ * schema legs (s1)-(s4) assert the record shape the planner's receipts ride
+ * on: kind+id on the interval record and the save_conservation_intervals
+ * action variant.
+ *
+ * The service-level legs (d, AC2a-AC2c, AC3a-AC3b, e — the SequenceService
+ * operation on the real store) moved OUT of this file to unit u3wire (same
+ * item, service-wiring split). They are preserved VERBATIM at commit
+ * 6c975ffaf: git show 6c975ffaf:server/src/sequences/conservationPersist.test.ts
  */
-import { beforeAll, afterAll, describe, expect, it } from 'vitest';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { describe, expect, it } from 'vitest';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
@@ -18,11 +22,6 @@ import Ajv2020 from 'ajv/dist/2020.js';
 import { createSchemaRegistry } from '../schema/SchemaRegistry.js';
 import { loadAllSchemas } from '../schema/SchemaLoader.js';
 import { createValidator } from '../validation/AjvValidator.js';
-import { LintEngine } from '../lint/LintEngine.js';
-import { createLocalRepoAdapter } from '../repo/LocalRepoAdapter.js';
-import { createRecordStore } from '../store/RecordStoreImpl.js';
-import type { AppContext } from '../server.js';
-import { SequenceService } from './SequenceService.js';
 import { SEQUENCE_SCHEMA } from './sequenceRuntime.js';
 import { computeConservationIntervals, type AlignmentRow } from './conservationCompute.js';
 import { alignmentRowsFromSnapshot, planConservationIntervals } from './conservationPersist.js';
@@ -30,6 +29,21 @@ import { alignmentRowsFromSnapshot, planConservationIntervals } from './conserva
 // Repo-root-relative (house idiom): src/sequences/ + three up = worktree root — not cwd.
 const intervalSchema = parseYaml(await readFile(join(fileURLToPath(new URL('.', import.meta.url)), '../../../schema/sequence-analysis/conservation-interval.schema.yaml'), 'utf8')) as Record<string, any>;
 const validateInterval = new Ajv2020({ strict: true, allErrors: true }).compile(intervalSchema);
+
+// The sequence-action schema needs the house harness (SequenceService.test.ts
+// idiom, minus the store): the existing variants $ref sibling schemas, so the
+// full schema directory is loaded once and every entry registered by $id
+// before the file compiles. createValidator() carries the house Ajv options
+// (strict + allErrors + discriminator + strictRequired:false —
+// AjvValidator.ts:27-32), which is what lets the file's `discriminator:`
+// keyword and root-level required compile under strict mode.
+const actionRegistry = createSchemaRegistry();
+const actionLoaded = await loadAllSchemas({ basePath: fileURLToPath(new URL('../../../schema', import.meta.url)), recursive: true });
+expect(actionLoaded.errors).toEqual([]);
+actionRegistry.addSchemas(actionLoaded.entries);
+const actionValidator = createValidator();
+for (const id of actionRegistry.getTopologicalOrder()) { const e = actionRegistry.getById(id); if (e) actionValidator.addSchema(e.schema, id); }
+const ACTION_SCHEMA = SEQUENCE_SCHEMA + 'sequence-action.schema.yaml';
 
 /** A COMPLETE declaration (mirrors conservationCompute.test.ts:30-41). */
 const declaration = (): Record<string, any> => ({
@@ -43,8 +57,6 @@ const declaration = (): Record<string, any> => ({
   uncertainty: { method: 'jackknife resampling over sequences per column', reported_per_interval: true },
   primer_suitability: { claimed: false, note: 'a declared column set is never a primer recommendation; primer choice stays a human decision' },
 });
-/** Same declaration, changed gap treatment and version — the mutation leg. */
-const declB = (): Record<string, any> => ({ ...declaration(), version: '1.1.0', gap_policy: { treatment: 'count_as_mismatch', denominator_effect: 'a column containing any gap stays in the denominator and counts as a mismatch' } });
 /** Three equal-length rows, all gapped at column 1; literal coordinateMap arrays
  *  — the mapping the persisted record must COPY (first/last non-null in the
  *  region: cols 1-5 -> start 1, end 4). */
@@ -53,27 +65,6 @@ const rows: AlignmentRow[] = [
   { sequenceId: 'seq-2', revisionId: 'rev-2', aligned: '-ATGCGG-GATGC', coordinateMap: [null, 1, 2, 3, 4, 5, 6, null, 7, 8, 9, 10, 11] },
   { sequenceId: 'seq-3', revisionId: 'rev-3', aligned: '-ATGCRGGGCGCT', coordinateMap: [null, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
 ];
-const base = 'https://computable-lab.com/schema/computable-lab/';
-const ref = (id: string, type: string) => ({ kind: 'record', id, type });
-const opRequest = (requestId: string, declaration_: Record<string, any>, artifactId = 'AOUT-CONS-1') => ({
-  operation: 'save_conservation_intervals', requestId, declaration: declaration_, alignmentRef: ref(artifactId, 'analysis-output-artifact'), regions: [{ start: 1, end: 5 }],
-});
-
-let ctx: AppContext; let root: string; let service: SequenceService;
-let saved: { ids: string[]; payload: Record<string, any> };
-beforeAll(async () => {
-  root = await mkdtemp(join(tmpdir(), 'cl-conpersist-'));
-  const registry = createSchemaRegistry();
-  const loaded = await loadAllSchemas({ basePath: fileURLToPath(new URL('../../../schema', import.meta.url)), recursive: true });
-  expect(loaded.errors).toEqual([]);
-  registry.addSchemas(loaded.entries);
-  const validator = createValidator();
-  for (const id of registry.getTopologicalOrder()) { const e = registry.getById(id); if (e) validator.addSchema(e.schema, id); }
-  const store = createRecordStore(createLocalRepoAdapter({ basePath: root }), validator, new LintEngine());
-  ctx = { store, validator, schemaRegistry: registry, workspaceRoot: root, recordsDir: root } as AppContext;
-  service = new SequenceService(ctx, 'USR-test');
-}, 30000);
-afterAll(async () => { if (root) await rm(root, { recursive: true, force: true }); });
 
 describe('alignmentRowsFromSnapshot / planConservationIntervals (pure; artifact snapshot is the only row authority)', () => {
   it('leg a — a dataKind:alignment inlineValue of shaped rows is accepted and returned as-is', () => {
@@ -124,60 +115,37 @@ describe('alignmentRowsFromSnapshot / planConservationIntervals (pure; artifact 
   });
 });
 
-describe('save_conservation_intervals — SequenceService operation on the real store and schemas', () => {
-  it('leg d — pins the alignment artifact, computes once per region, and persists one record per region naming the declaration and the pinned revision', async () => {
-    await service.save({ kind: 'analysis-run', id: 'ANR-CONS', title: 'alignment run', revisionRef: ref('ANREV-CONS', 'analysis-revision'), status: 'succeeded' }, base + 'analysis-run.schema.yaml');
-    await service.save({ kind: 'analysis-output-artifact', id: 'AOUT-CONS-1', title: 'alignment', name: 'alignment', runRef: ref('ANR-CONS', 'analysis-run'), dataKind: 'alignment', inlineValue: rows }, base + 'analysis-output-artifact.schema.yaml');
-    const before = (await ctx.store.list({ kind: 'conservation-interval' })).length;
-    const res = (await service.apply(opRequest('cons-1', declaration()))) as { recordIds: string[] };
-    expect(res.recordIds).toHaveLength(1);
-    const payload = ((await ctx.store.get(res.recordIds[0]!))?.payload ?? {}) as Record<string, any>;
-    saved = { ids: res.recordIds, payload };
-    expect(payload).toMatchObject({ kind: 'conservation-interval', id: res.recordIds[0], declarationId: 'CONSERV-DECL-1', declarationVersion: '1.0.0', metricUnit: 'per_column', source: 'alignment.coordinateMap' });
-    expect(typeof payload.metricValue).toBe('number');
-    expect(payload.coverage).toBeGreaterThanOrEqual(0);
-    // perSequence start/end = the artifact's OWN coordinateMap first/last non-null within columns 1-5 (copied, never recomputed)
-    expect(payload.perSequence[0]).toMatchObject({ sequenceId: 'seq-1', start: 1, end: 4 });
-    expect(payload.perSequence[2]).toMatchObject({ sequenceId: 'seq-3', start: 1, end: 4 });
-    // the persisted number equals a direct computeConservationIntervals call on the same rows/region
-    const direct = computeConservationIntervals(declaration(), rows, { start: 1, end: 5 });
-    expect(direct.ok).toBe(true);
-    if (direct.ok) expect(payload.metricValue).toBe(direct.intervals[0]!.metricValue);
-    expect((await ctx.store.list({ kind: 'conservation-interval' })).length).toBe(before + 1);
+describe('schema legs — kind+id on the interval record; the save_conservation_intervals action variant (u3persist)', () => {
+  /** The exact s3 body: the variant declares no rows member — the rows
+   *  authority is the pinned artifact snapshot, never the request. */
+  const s3Body: Record<string, any> = {
+    operation: 'save_conservation_intervals', requestId: 'cons-1',
+    declaration: { kind: 'conservation-analysis-declaration', id: 'CONSERV-DECL-1', version: '1.0.0' },
+    alignmentRef: { kind: 'record', id: 'AOUT-CONS-1', type: 'analysis-output-artifact' },
+    regions: [{ start: 1, end: 5 }],
+  };
+  const intervalPayload = (): Record<string, any> => {
+    const computed = computeConservationIntervals(declaration(), rows, { start: 1, end: 5 });
+    expect(computed.ok).toBe(true);
+    if (!computed.ok) throw new Error('fixture declaration must compute');
+    return computed.intervals[0]!;
+  };
+
+  it('s1 — an interval payload carrying kind + a CINT-<24hex> id validates against conservation-interval.schema.yaml (Ajv2020 strict)', () => {
+    const payload: Record<string, any> = { ...intervalPayload(), kind: 'conservation-interval', id: 'CINT-0123456789abcdef01234567' };
+    expect(validateInterval(payload), JSON.stringify(validateInterval.errors)).toBe(true);
   });
-  it('AC2a — an artifact whose dataKind is not alignment is refused with the named diagnostic; no record is created', async () => {
-    await service.save({ kind: 'analysis-output-artifact', id: 'AOUT-CONS-TBL', title: 'table artifact', name: 'table', runRef: ref('ANR-CONS', 'analysis-run'), dataKind: 'table', inlineValue: [{ a: 1 }] }, base + 'analysis-output-artifact.schema.yaml');
-    const before = (await ctx.store.list({ kind: 'conservation-interval' })).length;
-    await expect(service.apply(opRequest('cons-table', declaration(), 'AOUT-CONS-TBL'))).rejects.toThrow(/conservation_alignment_artifact_invalid.*table/);
-    expect((await ctx.store.list({ kind: 'conservation-interval' })).length).toBe(before);
+  it('s2 — without kind the payload STILL validates (kind is optional by design: kind is not in the schema required list, so the compute output, which carries no kind, must keep validating — the brief literal "kind deleted is INVALID" is unsatisfiable under that constraint), and an undeclared extra member is INVALID (additionalProperties: false — exactly the declared fields plus kind+id and nothing else)', () => {
+    const noKind = { ...intervalPayload(), id: 'CINT-0123456789abcdef01234567' }; // no kind
+    expect(validateInterval(noKind), JSON.stringify(validateInterval.errors)).toBe(true);
+    const extra = { ...intervalPayload(), kind: 'conservation-interval', id: 'CINT-0123456789abcdef01234567', rows: [{ sequenceId: 'seq-1' }] };
+    expect(validateInterval(extra), JSON.stringify(validateInterval.errors)).toBe(false);
   });
-  it('AC2b — a declaration missing gap_policy is refused with the reader own diagnostic; no record is created', async () => {
-    const noGap: Record<string, any> = { ...declaration() };
-    delete noGap.gap_policy;
-    const before = (await ctx.store.list({ kind: 'conservation-interval' })).length;
-    await expect(service.apply(opRequest('cons-nogap', noGap))).rejects.toThrow(/gap_policy/);
-    expect((await ctx.store.list({ kind: 'conservation-interval' })).length).toBe(before);
+  it('s3 — the save_conservation_intervals action body validates against sequence-action.schema.yaml (house validator, full schema directory registered)', () => {
+    expect(actionValidator.validate(s3Body, ACTION_SCHEMA).valid, JSON.stringify(actionValidator.validate(s3Body, ACTION_SCHEMA).errors)).toBe(true);
   });
-  it('AC2c — rows supplied in the request body are not accepted by the action schema at all', () => {
-    const v = ctx.validator.validate({ ...opRequest('cons-rows', declaration()), rows }, SEQUENCE_SCHEMA + 'sequence-action.schema.yaml');
-    expect(v.valid).toBe(false);
-  });
-  it('AC3a — replaying the same requestId returns the SAME record ids and creates no second record (the apply receipt lock)', async () => {
-    const n = (await ctx.store.list({ kind: 'conservation-interval' })).length;
-    const again = await service.apply(opRequest('cons-1', declaration()));
-    expect(again).toEqual({ recordIds: saved.ids });
-    expect((await ctx.store.list({ kind: 'conservation-interval' })).length).toBe(n);
-  });
-  it('AC3b — changing gap_policy.treatment (version 1.1.0) changes metricValue AND the persisted gapTreatment; the record carries a different id', async () => {
-    const resB = (await service.apply(opRequest('cons-2', declB()))) as { recordIds: string[] };
-    const payB = ((await ctx.store.get(resB.recordIds[0]!))?.payload ?? {}) as Record<string, any>;
-    expect(payB.declarationVersion).toBe('1.1.0');
-    expect(payB.gapTreatment).toBe('count_as_mismatch');
-    expect(payB.metricValue).toBe(0.8); // hand-computed: gap col 1 stays in the denominator as a mismatch -> 12/15
-    expect(payB.metricValue).not.toBe(saved.payload.metricValue);
-    expect(resB.recordIds[0]).not.toBe(saved.ids[0]);
-  });
-  it('leg e — the persisted record validates against schema/sequence-analysis/conservation-interval.schema.yaml (house harness: Ajv2020 strict)', () => {
-    expect(validateInterval(saved.payload), JSON.stringify(validateInterval.errors)).toBe(true);
+  it('s4 — the s3 body with an extra rows member is INVALID (the variant must not accept rows)', () => {
+    const withRows = { ...s3Body, rows: [{ sequenceId: 'seq-1', aligned: '-A', coordinateMap: [null, 1] }] };
+    expect(actionValidator.validate(withRows, ACTION_SCHEMA).valid, JSON.stringify(actionValidator.validate(withRows, ACTION_SCHEMA).errors)).toBe(false);
   });
 });
