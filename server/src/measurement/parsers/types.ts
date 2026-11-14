@@ -4,6 +4,7 @@ export type MeasurementRow = {
   value: number;
   channelId?: string;
   unit?: string;
+  timeMin?: number;
 };
 
 export type MeasurementParseResult = {
@@ -13,6 +14,8 @@ export type MeasurementParseResult = {
   data: MeasurementRow[];
   channels: string[];
   mimeType: string;
+  units?: { time: string; intensity: string };
+  metadata?: Record<string, string>;
 };
 
 export type MeasurementParser = {
