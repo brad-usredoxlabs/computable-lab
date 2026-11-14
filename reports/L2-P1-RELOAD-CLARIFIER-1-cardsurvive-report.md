@@ -112,3 +112,7 @@ git diff --stat 3b5b71a1..HEAD:
 ## Next actions / blockers
 - None for this unit. Browser-gate acceptance (AC1-AC3 on :5193) is the independent reviewer's lane; the unit-level pin + neighbour + typecheck are green on the final commit.
 - Report is committed to cl-integration-2 (reports/L2-P1-RELOAD-CLARIFIER-1-cardsurvive-report.md).
+
+---
+
+L2-P1-RELOAD-CLARIFIER-1-cardsurvive UNIT unit DONE 8ff5c6c33adcfcb9e670e87729eeb1b96714cce1
