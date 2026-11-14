@@ -243,6 +243,21 @@ export function clarificationRequestsFromAssurance(
       b.code.includes('QUANTITY') ? 'parameter'
         : b.mention ?? b.code,
     );
+    // L2-P1-CREATE-DOOR-1 (unit absdoor): a binding blocker with NO candidates
+    // is a miss this lab's records do not hold — declare it as a NAMED
+    // unresolved slot (context §2.7: identity is a record id, never a name; a
+    // miss is a named unresolved slot). `absence` rides a conditional spread
+    // (exactOptionalPropertyTypes: the key is ABSENT, never `undefined`) and
+    // is emitted ONLY when there is no candidate to bind. The reason is ONE
+    // server-side phrase matching the shipped slash-menu diagnostic
+    // (app/src/shared/taptab/slashMenu/resolvers.ts:568: "Not in this lab's
+    // records: <label>") — the client renders the server's words verbatim and
+    // never composes its own sentence about absence.
+    const hasCandidates = b.code === 'AMBIGUOUS_BINDING' && (b.candidateIds?.length ?? 0) > 0;
+    const absence =
+      b.code === 'AMBIGUOUS_BINDING' && !hasCandidates && b.mention !== undefined && b.mention !== ''
+        ? { mention: b.mention, reason: `Not in this lab's records: ${b.mention}` }
+        : undefined;
     const request: AgentClarificationRequest = {
       id: `assurance-${startIndex + i + 1}`,
       kind,
@@ -250,10 +265,11 @@ export function clarificationRequestsFromAssurance(
       menuProvider: menuProviderForKind(kind),
       options: [],
       ...(b.mention ? { query: b.mention, snippet: b.mention } : {}),
+      ...(absence ? { absence } : {}),
     };
     // For a material ambiguity with known candidates, surface them as options.
-    if (b.code === 'AMBIGUOUS_BINDING' && b.candidateIds?.length) {
-      request.options = b.candidateIds.map((cid) => ({ id: cid, label: cid }));
+    if (hasCandidates) {
+      request.options = b.candidateIds!.map((cid) => ({ id: cid, label: cid }));
     }
     requests.push(request);
   }

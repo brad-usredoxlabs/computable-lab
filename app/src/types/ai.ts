@@ -325,6 +325,16 @@ export interface AiClarificationRequest {
     candidates?: Array<{ label: string; confidence?: number; ref?: string }>
     actionLocation?: { actionIndex?: number; action?: string; argument?: string }
   }
+  /**
+   * L2-P1-CREATE-DOOR-1 (unit absdoor) — a DECLARED ABSENCE, mirrored from the
+   * server's AgentClarificationRequest.absence (clarificationRequestsFromAssurance):
+   * a binding blocker named a noun this lab's records do not hold, with no
+   * candidates — a NAMED unresolved slot (context §2.7), not an empty option
+   * list. The card renders `absence.reason` VERBATIM (the server owns the one
+   * sentence, shaped on resolvers.ts:568). Absent-or-value, never :undefined
+   * (exactOptionalPropertyTypes — the key rides a conditional spread server-side).
+   */
+  absence?: { mention: string; reason: string }
 }
 
 export interface AiClarificationAnswer {

@@ -636,6 +636,16 @@ export interface AgentClarificationRequest {
   clarifyControl?:
     | { kind: 'quantity'; label: string; value: number; unit: string; source: string; question: string }
     | { kind: 'wells'; question: string };
+  /**
+   * L2-P1-CREATE-DOOR-1 (unit absdoor): a DECLARED ABSENCE — set (via
+   * conditional spread, the key ABSENT and never `absence: undefined`) when a
+   * binding blocker named a noun this lab's records do not hold and offered no
+   * candidates: a NAMED unresolved slot (context §2.7), not an empty option
+   * list. `reason` is ONE server-side phrase matching the shipped slash-menu
+   * diagnostic (resolvers.ts:568, "Not in this lab's records") — the card
+   * renders the server's words verbatim; it never composes a second one.
+   */
+  absence?: { mention: string; reason: string };
 }
 
 export interface AgentClarificationAnswer {
