@@ -195,3 +195,7 @@ diagnostic string to replace — not a design.
   `server/node_modules` symlink points at it (no install, no scaffold). It is gitignored — the tree
   is clean without it. Delete the symlink before the worktree is recycled.
 - Scratch root /home/brad/.falsify-hidesjourney-scratch/ (ajv probe, tsc receipts) deleted at exit.
+
+## Marker
+
+L2-JOURNEY-FALSIFY-1-hidesjourney UNIT hidesjourney DONE 7c1b1741c5b695f1bf4501bda6f34bb3a35a38a2
