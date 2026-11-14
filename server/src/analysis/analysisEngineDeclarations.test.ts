@@ -20,6 +20,9 @@ import { join, resolve } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { initializeApp } from '../server.js';
 import { setupTestWorkspace } from '../test/setupApp.js';
+import { createSchemaRegistry } from '../schema/SchemaRegistry.js';
+import { loadAllSchemas } from '../schema/SchemaLoader.js';
+import { createValidator } from '../validation/AjvValidator.js';
 
 const REPO_ROOT = resolve(process.cwd(), '..');
 const SEED_DIR = join(REPO_ROOT, 'records', 'seed', 'analysis-engine');
@@ -93,6 +96,7 @@ type EnginePayload = {
 
 describe('analysis-engine seed declarations (u1enginerecords)', () => {
   let ctx: Awaited<ReturnType<typeof initializeApp>>;
+  let validator: ReturnType<typeof createValidator>;
   let wsDir = '';
   let moduleSources: Record<string, string> = {};
   const payloads = new Map<string, EnginePayload>();
@@ -134,6 +138,19 @@ describe('analysis-engine seed declarations (u1enginerecords)', () => {
     }
     for (const f of new Set(Object.values(DRIFT).map((d) => d.file))) {
       moduleSources[f] = await readFile(join(SDK_SRC, 'computable_lab_analysis', f), 'utf8');
+    }
+    // Schema pin wiring — the repo's own idiom (createSchemaRegistry +
+    // loadAllSchemas + createValidator; precedent: FulfillmentAccept.test.ts:75-86,
+    // DerivationSeedRecords.test.ts:28-52). The seed read path (store.list /
+    // parseRecord) NEVER validates, so this leg is the only Ajv gate on seeds.
+    const registry = createSchemaRegistry();
+    const loaded = await loadAllSchemas({ basePath: join(REPO_ROOT, 'schema'), recursive: true });
+    expect(loaded.errors).toEqual([]);
+    registry.addSchemas(loaded.entries);
+    validator = createValidator();
+    for (const id of registry.getTopologicalOrder()) {
+      const entry = registry.getById(id);
+      if (entry) validator.addSchema(entry.schema, id);
     }
   }, 60000);
 
@@ -232,6 +249,37 @@ describe('analysis-engine seed declarations (u1enginerecords)', () => {
         expect(p.runtime_requirements.interpreter).toBe('system');
         expect(p.version_constraints.python).toBe('>=3.13');
       }
+    });
+  });
+
+  describe('schema pin — every seed record is Ajv-valid (never-invent gate)', () => {
+    it('all three seed payloads validate against analysis-engine.schema.yaml ($schema stripped, as RecordParser.ts:113 does); a NEGATIVE probe with an invented capability term is rejected', async () => {
+      // POSITIVE: each record must pass the repo's real Ajv pipeline. The seed
+      // read path (store.list -> parseRecord) never validates, so this is the
+      // only schema gate on these records.
+      for (const [file, id] of Object.entries(ENGINE_FILES)) {
+        // Fresh parse so this leg reads the FILE, not the beforeAll map.
+        const parsed = parseYaml(await readFile(join(SEED_DIR, file), 'utf8')) as Record<string, unknown>;
+        // RecordParser.ts:113 strips $schema before validation — the schema
+        // (additionalProperties: false) must never see it.
+        const { $schema: _schema, ...record } = parsed;
+        const result = validator.validate(record, ENGINE_SCHEMA_ID);
+        expect(result.valid, `${id} invalid: ${JSON.stringify(result.errors)}`).toBe(true);
+      }
+      // NEGATIVE probe (the leg must not be vacuous): ENG-QUANT-1 declares no
+      // term (declared: [] — the honesty pin), so the probe injects ONE entry
+      // whose capability id is the INVENTED term — a capability id outside the
+      // closed enum must be REJECTED, not shipped.
+      const quant = parseYaml(await readFile(join(SEED_DIR, 'ENG-QUANT-1.yaml'), 'utf8')) as Record<string, unknown>;
+      const { $schema: _q, ...quantRecord } = quant;
+      const mutated = structuredClone(quantRecord) as { capabilities: { declared: Array<{ capability: string; support: string }> } };
+      mutated.capabilities.declared = [{ capability: 'invented_vendor_term', support: 'supported' }];
+      const negative = validator.validate(mutated, ENGINE_SCHEMA_ID);
+      console.error('u1fix1 NEGATIVE PROBE: invented_vendor_term -> valid =', negative.valid, 'errors =', JSON.stringify(negative.errors));
+      expect(negative.valid).toBe(false);
+      expect(
+        negative.errors.some((e) => e.keyword === 'enum' && e.path.includes('/capabilities/declared/0/capability')),
+      ).toBe(true);
     });
   });
 });
