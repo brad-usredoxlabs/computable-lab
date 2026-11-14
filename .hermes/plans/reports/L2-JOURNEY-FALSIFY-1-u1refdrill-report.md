@@ -65,7 +65,7 @@ Line budget: +194/-9 net across the 5 files (well under 300).
 1. c1a0330f — RED: store-level drill test (fails at f357ce11: resume returns ok:true).
 2. 2a47eb1c — GREEN (store): originCheck option + consult-before-write.
 3. cda3b35e — GREEN (handler+server): recordStore wiring + 409 mapping + handler tests.
-4. <final commit sha: see marker> — this report.
+4. ae6c653e — this report (report commit).
 
 ## Baselines (measured at f357ce11, before any change)
 
@@ -179,3 +179,5 @@ None for this unit. The other FALSIFY-1 units (falsify-compose, hidesjourney) ar
 briefs. If the lane stack reload is desired before live verification of the 409 path, the
 orchestrator owns the reload (YAML changes were not made here, so no reload is owed by this
 unit).
+
+L2-JOURNEY-FALSIFY-1-u1refdrill UNIT refdrill DONE ae6c653e4fde94a2f50639b7cf857989d2c0d23d
