@@ -569,24 +569,20 @@ export function createRecordHandlers(
         
         let record: RecordEnvelope | null = await store.get(id);
 
-        // Answer channel (L2-P1-ANSWERCHANNEL-1): on a store MISS — not on a
-        // store error, which surfaces as 500 below — fall back to the vendored
-        // labware-definition registry: first by recordId (the identity the
-        // definition-union search offers), then by the bare definition id.
-        // The shape `record:<recordId>` is NOT accepted — no double identity.
-        // READ-ONLY render of registry data the system already serves
-        // elsewhere: nothing is written, seeded or mutated.
+        // Answer channel (L2-P1-ANSWERCHANNEL-1, narrowed by L2-P1-STOCK-IS-A-RECORD-1):
+        // the store is the record layer; the vendored labware-definition registry is
+        // vocabulary. On a store MISS a registry entry only PRE-SELECTS a candidate
+        // recordId — by exact recordId, then the bare definition id, then a declared
+        // alias — and the STORE is re-read for it. A registry entry with no store
+        // record is a 404, never a synthesized record-shaped 200. A store ERROR is
+        // not a miss: it still surfaces as 500 below. The shape `record:<recordId>`
+        // is NOT accepted — no double identity. Nothing is written, seeded or mutated.
         if (!record) {
           const registry = getLabwareDefinitionRegistry();
           const byRecordId = registry.list().find((entry) => entry.recordId === id);
-          const hit = byRecordId ?? registry.get(id);
+          const hit = byRecordId ?? registry.get(id) ?? registry.getByAlias(id);
           if (hit) {
-            record = {
-              recordId: hit.recordId,
-              schemaId: 'https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml',
-              payload: hit,
-              meta: { kind: 'labware-definition', path: 'schema/registry/labware-definitions' },
-            };
+            record = await store.get(hit.recordId);
           }
         }
 
