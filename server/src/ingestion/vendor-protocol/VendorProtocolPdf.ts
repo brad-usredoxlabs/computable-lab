@@ -1,7 +1,9 @@
-import { basename } from 'node:path';
-import { readFile } from 'node:fs/promises';
+import { basename, join } from 'node:path';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { extractPdfLayoutText } from '../../extract/PdfTextAdapter.js';
 import { decodeAttachmentText } from '../../extract/decodeAttachment.js';
+import { extractDocumentPages, type DocumentPageMethod } from '../documentIntake.js';
 import type { ExtractionDiagnostic } from '../../extract/ExtractorAdapter.js';
 import type {
   ExtractedCandidateItem,
@@ -299,6 +301,47 @@ function extractVersion(text: string): string | undefined {
   return text.match(/INSTRUCTION MANUAL\s+Ver\.?\s*([0-9.]+)/iu)?.[1];
 }
 
+// L2-PROTOCOL-ADOPT-INTAKE-1 u1docintake — the intake-backed layout reader.
+// Defined ONCE here and imported by ProtocolIdeSourceImportService (no third
+// production module). The shared intake seam (extractDocumentPages) OWNS the
+// per-page METHOD decision and the diagnostics; it never re-derives layout —
+// its plain pdf-parse default would silently change the goldens.
+/**
+ * The page TEXT the step logic consumes stays EXACTLY what `extractPdfLayoutText`
+ * (pdftotext -layout) produces today (byte-identical). The intake is injected
+ * with a reader that hands it that same layout text, split into the document's
+ * own page model (`splitPdfPages`), so the per-page method lands 1:1 with
+ * `document.pages` and a genuinely blank page routes to `ocr`/a diagnostic
+ * (never `pdf_text` with empty text). The intake decides the method; it
+ * decides nothing about the text string.
+ */
+export async function readVendorPdfIntake(
+  buffer: Buffer | Uint8Array,
+  filename: string,
+): Promise<{ text: string; diagnostics: ExtractionDiagnostic[]; pageMethods: DocumentPageMethod[]; pages: Array<{ page: number; text: string }> }> {
+  const decoded = await extractPdfLayoutText(buffer);
+  const baseName = basename(filename || 'vendor-protocol.pdf');
+  const tempDir = await mkdtemp(join(tmpdir(), 'cl-vendor-pdf-intake-'));
+  const tempFile = join(tempDir, baseName.endsWith('.pdf') ? baseName : `${baseName}.pdf`);
+  try {
+    await writeFile(tempFile, buffer);
+    const intake = await extractDocumentPages(tempFile, {
+      readPageTexts: () => Promise.resolve({
+        pages: splitPdfPages(decoded.text).map((page) => ({ page: page.pageNumber, text: page.text })),
+        diagnostics: [],
+      }),
+    });
+    return {
+      text: decoded.text,
+      diagnostics: [...decoded.diagnostics, ...intake.diagnostics],
+      pageMethods: intake.pages.map((page) => page.method),
+      pages: intake.pages,
+    };
+  } finally {
+    await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
 function pageForOffset(pages: VendorProtocolPage[], offset: number): number {
   let cursor = 0;
   for (const page of pages) {
@@ -379,16 +422,26 @@ export function createVendorProtocolDocumentFromText(
 export async function decodeVendorProtocolPdf(
   buffer: Buffer | Uint8Array,
   options: DecodeVendorProtocolPdfOptions = {},
-): Promise<VendorProtocolDocument> {
-  // DOCINGEST-A convergence site 2 (OQ1: delegation, not import-swapping).
-  // PDF bytes keep the EXACT current layout call — routing them through the
-  // dispatcher's plain-text pdf arm would silently degrade vendor-PDF
-  // extraction. Non-PDF bytes (or an unknown extension) route through the
-  // ONE dispatcher (decodeAttachmentText).
+): Promise<VendorProtocolDocument & { pageMethods?: DocumentPageMethod[] }> {
+  // DOCINGEST-A convergence site 2 + L2-PROTOCOL-ADOPT-INTAKE-1 u1docintake
+  // (OQ1: delegation, not import-swapping). PDF bytes keep the EXACT current
+  // layout TEXT (extractPdfLayoutText); the shared intake seam (extractDocumentPages)
+  // is injected with that reader so it owns ONLY the per-page METHOD decision +
+  // diagnostics (its plain pdf-parse default would change the goldens). The
+  // method rides the document's own sidecar `pageMethods` (per PAGE, never per
+  // document) so `pages` and the golden candidate stay byte-identical. Non-PDF
+  // bytes route through the ONE dispatcher (decodeAttachmentText), no method.
   const filename = options.filename ?? 'vendor-protocol.pdf';
-  const decoded = filename.toLowerCase().endsWith('.pdf')
-    ? await extractPdfLayoutText(buffer)
-    : await decodeAttachmentText(filename, undefined, buffer);
+  if (filename.toLowerCase().endsWith('.pdf')) {
+    const intake = await readVendorPdfIntake(buffer, filename);
+    const document = createVendorProtocolDocumentFromText(intake.text, options);
+    return {
+      ...document,
+      pageMethods: intake.pageMethods,
+      diagnostics: [...intake.diagnostics, ...document.diagnostics],
+    };
+  }
+  const decoded = await decodeAttachmentText(filename, undefined, buffer);
   const document = createVendorProtocolDocumentFromText(decoded.text, options);
   return {
     ...document,
