@@ -131,3 +131,5 @@ vitest accepted.
 
 Files changed: exactly the three owned paths. `git -c core.fileMode=false status --short` clean at
 exit. No installs, no scratch inside the worktree, no seed/records edits, no registry edits.
+
+L2-P1-BIND-ID-1-u1storetier UNIT L2-P1-BIND-ID-1-u1storetier DONE 53db433489b66bb2bfdc0886619330e91cfaf67b
