@@ -342,7 +342,7 @@ export async function validateDeclaredInputs(
       if (resolvedKind !== undefined && resolvedKind !== slot.dataKind) {
         throw new AnalysisServiceError(
           'INPUT_DATAKIND_INCOMPATIBLE',
-          `input '${key}' is declared dataKind '${slot.dataKind}' but the bound record resolves to dataKind '${String(resolvedKind)}'`,
+          `input '${key}' is declared dataKind '${slot.dataKind}' but the bound record resolves to dataKind '${String(resolvedKind)}' (bound record '${ref.id}')`,
         );
       }
     }

@@ -293,11 +293,13 @@ describe('validateDeclaredInputs — OQ-3 named skip + W4 rejection set', () => 
       trace: { kind: 'record', id: 'MSR-TEST-1', type: 'measurement' },
     })).rejects.toMatchObject({
       code: 'INPUT_DATAKIND_INCOMPATIBLE',
-      // ONE object literal, ONE message key. The earlier two `message:` keys
-      // meant only the SECOND was ever evaluated — the first (:296) was a dead
-      // assertion. Collapse to a single string that contains BOTH halves so
-      // both the declared and the resolved kind stay live (typed ports).
-      message: expect.stringContaining("declared dataKind 'signal' but the bound record resolves to dataKind 'measurement'"),
+      // ONE object literal, ONE message key (step 1b: two `message:` keys in
+      // one literal made only the second evaluable — :296 was a dead
+      // assertion). A single template expression carries BOTH halves, so both
+      // the declared and the resolved kind stay live, and the D4 record id
+      // (which a run with two inputs of the same kind needs) names WHICH
+      // bound record failed.
+      message: expect.stringContaining(`declared dataKind 'signal' but the bound record resolves to dataKind 'measurement' (bound record 'MSR-TEST-1')`),
     });
   });
 
@@ -320,7 +322,11 @@ describe('validateDeclaredInputs — OQ-3 named skip + W4 rejection set', () => 
       chromatogram: { kind: 'record', id: 'PRT-TEST-1', type: 'measurement' },
     })).rejects.toMatchObject({
       code: 'INPUT_DATAKIND_INCOMPATIBLE',
-      message: expect.stringContaining("resolves to dataKind 'protocol'"),
+      // ONE message key: a single expression carrying BOTH the record's real
+      // kind (the client label is NOT the authority) and the D4 record id.
+      // (A second `message:` key in this literal would be unevaluated again —
+      // exactly the dead-assertion bug this unit exists to remove.)
+      message: expect.stringContaining("resolves to dataKind 'protocol' (bound record 'PRT-TEST-1')"),
     });
   });
 
