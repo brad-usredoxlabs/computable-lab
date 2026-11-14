@@ -12,6 +12,8 @@ import type { SchemaRegistry } from '../../schema/SchemaRegistry.js';
 import type { SchemaOverlayLoader } from '../../schema/SchemaOverlayLoader.js';
 import type { GitRepoAdapter } from '../../repo/GitRepoAdapter.js';
 import type { RepositoryConfig, NamespaceConfig } from '../../config/types.js';
+import type { BuildInfo } from './buildInfo.js';
+import { resolveBuildInfo } from './buildInfo.js';
 
 /**
  * Server version (loaded from package.json in real app).
@@ -77,6 +79,12 @@ export interface ServerMetaResponse {
     uptime: string;
     uptimeMs: number;
   };
+  /**
+   * Serving-tree identity (L2-P1-BUILDINFO-1 buildinfo): derived from git at
+   * process start, never a hand-typed literal. Optional so pre-existing
+   * fixtures without a `build` key keep passing.
+   */
+  build?: BuildInfo;
   repository?: {
     id: string;
     mode?: string;
@@ -151,6 +159,7 @@ export function createMetaHandlers(ctx: MetaContext) {
         uptime: formatUptime(uptimeMs),
         uptimeMs,
       },
+      build: resolveBuildInfo(),
       schemas: {
         source: ctx.schemaOverlayLoader ? 'bundled+overlay' : 'bundled',
         count: ctx.schemaRegistry.size,

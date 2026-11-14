@@ -152,6 +152,31 @@ export function SettingsPage() {
         {/* ---- Read-only: Server ---- */}
         <Section title="Server">
           <InfoRow label="Version" value={meta?.server.version || '—'} mono />
+          <InfoRow
+            label="Build"
+            value={
+              meta?.build?.sha && meta.build.sha !== 'unknown' ? (
+                <span
+                  title={meta.build.sha}
+                  style={{
+                    fontFamily: 'Monaco, Menlo, monospace',
+                    fontSize: '0.8rem',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    display: 'inline-block',
+                    maxWidth: '100%',
+                    verticalAlign: 'bottom',
+                  }}
+                >
+                  {meta.build.sha.slice(0, 12)}
+                </span>
+              ) : (
+                '—'
+              )
+            }
+          />
+          <InfoRow label="Built" value={meta?.build?.builtAt || '—'} />
           <InfoRow label="Uptime" value={meta?.server.uptime || '—'} />
           <InfoRow
             label="Status"
