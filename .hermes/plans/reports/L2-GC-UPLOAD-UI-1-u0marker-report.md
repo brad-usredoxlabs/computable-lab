@@ -8,8 +8,7 @@ Scenario: NONE — GC-FID instrument round (Brad 2026-11-14); `grep -ril 'gc-fid
 over the corpus manifest = 0 rows; this is not a Corpus2 scenario (no scenario leg).
 Governing line (architect-context-l2.md:51-52, §2.10): "A human step declares its own
 completion." A unit declares completion in a token the next tool can read, never in prose.
-The defect was a NAME USED AS IF IT WERE THE IDENTITY (the item-unit slug written in the
-unit field); the fix is the two-token pair, rewritten in place — not a second marker.
+The defect: a NAME USED AS IF IT WERE THE IDENTITY (item-unit slug in the unit field); fixed in place as the two-token pair, not a second marker.
 
 ## Re-measured (raw, at HEAD 6d42f6fdc..., before any edit) — all three match the report
 1. cd server && npx vitest run src/measurement/MeasurementService.parserInfoProvenance.test.ts
