@@ -43,7 +43,11 @@ scenarios:
       - "Add a 96-well deepwell plate to the deck."
     entry_state: >-
       The person is in a run, looking at the plate deck. The system does NOT already have a
-      96-well deepwell plate type.
+      96-well deepwell plate type. On lane 2 the seed data currently VIOLATES this (two deepwell
+      definitions ship as lab stock); Brad ruled on 2026-11-13 that the stock is pruned or namespaced so
+      the scenario starts from a true state — ruling:
+      .hermes/plans/decisions/PROMPT1-ENTRY-STATE-l2-20261113.md. A drive that finds a deepwell already
+      offered has failed its entry condition before it begins.
     human_choices:
       - >-
         The assistant says plainly that the type is not in the system and offers to create it.
