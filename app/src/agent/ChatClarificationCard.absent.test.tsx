@@ -1,33 +1,20 @@
 /**
  * ChatClarificationCard.absent.test.tsx — L2-P1-CREATE-DOOR-1 (unit absdoor).
  *
- * When a binding blocker named a noun this lab's records do NOT hold and
- * offered NO candidates, the server declares the miss (request.absence —
- * one server-supplied reason, the shipped slash-menu diagnostic wording)
- * instead of emitting `options: []` for the card to fall through to a
- * free-text box that can never bind. The card renders that named line plus
- * exactly ONE create row — an ANCHOR to the existing /lab/labware/new
- * surface (route registered at app/src/App.tsx:169, prefill via
- * ?prefillName= at LabLabwareNewPage.tsx:42). The row NAVIGATES; it never
- * writes: the card mints nothing and posts nothing on click (the door's own
- * accept via apiClient.createRecord remains the only writer).
+ * A binding blocker with NO candidates names a noun this lab's records do
+ * not hold: the server declares the miss (request.absence — one server-side
+ * reason) and the card renders that line plus exactly ONE create row — an
+ * ANCHOR to the existing /lab/labware/new door (route at App.tsx:169,
+ * prefill via ?prefillName= at LabLabwareNewPage.tsx:42). The row NAVIGATES;
+ * it never writes (the apiClient.createRecord spy stays at zero calls).
  *
- * Wire pin (anti-vacuity): the requests are built THROUGH the real server
- * emitter (clarificationRequestsFromAssurance), not hand-shaped — so the
- * mutation probe (delete the absence emission in clarifications.ts) drops
- * `absence` from the wire and this suite goes RED with the server case.
- * The specifier is an OPAQUE (non-literal) dynamic import: tsc cannot
- * resolve it (a static import would pull the server type graph into app's
- * tsc program and add ~19 errors to the measured baseline), while vitest's
- * SSR runner resolves it at runtime.
- *
- * AC1: ONE line naming the noun (the server's reason verbatim) + ONE create
- *      row; the row is an anchor to the door with the noun prefilled.
- * AC2: NO free-text "Type your answer…" box; clicking the row writes NO
- *      record (apiClient.createRecord spy stays at zero calls).
- * AC3: a request with bindable candidates renders the numbered rows as
- *      today (no create row, no absence); a `parameter` request keeps the
- *      typed box.
+ * Wire pin (anti-vacuity): requests are built THROUGH the real server
+ * emitter (clarificationRequestsFromAssurance), so the mutation probe
+ * (delete the absence emission) drops `absence` from the wire and this
+ * suite goes RED with the server case. The specifier is an OPAQUE
+ * (non-literal) dynamic import: tsc cannot resolve it (a static import
+ * pulls the server type graph into app's program, ~19 new tsc errors),
+ * while vitest's SSR runner resolves it at runtime.
  */
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
