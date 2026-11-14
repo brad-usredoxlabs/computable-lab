@@ -1,5 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { getLabwareDefinitionRegistry } from './LabwareDefinitionRegistry.js';
+import { readdirSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { load as yamlLoad } from 'js-yaml';
+
+// server/src/registry/ -> server/src -> server -> repoRoot (same idiom as
+// server/src/seeds/labwareDefinition.absence.test.ts)
+const storeDefsDir = resolve(fileURLToPath(import.meta.url), '..', '..', '..', '..', 'records', 'seed', 'labware-definition');
 
 describe('LabwareDefinitionRegistry', () => {
   it('list() returns at least 5 entries', () => {
@@ -128,5 +136,39 @@ describe('LabwareDefinitionRegistry', () => {
   it('getByAlias is exact-match: the family word "reservoir" does not resolve', () => {
     const registry = getLabwareDefinitionRegistry();
     expect(registry.getByAlias('reservoir')).toBeUndefined();
+  });
+
+  // L2-P1-SEED-ENTRY-1 (unit regguard) — amendment c7c1d8f4, point 1:
+  // "Offered means it exists." The loader must SURFACE the declared flag
+  // (zod strips unknown keys), and the pin is two-directional and
+  // non-vacuous: offerable ⇔ store-backed, in both directions.
+  it('surfaces the declared offerable flag (24-well-plate is offerable)', () => {
+    const registry = getLabwareDefinitionRegistry();
+    expect(registry.get('24-well-plate')!.offerable, 'flag must survive the loader').toBe(true);
+  });
+
+  it('offerable entries are exactly the store-backed registry entries (both directions)', () => {
+    const registry = getLabwareDefinitionRegistry();
+    const registryIds = new Set(registry.list().map((e) => e.recordId));
+    const offerableIds = registry
+      .list()
+      .filter((e) => e.offerable === true)
+      .map((e) => e.recordId)
+      .sort();
+    const storeIds = readdirSync(storeDefsDir)
+      .filter((f) => f.endsWith('.yaml'))
+      .map(
+        (f) =>
+          (yamlLoad(readFileSync(resolve(storeDefsDir, f), 'utf8')) as { recordId: string })
+            .recordId,
+      );
+    const storeBackedRegistryIds = storeIds.filter((id) => registryIds.has(id)).sort();
+    expect(offerableIds.length, 'non-vacuity: the flag must survive the loader').toBeGreaterThan(0);
+    expect(offerableIds, 'offerable set must equal the store-backed registry set').toEqual(storeBackedRegistryIds);
+  });
+
+  it('a catalogue-only entry is not offerable (96-well-deepwell-plate)', () => {
+    const registry = getLabwareDefinitionRegistry();
+    expect(registry.get('96-well-deepwell-plate')!.offerable, 'no store record: absent, never true').not.toBe(true);
   });
 });
