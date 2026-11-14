@@ -23,9 +23,12 @@ unit field); the fix is the two-token pair, rewritten in place — not a second 
 All three match the values the report already prints → NO closeout re-measure block appended
 (a second version of a measurement is a second authority).
 
-## The one-line diff (lane report line 145, in place — the ONLY change to that file)
-- L2-GC-UPLOAD-UI-1-u0parserinfo UNIT L2-GC-UPLOAD-UI-1-u0parserinfo DONE 6d42f6fdc9de1af5c52d693faebe213e0f5de9d0
-+ L2-GC-UPLOAD-UI-1 UNIT u0parserinfo DONE 6d42f6fdc9de1af5c52d693faebe213e0f5de9d0
+## The one-line change (lane report line 145, in place — the ONLY edit to that file)
+The delivered marker wrote the item-unit slug into BOTH the item and the unit field,
+so a two-token scanner read it as unclosed. Repaired in place to the two-token pair:
+item becomes L2-GC-UPLOAD-UI-1, unit becomes u0parserinfo, sha unchanged
+(6d42f6fdc9de1af5c52d693faebe213e0f5de9d0). The old slug line is deleted in the same
+edit and NO second marker is added; the lane report now carries exactly one UNIT line.
 Lane report sha256sum after edit: 5f5808fbc2e8547625b41262e445fe5d5dffc4a91320fb268cc2230950404d2d
 
 ## git -C <worktree> rev-parse HEAD (work-carrying commit, before this unit's commits)
