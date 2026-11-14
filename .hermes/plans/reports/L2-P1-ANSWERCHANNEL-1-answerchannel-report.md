@@ -66,7 +66,10 @@ undefined-optional assignments.
 ## Commits
 - a260c92c — RED test
 - bf24f854 — GREEN implementation
-- (this report) + marker append (separate commit, per unit convention)
+- (this report + marker, one commit — the marker names the final content
+  commit of the unit's lineage, per the repo's marker precedent)
 
 Remaining: browser acceptance gate and any live :3093 recheck are
 orchestrator-owned; no blockers in this unit.
+
+L2-P1-ANSWERCHANNEL-1-answerchannel UNIT unit DONE bf24f854214999397eae848ff0e501e3c0df06c6
