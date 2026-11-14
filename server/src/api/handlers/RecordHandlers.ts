@@ -40,6 +40,7 @@ import type { PolicyDisposition } from '../../policy/types.js';
 import type { AuditEventService } from '../../governance/AuditEventService.js';
 import type { KindLifecycleRegistry } from '../../registry/KindLifecycleRegistry.js';
 import { findDanglingReferences } from '../../store/referenceCascade.js';
+import { getLabwareDefinitionRegistry } from '../../registry/LabwareDefinitionRegistry.js';
 
 /** Schema-driven provenance check: describes which fields the target schema accepts */
 interface SchemaProvenanceCheck {
@@ -566,8 +567,29 @@ export function createRecordHandlers(
           };
         }
         
-        const record = await store.get(id);
-        
+        let record: RecordEnvelope | null = await store.get(id);
+
+        // Answer channel (L2-P1-ANSWERCHANNEL-1): on a store MISS — not on a
+        // store error, which surfaces as 500 below — fall back to the vendored
+        // labware-definition registry: first by recordId (the identity the
+        // definition-union search offers), then by the bare definition id.
+        // The shape `record:<recordId>` is NOT accepted — no double identity.
+        // READ-ONLY render of registry data the system already serves
+        // elsewhere: nothing is written, seeded or mutated.
+        if (!record) {
+          const registry = getLabwareDefinitionRegistry();
+          const byRecordId = registry.list().find((entry) => entry.recordId === id);
+          const hit = byRecordId ?? registry.get(id);
+          if (hit) {
+            record = {
+              recordId: hit.recordId,
+              schemaId: 'https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml',
+              payload: hit,
+              meta: { kind: 'labware-definition', path: 'schema/registry/labware-definitions' },
+            };
+          }
+        }
+
         if (!record) {
           reply.status(404);
           return {
