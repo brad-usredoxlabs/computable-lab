@@ -3011,6 +3011,37 @@
   cursor: not-allowed;
 }
 
+/* pickerdoor: this dialog's inert primary must not read as an active accent.
+   Scoped to THIS dialog's footer (no other surface uses .ee-dialog__footer),
+   so the shared rule above stays intact for every other dialog. */
+.event-editor .ee-dialog__footer .ee-dialog__btn--primary:disabled {
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text-faint);
+  border-color: var(--cl-border);
+  opacity: 1;
+}
+
+/* pickerdoor: the empty-state create door — a real next step ("Create …")
+   that names the user's own words, distinct from a selectable vendor row:
+   dashed accent border, no filled source badge. */
+.event-editor .ee-dialog__create-door {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 8px 12px;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  border: 1px dashed var(--cl-accent);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.event-editor .ee-dialog__create-door:hover {
+  background: var(--cl-accent-soft);
+}
+
 .event-editor .ee-dialog__vendor-label {
   display: flex;
   align-items: center;

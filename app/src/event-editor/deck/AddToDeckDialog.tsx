@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   LABWARE_CATEGORIES,
   LABWARE_TYPE_LABELS,
@@ -97,6 +98,9 @@ export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPi
   const [loadingLabDb, setLoadingLabDb] = useState(false)
   const [ontologyCandidates, setOntologyCandidates] = useState<ResolveCandidate[]>([])
   const [loadingOntology, setLoadingOntology] = useState(false)
+
+  // pickerdoor: the door navigates (PreviewActionBar.tsx:2 precedent) — real route, no writes.
+  const navigate = useNavigate()
 
   // The two Exa categories reduce to: equipment tab → 'equipment', else 'labware'.
   // One hook (stable count above the early return); cleared query on tab switch
@@ -421,6 +425,7 @@ export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPi
   }
 
   const selectedRow = selectedKey ? byKey[selectedKey] : null
+  const trimmedQuery = query.trim()
 
   return (
     <div className="ee-dialog__scrim" role="dialog" aria-modal="true" onClick={onClose}>
@@ -530,7 +535,24 @@ export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPi
           ))}
           {isEmptyResult ? (
             <div className="ee-dialog__empty">
-              {query.trim() ? `No ${activeTab} matches "${query.trim()}".` : `Nothing here yet — type to search.`}
+              {emptyStateCopy(activeTab, trimmedQuery)}
+              {/* pickerdoor: a missing type is a DECLARED absence with a next
+                  step, not a silent "no" (architect-context-l2.md §2.15). Only
+                  the labware tabs have a local create surface to point at; the
+                  prefill carries the user's own words (trimmed + URL-encoded) —
+                  never an invented value. Navigation only: zero POST /records. */}
+              {trimmedQuery && activeTab !== 'equipment' ? (
+                <button
+                  type="button"
+                  className="ee-dialog__create-door"
+                  onClick={() => {
+                    onClose()
+                    navigate(`/lab/labware/new?prefillName=${encodeURIComponent(trimmedQuery)}`)
+                  }}
+                >
+                  Create "{trimmedQuery}"…
+                </button>
+              ) : null}
             </div>
           ) : null}
           {vendorExa.loading ? <div className="ee-dialog__vendor-spinner">…</div> : null}
@@ -541,6 +563,7 @@ export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPi
             type="button"
             className="ee-dialog__btn ee-dialog__btn--primary"
             disabled={!selectedRow || mintingKey !== null}
+            aria-disabled={!selectedRow || mintingKey !== null}
             onClick={() => void handleSubmit()}
             title="Place the selected item at the point you clicked"
           >
@@ -559,4 +582,17 @@ function sourceHint(source: DeckRow['source']): string {
     case 'exa': return 'Exa'
     case 'ontology': return 'Ontology'
   }
+}
+
+/**
+ * pickerdoor: the empty-state copy agrees in number with the tab's kind.
+ * `plates`/`labware` are plural families ("No plates match"), `equipment`
+ * singular ("No equipment matches") — one helper, not a branch per tab.
+ * A blank query has nothing to name: the resting prompt stays as before.
+ */
+function emptyStateCopy(tab: AddDeckTab, trimmed: string): string {
+  if (!trimmed) return 'Nothing here yet — type to search.'
+  const kind = tab === 'plates' ? 'plates' : tab === 'labware' ? 'labware' : 'equipment'
+  const verb = kind === 'equipment' ? 'matches' : 'match'
+  return `No ${kind} ${verb} "${trimmed}".`
 }
