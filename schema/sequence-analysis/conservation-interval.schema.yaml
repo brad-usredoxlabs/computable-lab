@@ -45,6 +45,11 @@ required:
     perSequence,
   ]
 properties:
+  kind:
+    const: "conservation-interval"
+  id:
+    type: string
+    minLength: 1
   declarationId:
     type: string
     minLength: 1
