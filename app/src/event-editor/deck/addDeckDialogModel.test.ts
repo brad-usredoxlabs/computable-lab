@@ -3,7 +3,9 @@ import {
   isPlateCategory,
   labwareRowMatches,
   mergeAndRankDeckSources,
+  splitLabDbDeckRows,
   tokenizeLabwareQuery,
+  type AddDeckLabDbHit,
   type AddDeckSourceItem,
 } from './addDeckDialogModel'
 
@@ -66,5 +68,64 @@ describe('addDeckDialogModel', () => {
   it('handles empty bundles', () => {
     const ranked = mergeAndRankDeckSources({ catalog: [], labDb: [], exa: [], ontology: [] })
     expect(ranked).toEqual([])
+  })
+})
+
+// L2-P1-SEED-ENTRY-1 (unit offerfilter) — the dialog's row model: a lab-db hit
+// marked non-offerable (the server's declared non-stock catalogue reference,
+// e.g. the registry-only 96-well deepwell plate) must NOT become a choosable
+// labware row; at most one labelled non-bindable line may name it.
+describe('addDeckDialogModel — offerable rows (unit offerfilter)', () => {
+  const hit = (
+    label: string,
+    recordId: string,
+    extra: { offerable?: boolean; offer_reason?: string } = {},
+  ): AddDeckLabDbHit => ({
+    recordId,
+    label,
+    kind: 'labware-definition',
+    ...extra,
+  })
+
+  it('a non-stock hit yields NO choosable row; the catalogue reference is labelled, not selectable', () => {
+    const labDb = [
+      hit('Generic 96-Well Deep Well Plate', 'lbw-def-generic-96-well-deep-plate', {
+        offerable: false,
+        offer_reason: 'no labware-definition record for lbw-def-generic-96-well-deep-plate in this lab store (catalogue reference only)',
+      }),
+    ]
+    const { rows, unavailable } = splitLabDbDeckRows(labDb)
+    expect(rows).toEqual([])
+    expect(unavailable).toHaveLength(1)
+    expect(unavailable[0]!.bindable).toBe(false)
+    expect(unavailable[0]!.recordId).toBe('lbw-def-generic-96-well-deep-plate')
+    expect(unavailable[0]!.label).toBe('Not in this lab\'s stock: Generic 96-Well Deep Well Plate')
+  })
+
+  it('at most ONE unavailable line regardless of how many non-stock hits arrive', () => {
+    const labDb = [
+      hit('Alpha Catalogue-Only', 'lbw-def-catalogue-only-alpha', { offerable: false, offer_reason: 'no record in store' }),
+      hit('Beta Catalogue-Only', 'lbw-def-catalogue-only-beta', { offerable: false, offer_reason: 'no record in store' }),
+      hit('Gamma Stock', 'lbw-def-gamma-stock', { offerable: true }),
+    ]
+    const { rows, unavailable } = splitLabDbDeckRows(labDb)
+    expect(unavailable).toHaveLength(1)
+    expect(rows.map((r) => r.key)).toEqual(['lab-db:lbw-def-gamma-stock'])
+  })
+
+  it('store-backed hits keep their choosable rows (non-vacuity: the lab stock is still placeable)', () => {
+    const labDb = [
+      // offerable ABSENT = the pre-marker wire shape (server predates the
+      // marker): kept, so an unpatched server still shows its stock.
+      hit('Generic 24-Well Plate', 'lbw-def-generic-24-well-plate'),
+      hit('Opentrons Nest 12 Reservoir', 'lbw-def-opentrons-nest-12-reservoir-22ml-v1', { offerable: true }),
+    ]
+    const { rows, unavailable } = splitLabDbDeckRows(labDb)
+    expect(unavailable).toEqual([])
+    expect(rows.map((r) => r.key)).toEqual([
+      'lab-db:lbw-def-generic-24-well-plate',
+      'lab-db:lbw-def-opentrons-nest-12-reservoir-22ml-v1',
+    ])
+    expect(rows.every((r) => r.source === 'lab-db' && r.kind === 'labware')).toBe(true)
   })
 })

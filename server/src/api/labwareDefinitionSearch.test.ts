@@ -5,7 +5,7 @@
  * name, and hits gain `lwoClass` only when the data maps the type to a CURIE.
  */
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
@@ -91,6 +91,30 @@ const SEED_SHAPED_PAYLOADS: Array<Record<string, unknown>> = [
     render_hints: { profile: 'reservoir', linear_well_style: 'trough' },
   },
 ];
+
+/**
+ * Store stub for the offerability tests, built FROM THE SHIPPED REGISTRY:
+ * every vendored definition gets a store record mirroring its recordId —
+ * EXCEPT the registry-only deepwell entry, which has NO record. It is the
+ * single non-offerable entry in the searched universe, so "the only
+ * non-offerable hit is the deepwell reference" is a real assertion.
+ */
+function buildStoreBackedPayloads(): Array<Record<string, unknown>> {
+  const regDir = resolve(__dirname, '../../../schema/registry/labware-definitions');
+  const entries = readdirSync(regDir)
+    .filter((f) => f.endsWith('.yaml'))
+    .map((f) => parseYaml(readFileSync(resolve(regDir, f), 'utf8')) as Record<string, unknown>);
+  // The deepwell catalogue reference is the only entry the store does not back.
+  return entries
+    .filter((e) => e.recordId !== 'lbw-def-generic-96-well-deep-plate')
+    .map((e) => ({
+      kind: 'labware-definition',
+      recordId: e.recordId,
+      type: 'labware_definition',
+      id: e.id,
+      display_name: e.display_name,
+    }));
+}
 
 /** ROUTE-level stub, copied from InventoryShelfHandlers.test.ts:67-81. */
 function stubRouteOptions(store: RecordStore) {
@@ -261,5 +285,82 @@ describe('labware-definition search: the record store is the second source', () 
     expect(start).toBeGreaterThan(-1);
     const block = source.slice(start, source.indexOf('    };', start));
     expect(block).toMatch(/recordStore:\s*ctx\.store,/);
+  });
+});
+
+// L2-P1-SEED-ENTRY-1 (unit offerfilter) — a registry-tier entry with NO store
+// record is a declared non-stock catalogue reference, never an offerable lab
+// stock (rulings PROMPT1-ENTRY-STATE-l2 (b) + DEFINITION-IDENTITY-UNIQUENESS-l2;
+// identity is a record id — architect-context-l2 §2.7). The rule is read from
+// the DATA (entry flag + store membership), never a hardcoded list.
+describe('offerability: store-backed membership is the single authority', () => {
+  it('the registry-only deepwell reference is NOT offerable and names why (scenario 1 entry state)', async () => {
+    const store = storeWith(buildStoreBackedPayloads());
+    const { hits, storeTier } = await searchLabwareDefinitions({ store, q: 'deepwell' });
+    expect(storeTier).toEqual({ status: 'searched' });
+    const deepwell = hits.find((h) => h.recordId === 'lbw-def-generic-96-well-deep-plate');
+    expect(deepwell, 'the deepwell catalogue reference must still be visible (reference tier)').toBeDefined();
+    expect(deepwell!.offerable, 'a registry entry with no store record is not lab stock').toBe(false);
+    expect(deepwell!.offer_reason).toContain('no');
+    expect(deepwell!.offer_reason).toContain('store');
+  });
+
+  it('every store-backed definition stays offerable (non-vacuity: stock is not blanked)', async () => {
+    const store = storeWith(buildStoreBackedPayloads());
+    const { hits, total } = await searchLabwareDefinitions({ store, q: 'plate' });
+    // The deepwell reference also matches "plate" and is the ONLY non-offerable hit.
+    expect(total).toBeGreaterThanOrEqual(2);
+    const nonOfferable = hits.filter((h) => h.offerable === false);
+    expect(nonOfferable).toHaveLength(1);
+    expect(nonOfferable[0]!.recordId).toBe('lbw-def-generic-96-well-deep-plate');
+    // The store-backed standard 96-well plate stays offerable, reason key absent.
+    const standard = hits.find((h) => h.recordId === 'lbw-def-generic-96-well-plate');
+    expect(standard, 'store-backed 96-well plate must remain offerable').toBeDefined();
+    expect(standard!.offerable).toBe(true);
+    expect('offer_reason' in standard!).toBe(false);
+    for (const h of (await searchLabwareDefinitions({ store, q: 'reservoir' })).hits) {
+      expect(h.offerable, `store-backed ${h.recordId} must stay offerable`).toBe(true);
+    }
+  });
+
+  it('a store-backed record that declares offerable: false is not offered, and the reason says why', async () => {
+    // The declared-flag branch, distinct from the no-store-record branch.
+    const store = storeWith([
+      ...buildStoreBackedPayloads(),
+      {
+        kind: 'labware-definition',
+        recordId: 'lbw-def-declared-not-offerable',
+        type: 'labware_definition',
+        id: 'fixture/declared-nonofferable@v1',
+        display_name: 'Declared Non-Offerable Fixture',
+        offerable: false,
+      },
+    ]);
+    const { hits } = await searchLabwareDefinitions({ store, q: 'declared non-offerable fixture' });
+    expect(hits).toHaveLength(1);
+    expect(hits[0]!.recordId).toBe('lbw-def-declared-not-offerable');
+    expect(hits[0]!.offerable).toBe(false);
+    expect(hits[0]!.offer_reason).toContain('declared');
+  });
+
+  it('route: the POST /labware-definitions/search response carries the offerable marker', async () => {
+    const app = Fastify();
+    const store = storeWith(buildStoreBackedPayloads()) as unknown as RecordStore;
+    const realCwd = process.cwd;
+    process.cwd = () => resolve(__dirname, '../../..');
+    try {
+      const { registerRoutes } = await import('./routes.js');
+      registerRoutes(app, stubRouteOptions(store));
+      const res = await app.inject({ method: 'POST', url: '/labware-definitions/search', payload: { q: 'deepwell' } });
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as { hits: Array<{ recordId: string; offerable?: boolean; offer_reason?: string }> };
+      const deepwell = body.hits.find((h) => h.recordId === 'lbw-def-generic-96-well-deep-plate');
+      expect(deepwell).toBeDefined();
+      expect(deepwell!.offerable).toBe(false);
+      expect(deepwell!.offer_reason).toContain('store');
+    } finally {
+      process.cwd = realCwd;
+    }
+    await app.close();
   });
 });

@@ -46,6 +46,17 @@ export interface LabwareDefinitionSearchHit {
   physical_geometry?: { overall_dimensions_mm?: { length?: number; width?: number; height?: number } };
   legacy_labware_types?: string[];
   /**
+   * Whether this hit may be offered as THIS LAB'S lab stock (placeable from a
+   * picker). Read from the DATA, never a hardcoded id list: offerable only when
+   * the recordId exists in the store's labware-definition records AND the entry
+   * does not declare `offerable: false`. A registry-tier hit not store-backed is
+   * a catalogue reference — still visible, but not the lab's stock. ABSENT on a
+   * server that predates this marker.
+   */
+  offerable?: boolean;
+  /** Present exactly when `offerable` is false — the declared reason. */
+  offer_reason?: string;
+  /**
    * Ontology class for this definition's labware type, mapped by the shipped
    * bindings file. ABSENT (not null, not '') when the data maps the type to
    * null or has no entry — a definition with no anchor shows no anchor.
@@ -74,6 +85,12 @@ export interface LabwareDefinitionSearchResult {
   storeTier: LabwareDefinitionStoreTier;
 }
 
+/** The offerability decision: `offer_reason` is present exactly when
+ *  `offerable` is false (never both, never neither). */
+type Offerability =
+  | { offerable: true }
+  | { offerable: false; offer_reason: string };
+
 const fold = (s: string): string =>
   s.toLowerCase().replace(/[×]/g, 'x').replace(/[-_]+/g, ' ');
 
@@ -82,6 +99,8 @@ interface DefinitionLike {
   id?: unknown;
   recordId?: unknown;
   display_name?: unknown;
+  /** Declared on the entry itself (e.g. the vendored registry YAML). */
+  offerable?: unknown;
   topology?: unknown;
   capacity?: unknown;
   render_hints?: unknown;
@@ -89,7 +108,11 @@ interface DefinitionLike {
   legacy_labware_types?: unknown;
 }
 
-function toHit(def: DefinitionLike, fallbackRecordId?: string): LabwareDefinitionSearchHit | null {
+function toHit(
+  def: DefinitionLike,
+  fallbackRecordId?: string,
+  offerability?: Offerability,
+): LabwareDefinitionSearchHit | null {
   const id = typeof def.id === 'string' && def.id.length > 0 ? def.id : undefined;
   const displayName = typeof def.display_name === 'string' ? def.display_name : undefined;
   const recordId =
@@ -102,6 +125,12 @@ function toHit(def: DefinitionLike, fallbackRecordId?: string): LabwareDefinitio
     label: displayName,
     kind: 'labware-definition',
   };
+  // Carried only when the caller computed it (the search path always does);
+  // `offer_reason` rides exactly on the false branch (exactOptionalPropertyTypes).
+  if (offerability) {
+    hit.offerable = offerability.offerable;
+    if (!offerability.offerable) hit.offer_reason = offerability.offer_reason;
+  }
   if (id) hit.definitionId = id;
   if (def.topology) hit.topology = def.topology as NonNullable<LabwareDefinitionSearchHit['topology']>;
   if (def.capacity) hit.capacity = def.capacity as NonNullable<LabwareDefinitionSearchHit['capacity']>;
@@ -156,6 +185,13 @@ export async function searchLabwareDefinitions(
     }
   }
 
+  // The store's own membership — the single authority for "is this entry lab stock".
+  const storeRecordIds = new Set<string>(
+    recordCandidates
+      .map((p) => (typeof p.recordId === 'string' && p.recordId.length > 0 ? p.recordId : ''))
+      .filter((rid) => rid.length > 0),
+  );
+
   // Dedupe on definition id, registry copy wins; keep insertion order stable
   // (registry first, then record-store-only ids in store order).
   const seen = new Set<string>();
@@ -185,7 +221,26 @@ export async function searchLabwareDefinitions(
 
   const hits = matches
     .slice(0, limit)
-    .map((def) => toHit(def))
+    .map((def) => {
+      // Offerability (unit offerfilter, L2-P1-SEED-ENTRY-1), read from the
+      // DATA, never a hardcoded id/alias list: offerable only when the recordId
+      // is in the store's labware-definition records AND the entry does not
+      // declare `offerable: false`. Registry-only (no store record) hits are
+      // still returned — the reference tier is never silently deleted — but
+      // flagged non-offerable so pickers never present them as the lab's stock.
+      const rid = typeof def.recordId === 'string' && def.recordId.length > 0 ? def.recordId : '';
+      const declaredOff = def.offerable === false;
+      const offerability: Offerability =
+        rid.length > 0 && storeRecordIds.has(rid) && !declaredOff
+          ? { offerable: true }
+          : {
+              offerable: false,
+              offer_reason: declaredOff
+                ? 'entry declares offerable: false (declared non-stock)'
+                : 'registry entry with no record in the lab store (not lab stock)',
+            };
+      return toHit(def, undefined, offerability);
+    })
     .filter((h): h is LabwareDefinitionSearchHit => h !== null);
 
   return { hits, total: matches.length, storeTier };
