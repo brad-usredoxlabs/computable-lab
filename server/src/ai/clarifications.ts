@@ -277,47 +277,29 @@ export function clarificationRequestsFromAssurance(
 }
 
 /**
- * L2-P1-EMPTY-TURN-CARD-2 (u1emptycard) — the empty-turn guard's NAMED
- * ABSENCE card.
- *
- * When an agent turn ends having produced NOTHING (the empty-turn guard) and
- * the user's sentence names a labware noun that has NO match in the store or
- * the deck, the done result must ALSO carry a typed clarificationRequest
- * declaring that absence — so the client's existing typed-clarification arm
- * renders the actionable clarifier card beside the named-cause error (no
- * client change). Gate defect D1 of PROMPT1-GATE-20261114T192103Z (second
- * occurrence): the prompt-1 manifest utterance ended "No events generated."
- * with ZERO records.
- *
- * The probe is a STORE/DECK EXISTENCE lookup only (the composed
- * `searchLabwareByHint`, the SAME lookup the compile uses) — resolution is
- * never re-asked (compiler/resolve stay untouched).
- *
- * Deterministic, dumb extraction: strip the leading action verb, split on the
- * corpus delimiter set (`,`, `and`), strip parentheticals and trailing
- * catalog fragments, and keep only phrases that carry a labware head noun.
- * The FIRST candidate (longest first) whose probe returns ZERO matches is the
- * NAMED ABSENCE — at most ONE request. Every candidate matches, or none
- * extract, returns [] — a truly contentless turn keeps its current honest
- * error with no card (AC3: a turn naming an EXISTING labware gets no new
- * card; behaviour byte-unchanged).
+ * L2-P1-EMPTY-TURN-CARD-2 (u1emptycard) — the empty-turn guard's NAMED ABSENCE card.
+ * When the turn ends having produced NOTHING (the empty-turn guard) and the user's
+ * sentence names a labware noun with NO store/deck match, the done result ALSO
+ * carries one typed clarificationRequest declaring the absence — the client's
+ * existing typed-clarification arm renders the card beside the named-cause error
+ * (no client change). Gate defect D1 of PROMPT1-GATE-20261114T192103Z (2nd
+ * occurrence): the prompt-1 manifest utterance ended "No events generated." with
+ * zero records. The probe is a STORE/DECK EXISTENCE lookup only (the composed
+ * `searchLabwareByHint`, the same lookup the compile uses) — resolution is never
+ * re-asked. Deterministic extraction: strip the leading action verb, split on the
+ * corpus delimiter set (`,` and standalone `and`), drop parentheticals / trailing
+ * location phrases / pure well-deck-volume-count noise; keep phrases carrying a
+ * labware head noun. The FIRST candidate (longest first) whose probe returns ZERO
+ * matches is the named absence — at most ONE request. Every candidate matches, or
+ * none extract, returns [] — an EXISTING-labware turn gets no new card (AC3).
  */
-
-/**
- * The `[Answered clarifications]` trailer `appendClarificationAnswersToPrompt`
- * appends to the prompt (AgentOrchestrator.ts:278-292). It must never leak
- * into a mention: the trailer is authoritative ANSWER data, not user wording.
- */
+/** `[Answered clarifications]` trailer appendClarificationAnswersToPrompt appends (AgentOrchestrator.ts:278-292) — authoritative answer data, never user wording; must not leak into a mention. */
 const ANSWERED_CLARIFICATIONS_TRAILER = /\n\s*\[Answered clarifications\][\s\S]*$/;
 
-/** Leading action verb the corpus uses to name a labware placement. */
+/** Leading action verbs: place/add/create/set up/put/run (the corpus's placement verbs). */
 const EMPTY_TURN_ACTION_VERB = /^(?:place|add|create|set up|put|run)\s+/i;
 
-/**
- * The labware head nouns the corpus uses (the existing vocabulary). A head
- * must not be a PREFIX of a longer word: `well` inside "black-walled" is NOT
- * a well (the trailing-letter guard), but the hyphen-token `384-well` is.
- */
+/** Labware head nouns (existing vocabulary); `well` inside "black-walled" is not a well (trailing-letter guard). */
 const EMPTY_TURN_LABWARE_HEAD =
   /\b(?:plate|plates|tube|rack|racks|reservoir|reservoirs|vial|cryobox|well)(?![a-z])/i;
 
@@ -327,11 +309,10 @@ const EMPTY_TURN_NOISE =
 
 /**
  * Extract candidate labware noun phrases from a user sentence.
- *
- * Dumb and deterministic: strip the leading action verb, drop parentheticals
- * and the answered-clarifications trailer, split on the corpus delimiter set
- * (`,` and standalone `and`), trim, and keep only fragments that carry a
- * labware head noun and are not pure well/deck/volume/count noise.
+ * Deterministic: strip the leading action verb, drop parentheticals + the
+ * answered-clarifications trailer, split on `,` and standalone `and`, strip
+ * leading determiners and trailing location phrases, keep labware-head nouns
+ * that are not pure well/deck/volume/count noise.
  */
 export function extractEmptyTurnLabwarePhrases(sentence: string): string[] {
   if (typeof sentence !== 'string') return [];
@@ -341,13 +322,9 @@ export function extractEmptyTurnLabwarePhrases(sentence: string): string[] {
   const fragments = withoutVerb
     .split(/,|and(?=\s)/)
     .map((fragment) => fragment.trim().replace(/[.;!?]+$/, '').trim())
-    // A leading determiner is not part of the noun ("a Thermo ..." names
-    // "Thermo ..."): strip it so the mention (and the prefill) carries the
-    // noun, original casing, trimmed.
+    // Leading determiners aren't part of the noun ("a Thermo ..." → "Thermo ...").
     .map((fragment) => fragment.replace(/^(?:a|an|the)\s+/i, '').trim())
-    // A trailing prepositional phrase is a LOCATION (on the deck, into well
-    // A1), not part of the noun: strip it so the probe never carries a
-    // location the labware name can never hold.
+    // Trailing location phrases (on the deck, into well A1) aren't part of the noun.
     .map((fragment) => fragment.replace(/\s+(?:on|onto|into|in|at|to)\b[\s\S]*$/, '').trim())
     .filter(
       (fragment) =>
@@ -361,15 +338,11 @@ export function extractEmptyTurnLabwarePhrases(sentence: string): string[] {
 /**
  * Given the user turn text and the composed `searchLabwareByHint`, return
  * `AgentClarificationRequest[]` with AT MOST ONE request: a NAMED ABSENCE for
- * the FIRST candidate (longest first) that the store/deck lookup returns ZERO
- * matches for. Every candidate matches, or none extract, returns [].
- *
- * The request reuses the SAME absence vocabulary as
- * `clarificationRequestsFromAssurance` (line ~257): `absence.mention` is the
- * trimmed original-casing noun, `absence.reason` is the one server-side phrase
- * ``Not in this lab's records: <mention>``, `options` stay empty, and
- * `query`/`snippet` carry the mention. `kind` is normalized via
- * `normalizeClarificationKind` (the plate sentence normalizes 'labware').
+ * the FIRST candidate (longest first) the store/deck lookup returns ZERO
+ * matches for. Every candidate matches, or none extract, returns []. Same
+ * absence vocabulary as clarificationRequestsFromAssurance: absence.mention =
+ * trimmed original-casing noun, reason = `Not in this lab's records: <mention>`,
+ * options empty, query/snippet = mention, kind via normalizeClarificationKind.
  */
 export async function emptyTurnAbsenceRequests(
   turnText: string,
@@ -377,10 +350,9 @@ export async function emptyTurnAbsenceRequests(
 ): Promise<AgentClarificationRequest[]> {
   const candidates = extractEmptyTurnLabwarePhrases(turnText);
   if (candidates.length === 0) return [];
-  // Longest first: the most specific (full-phrase) noun is probed first. The
-  // probe is the FULL extracted phrase — never a sub-window of it: the labware
-  // lookup's name tier is substring-based, so a sub-phrase probe would MISS a
-  // record the lab holds under a longer name and declare a false absence.
+  // Longest first; probe the FULL extracted phrase (never a sub-window — the
+  // lookup's name tier is substring-based, a sub-phrase probe could miss a
+  // longer-held name and declare a false absence).
   const ordered = [...candidates].sort(
     (a, b) => b.length - a.length || candidates.indexOf(a) - candidates.indexOf(b),
   );
@@ -393,8 +365,7 @@ export async function emptyTurnAbsenceRequests(
       const request: AgentClarificationRequest = {
         id: 'empty-turn-absence-1',
         kind,
-        // One server-side prompt, the harness's own identity question
-        // (filterModelClarifications keeps origin 'harness' verbatim).
+        // Harness-authored (filterModelClarifications keeps origin 'harness' verbatim).
         prompt: 'Pick the record this step names.',
         origin: 'harness',
         entityType: kind,

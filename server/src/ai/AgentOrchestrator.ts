@@ -121,6 +121,7 @@ import {
   clarificationRequestFromLegacy,
   clarificationRequestsFromGaps,
   clarificationRequestsFromAssurance,
+  emptyTurnAbsenceRequests,
   legacyClarificationFromRequests,
   parseClarificationRequests,
 } from './clarifications.js';
@@ -3132,6 +3133,16 @@ export function createAgentOrchestrator(
             draftProducedNothingOnServer(result) &&
             !(result.notes?.length ?? 0)
           ) {
+            // L2-P1-EMPTY-TURN-CARD-2 (u1emptycard): the empty-turn guard's NAMED
+            // ABSENCE card — the user's sentence (effectivePrompt, the last user
+            // message, :1540) names a labware noun with no store/deck match
+            // (probe: shorthandSearchLabwareByHint, :1650). The named-cause error
+            // stays EXACTLY as-is; the card rides the typed channel beside it
+            // (conditional spread — key ABSENT, never undefined, when no noun misses).
+            const emptyTurnAbsence = await emptyTurnAbsenceRequests(
+              effectivePrompt,
+              shorthandSearchLabwareByHint ?? (async () => []),
+            );
             result = {
               ...result,
               success: false,
@@ -3140,6 +3151,7 @@ export function createAgentOrchestrator(
                 hadArguments: false,
                 noToolCall: true,
               }),
+              ...(emptyTurnAbsence.length > 0 ? { clarificationRequests: emptyTurnAbsence } : {}),
             };
           }
           const elapsed = Date.now() - t0;
@@ -3562,6 +3574,18 @@ export function createAgentOrchestrator(
               if (shResult.success && !shResult.error && draftProducedNothingOnServer(shResult)) {
                 shResult.error = emptyDraftMessage({ truncated: false, hadArguments: true });
                 console.warn(`[agent ${tid}] ${shResult.error}`);
+                // L2-P1-EMPTY-TURN-CARD-2 (u1emptycard): the SAME named-absence card
+                // on the shorthand-arm backstop (same effectivePrompt :1540 and
+                // probe :1650). The guard above proves clarificationRequests is
+                // empty, so the card adds only a key no other path set here;
+                // absent (never undefined) when no labware noun misses.
+                const shEmptyTurnAbsence = await emptyTurnAbsenceRequests(
+                  effectivePrompt,
+                  shorthandSearchLabwareByHint ?? (async () => []),
+                );
+                if (shEmptyTurnAbsence.length > 0) {
+                  shResult.clarificationRequests = shEmptyTurnAbsence;
+                }
               }
               // Enrich compiler-draft events: material_spec_ref expansion +
               // composition_snapshot so deterministic drafts carry bound refs.

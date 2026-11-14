@@ -1,16 +1,9 @@
 /**
- * L2-P1-EMPTY-TURN-CARD-2 / unit u1emptycard — the empty-turn guard's
- * NAMED-ABSENCE card.
- *
- * Gate defect D1 of PROMPT1-GATE-20261114T192103Z (second occurrence): the
- * prompt-1 manifest utterance ends "No events generated." with ZERO records —
- * the user's sentence named a labware noun this lab's records do not hold,
- * and the empty-turn guard's result carried only the named-cause error. The
- * done result must ALSO carry a typed clarificationRequest declaring the
- * NAMED ABSENCE, so the client's existing typed-clarification arm renders
- * the actionable clarifier card beside the error (no client change — anchor 5).
- *
- * This file REDs first: `emptyTurnAbsenceRequests` does not exist yet.
+ * L2-P1-EMPTY-TURN-CARD-2 / u1emptycard — the empty-turn guard's NAMED-ABSENCE card.
+ * Gate defect D1 of PROMPT1-GATE-20261114T192103Z (2nd occurrence): the prompt-1 manifest
+ * utterance ended "No events generated." with zero records — it must ALSO carry a typed
+ * clarificationRequest declaring the NAMED ABSENCE (no client change — anchor 5).
+ * REDs first: `emptyTurnAbsenceRequests` does not exist yet.
  */
 import { describe, expect, it } from 'vitest';
 import { emptyTurnAbsenceRequests } from './clarifications.js';

@@ -84,7 +84,7 @@ function finalAnswerRequest(): AgentRequest {
   } as unknown as AgentRequest;
 }
 
-async function runFinalAnswer(content: string, finishReason = 'stop') {
+async function runFinalAnswer(content: string, finishReason = 'stop', prompt?: string) {
   const model = finalAnswerModel(content, finishReason);
   const orchestrator = createAgentOrchestrator(
     model.client,
@@ -93,7 +93,9 @@ async function runFinalAnswer(content: string, finishReason = 'stop') {
     { maxTurns: 2 },
     orchestratorDeps(),
   );
-  return orchestrator.run(finalAnswerRequest());
+  const request = finalAnswerRequest();
+  if (prompt !== undefined) request.prompt = prompt;
+  return orchestrator.run(request);
 }
 
 // ---------------------------------------------------------------------------
@@ -166,5 +168,55 @@ describe('L2-P1-EMPTY-TURN-CARD-1 u1finalsite — final-answer empty exit', () =
     expect(result.success).toBe(true);
     expect(result.error).toBeUndefined();
     expect((result.notes ?? []).length).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// L2-P1-EMPTY-TURN-CARD-2 (u1emptycard) — the FINAL-ANSWER arm attaches the
+// NAMED-ABSENCE card beside the named-cause error. New describe only: the
+// CARD-1 legs above are untouched (their prompt names no labware noun, so the
+// helper returns [] and their results stay byte-identical).
+// ---------------------------------------------------------------------------
+
+describe('L2-P1-EMPTY-TURN-CARD-2 u1emptycard — the final-answer arm attaches the named-absence card', () => {
+  const MANIFEST =
+    'Place a Thermo Optical-Quality Imaging Plate, 384-well, black-walled, ' +
+    'clear bottom (catalog number A58941) on the deck.';
+
+  it('arm: a manifest noun miss rides clarificationRequests EXACTLY ONCE (one absence request)', async () => {
+    const result = await runFinalAnswer('{\"events\":[]}', 'stop', MANIFEST);
+    // The guard's error stays EXACTLY as CARD-1 pinned it (arm unchanged; the
+    // card only rides the typed channel beside it).
+    expect(result.success).toBe(false);
+    expect(result.error).toBe(
+      emptyDraftMessage({ truncated: false, hadArguments: false, noToolCall: true }),
+    );
+    // EXACTLY ONE request (at most one — never one per comma fragment).
+    expect(result.clarificationRequests).toHaveLength(1);
+    const [request] = result.clarificationRequests!;
+    expect(request!.kind).toBe('labware');
+    // Mention names the plate phrase (original casing); reason is the SAME
+    // server-side absence vocabulary as clarificationRequestsFromAssurance.
+    expect(request!.absence?.mention).toContain('Thermo Optical-Quality Imaging Plate');
+    expect(request!.absence?.mention).toBe('Thermo Optical-Quality Imaging Plate');
+    expect(request!.absence?.reason).toBe(
+      `Not in this lab's records: ${request!.absence?.mention}`,
+    );
+    expect(request!.options).toEqual([]);
+    expect(request!.query).toBe(request!.absence?.mention);
+    expect(request!.snippet).toBe(request!.absence?.mention);
+  });
+
+  it('arm: a noun-less empty turn gets NO card (the key is ABSENT, never undefined)', async () => {
+    const result = await runFinalAnswer('{\"events\":[]}');
+    expect(result.success).toBe(false);
+    expect(result.error).toBe(
+      emptyDraftMessage({ truncated: false, hadArguments: false, noToolCall: true }),
+    );
+    // No labware noun in the turn → the helper returns [] → the conditional
+    // spread keeps the key ABSENT (exactOptionalPropertyTypes: never
+    // clarificationRequests: undefined / []).
+    expect('clarificationRequests' in result).toBe(false);
+    expect(result.clarificationRequests).toBeUndefined();
   });
 });
