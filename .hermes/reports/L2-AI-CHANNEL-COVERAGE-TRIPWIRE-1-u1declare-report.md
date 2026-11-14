@@ -17,7 +17,7 @@
 The registry declares exactly the 11 TREATMENT-MAP channels (events=answer,
 clarification=card, recordCreations/labwareAdditions/equipmentRequirements/
 labwareRequirements/deckLayout/sequenceProposal/protocolEdit/instrumentJob=wall,
-proseDeliverable=answer) — 9 wall, 1 card, 2 answer, 0 mount/navigate.
+proseDeliverable=answer) — 8 wall, 1 card, 2 answer, 0 mount/navigate.
 `wall` is the honest declaration of today's reality per Amendment 1: the
 universal pane cannot present those channels yet; u2 upgrades their handling.
 
@@ -38,8 +38,10 @@ surfaces.ts:118-135 does; duplicate channel ids are named before Ajv runs.
 ## Decisions and deviations
 
 1. node_modules: the worktree shipped without a dependency store (root and
-   server/). Created the same gitignored symlinks the sibling lane worktrees
-   use (verified against 6 sibling lanes): node_modules ->
+   server/). Created the same gitignored store symlinks sibling lane worktrees
+   use (this worktree's app/node_modules already linked to
+   /mnt/vast/home/brad/git/cl-integration-2; the same store serves the
+   majority of sibling lanes): node_modules ->
    /mnt/vast/home/brad/git/cl-integration-2/node_modules and
    server/node_modules -> /mnt/vast/home/brad/git/cl-integration-2/server/node_modules.
    `git status --porcelain` stays clean (node_modules is gitignored).
@@ -48,7 +50,8 @@ surfaces.ts:118-135 does; duplicate channel ids are named before Ajv runs.
    all in Fastify handlers (AIHandlers.ts:332/438/716, AiIngestionHandlers.ts:291,
    ExtractProtocolHandler.ts:63, sequenceRoutes.ts:37 — `request.parts()` /
    `request.file()` typing). Re-measured on the integration-2 trunk store at
-   7b9ec0ad0: the same 6 error classes. The brief's "0 errors" baseline is
+   9b247778b (re-verified just before this fix commit): the same 6 error
+   classes. The brief's "0 errors" baseline is
    stale; the governing constraint is "stay clean / no NEW errors", which holds:
    the after-run error list is byte-identical to the base list (diff = empty).
 3. Output budget: first draft was 353 lines (>300). Trimmed comments/boilerplate
@@ -80,7 +83,15 @@ surfaces.ts:118-135 does; duplicate channel ids are named before Ajv runs.
 
 - 5f7c9f492ade4884f43a93df17f819330999b227 — u1declare: channel declaration data + schema
 - d366e46220a05f2fa52f076d9956ed894500c862 — u1declare: validated loader + coverage test
-- (this report commit — step 3)
+- 3e0a880989afcf3408f61cbf43a37f084d11ba85 — u1declare: report + DONE marker (step 3)
+
+(This fix commit — treatment count corrected to 8 wall — follows 3e0a8809 in
+`git log --format='%h %s' dc456071e..HEAD`.)
+
+The DONE marker cites d366e46220a05f2fa52f076d9956ed894500c862 — the REAL sha
+read back with `git rev-parse HEAD` after the step-2 commit, per the brief's
+step-3 rule. Verified real: `git cat-file -t d366e46220a05f2fa52f076d9956ed894500c862`
+→ commit.
 
 Worktree `git status --porcelain` is clean at exit. No files outside the 4
 owned files were modified; server.ts wiring, app/src, surfaces.*, AiTabPanel,
