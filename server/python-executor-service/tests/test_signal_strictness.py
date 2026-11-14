@@ -49,10 +49,15 @@ class SignalStrictnessTests(unittest.TestCase):
             _handle(str(p)).read_signal()
         msg = str(cm.exception)
         self.assertTrue(msg.startswith("SIGNAL_NOT_NUMERIC"), msg)
-        self.assertIn("Operator,Alice", msg)
+        # the first offending source line (first data row whose text would be
+        # carried into axis/values) is quoted verbatim; the garbage header
+        # shows up in the detected-columns report
+        self.assertIn("Method,GC-FID-01", msg)
+        self.assertIn("'Operator'", msg)
         rows = _handle(str(p)).read_rows()
         self.assertEqual(len(rows), 3)
-        self.assertEqual(rows[0]["Operator"], "Alice")
+        self.assertEqual(rows[0], {"Operator": "Method", "Alice": "GC-FID-01"})
+        self.assertEqual(rows[1]["Operator"], 0.1)
 
     def test_non_numeric_cell_refused_naming_the_line(self) -> None:
         # leg (b) NON-NUMERIC CELL: a clean table with one cell "45abc" —
