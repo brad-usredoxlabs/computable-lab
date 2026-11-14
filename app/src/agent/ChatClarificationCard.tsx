@@ -158,6 +158,17 @@ export function ChatClarificationCard({
       {requests.map((request) => {
         const options = request.options ?? []
         const hasPicker = requestHasPicker(request)
+        // L2-P1-CREATE-DOOR-1 (unit absdoor): the DECLARED ABSENCE (server/src/
+        // ai/clarifications.ts emits `absence` when a binding blocker named a
+        // noun this lab's records do not hold and offered NO candidates). It is
+        // a branch AHEAD of the picker/options/typed fallback — and ahead of
+        // `hasPicker` ON PURPOSE: a labware miss still carries kind 'labware'
+        // (menuProvider '/l'), so `hasPicker` is true and the picker's
+        // search-then-mint surface would otherwise shadow the named miss with a
+        // box that finds nothing (a miss read as "nothing to see").
+        // (context §2.7: identity is a record id, never a name — a miss is a
+        // named unresolved slot, not an empty option list.)
+        const absence = request.absence
         // BGATE-FIX D3 (the single-request arm's rule, ChatLog.tsx
         // shownPrompts) — for the GROUPED card the host passes an EMPTY seed
         // (advc-c3 D2, fix3): the card OWNS its prompts and the dedupe is
@@ -191,11 +202,27 @@ export function ChatClarificationCard({
               <p className="chat-clarification-card__prompt">{request.prompt}</p>
             ) : null}
             {/* Exactly ONE answer surface per slot (spec item 2): the DECLARED
-                slot control first (TARGET-1: the assumed-value quantity chip /
-                the target-well slot, both riding `record`), then the picker
-                (the same per-slot picker identity law the panel documents),
-                else the numbered options, else the typed parameter box. */}
-            {controlKind === 'quantity' && request.clarifyControl ? (
+                ABSENCE first (CREATE-DOOR-1: the server's named miss + the ONE
+                create row to the existing /lab/labware/new surface — an ANCHOR,
+                never a write: the card mints nothing and posts nothing on
+                click; the door's own accept is the only writer), then the
+                DECLARED slot control (TARGET-1: the assumed-value quantity
+                chip / the target-well slot, both riding `record`), then the
+                picker (the same per-slot picker identity law the panel
+                documents), else the numbered options, else the typed
+                parameter box. */}
+            {absence && options.length === 0 ? (
+              <div className="chat-clarification-card__absent">
+                <p className="chat-clarification-card__absent-reason">{absence.reason}</p>
+                <a
+                  className="chat-clarification-card__absent-create"
+                  data-testid="chat-clarification-absent-create"
+                  href={`/lab/labware/new?prefillName=${encodeURIComponent(absence.mention)}`}
+                >
+                  Create this record
+                </a>
+              </div>
+            ) : controlKind === 'quantity' && request.clarifyControl ? (
               <ClarifyAssumedChip
                 requestId={request.id}
                 control={request.clarifyControl}
