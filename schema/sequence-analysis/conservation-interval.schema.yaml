@@ -1,0 +1,121 @@
+# Conservation interval record — computed output of the conservation-analysis
+# capability (server/src/sequences/conservationCompute.ts), READ AGAINST a
+# validated conservation-analysis declaration
+# (schema/sequence-analysis/conservation-analysis.schema.yaml). The record is
+# the computation's RECEIPT, not the contract: it names the declaration id and
+# version it read and records every policy it applied. regionStart/regionEnd
+# are ALIGNMENT coordinates (1-based columns of the aligned rows), never
+# source coordinates. The per-sequence source mapping is the alignment
+# artifact's own coordinateMap field (source: alignment.coordinateMap,
+# produced by server/src/sequences/sequenceRuntime.ts), copied per row —
+# first/last non-null coordinateMap value within the region span, null when the
+# row is entirely gapped there — and is never recomputed here. strand and
+# convention are the declaration's coordinate_mapping values, recorded.
+# metricValue is the declared below-threshold behaviour verbatim: 'unresolved'
+# when coverage fell below the declared threshold or the weighted denominator
+# was empty — never a number, never null. coverage and uncertainty are
+# reported alongside the number: an interval is a measured quantity with its
+# own denominator, its gap/ambiguity treatment and its uncertainty, not just a
+# colour — and it claims no primer suitability (primer_suitability.claimed:
+# false is the declaration's; a coloured column is never a primer
+# recommendation). No numeric defaults and no policy-read-as-example block.
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/sequence-analysis/conservation-interval.schema.yaml"
+title: "ConservationInterval"
+type: object
+additionalProperties: false
+required:
+  [
+    declarationId,
+    declarationVersion,
+    regionStart,
+    regionEnd,
+    metricId,
+    metricUnit,
+    metricValue,
+    metricDenominator,
+    metricWeighting,
+    gapTreatment,
+    ambiguityTreatment,
+    coverage,
+    coverageThreshold,
+    uncertainty,
+    uncertaintyMethod,
+    source,
+    perSequence,
+  ]
+properties:
+  declarationId:
+    type: string
+    minLength: 1
+  declarationVersion:
+    type: string
+    minLength: 1
+  regionStart:
+    type: integer
+    minimum: 1
+  regionEnd:
+    type: integer
+    minimum: 1
+  metricId:
+    type: string
+    minLength: 1
+  metricUnit:
+    const: "per_column"
+  metricValue:
+    oneOf:
+      - type: number
+      - const: "unresolved"
+    description: "The computed conservation value, or the string 'unresolved' when coverage fell below the declared threshold or the weighted denominator was empty — never a number, never null below threshold."
+  metricDenominator:
+    type: string
+    enum: [ non_gap_columns, all_columns, defined_bases, weighted_bases ]
+  metricWeighting:
+    type: string
+    enum: [ none, sequence_count, unique_taxa ]
+  gapTreatment:
+    type: string
+    enum: [ exclude_column, count_as_mismatch, impute ]
+  ambiguityTreatment:
+    type: string
+    enum: [ exclude_column, count_as_partial_match, impute ]
+  coverage:
+    type: number
+    minimum: 0
+    maximum: 1
+  coverageThreshold:
+    type: number
+    minimum: 0
+    maximum: 1
+  uncertainty:
+    type: number
+    minimum: 0
+  uncertaintyMethod:
+    type: string
+    minLength: 1
+  source:
+    const: "alignment.coordinateMap"
+  perSequence:
+    type: array
+    minItems: 1
+    items:
+      type: object
+      additionalProperties: false
+      required: [ sequenceId, start, end, strand, convention ]
+      properties:
+        sequenceId:
+          type: string
+          minLength: 1
+        revisionId:
+          type: string
+          minLength: 1
+        start:
+          type: [ "number", "null" ]
+        end:
+          type: [ "number", "null" ]
+        strand:
+          type: string
+          enum: [ forward, reverse_complement, as_aligned ]
+        convention:
+          type: string
+          enum: [ one_based, zero_based ]
