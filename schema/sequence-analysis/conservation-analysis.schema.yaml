@@ -1,0 +1,90 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/sequence-analysis/conservation-analysis.schema.yaml"
+title: "ConservationAnalysisDeclaration"
+description: >-
+  A DECLARATION of how a conservation/variation analysis over an alignment
+  artifact is computed and reported — DATA the later computation is read
+  against, so its numbers stay auditable. It is NOT the computation (no
+  numbers, interval records or tracks) and it commits nothing: nothing here
+  is a result, a record or a primer recommendation. The biological objective
+  is a HUMAN decision, recorded — never inferred or silently defaulted.
+  Per-sequence coordinates are never restated here: the shipped alignment
+  artifact already carries them (source: alignment.coordinateMap,
+  server/src/sequences/sequenceRuntime.ts). Every load-bearing statement is
+  a required enum or required sub-field — there is no default conservation
+  policy anywhere in this document.
+type: object
+additionalProperties: false
+required: [ kind, id, version, objective, metric, gap_policy, ambiguity_policy, coverage, coordinate_mapping, uncertainty, primer_suitability ]
+properties:
+  kind: { const: "conservation-analysis-declaration" }
+  id: { type: string, minLength: 1 }
+  version:
+    type: string
+    minLength: 1
+    description: "A changed gap/ambiguity/denominator policy must be a changed version: the computation receipt names the declaration version it read."
+  objective:
+    type: object
+    additionalProperties: false
+    required: [ kind, decided_by, decision_ref ]
+    description: "The biological objective as an explicit HUMAN decision, recorded, never a silent default — 'broadly conserved' and 'taxon discrimination' are different sciences."
+    properties:
+      kind: { type: string, enum: [ broadly_conserved, taxon_discrimination, other ] }
+      decided_by: { type: string, minLength: 1, description: "The human who made the objective decision." }
+      decision_ref: { type: string, minLength: 1, description: "Where the decision is recorded (journey step, note, conversation)." }
+  metric:
+    type: object
+    additionalProperties: false
+    required: [ id, unit, numerator, denominator, weighting ]
+    description: "The conservation metric; the denominator is declared, never implicit."
+    properties:
+      id: { type: string, minLength: 1 }
+      unit: { const: "per_column" }
+      numerator: { type: string, minLength: 1, description: "What is counted in the numerator, stated." }
+      denominator: { type: string, enum: [ non_gap_columns, all_columns, defined_bases, weighted_bases ], description: "Gaps change the number, so the choice is stated, never inferred." }
+      weighting: { type: string, enum: [ none, sequence_count, unique_taxa ], description: "How sequences enter the count; duplicated strains and uneven sampling dominate naive scores, so the weighting is declared." }
+  gap_policy:
+    type: object
+    additionalProperties: false
+    required: [ treatment, denominator_effect ]
+    properties:
+      treatment: { type: string, enum: [ exclude_column, count_as_mismatch, impute ] }
+      denominator_effect: { type: string, minLength: 1, description: "How gap treatment changes the denominator, stated in words." }
+  ambiguity_policy:
+    type: object
+    additionalProperties: false
+    required: [ treatment, codes ]
+    properties:
+      treatment: { type: string, enum: [ exclude_column, count_as_partial_match, impute ] }
+      codes: { type: array, items: { type: string, minLength: 1 }, description: "The IUPAC ambiguity codes this policy applies to." }
+  coverage:
+    type: object
+    additionalProperties: false
+    required: [ threshold, denominator, below_threshold ]
+    properties:
+      threshold: { type: number, minimum: 0, maximum: 1, description: "Minimum coverage for an interval to be reported as a number." }
+      denominator: { type: string, enum: [ all_columns, defined_bases ] }
+      below_threshold: { const: "unresolved", description: "Below threshold is NEVER reported as a number — it stays 'unresolved'." }
+  coordinate_mapping:
+    type: object
+    additionalProperties: false
+    required: [ source, strand, convention ]
+    description: "REFERENCES the shipped alignment artifact's coordinateMap by name — it never restates or recomputes the mapping."
+    properties:
+      source: { const: "alignment.coordinateMap", description: "The alignment artifact's (dataKind: alignment) per-sequence alignment-to-source mapping field." }
+      strand: { type: string, enum: [ forward, reverse_complement, as_aligned ] }
+      convention: { type: string, enum: [ one_based, zero_based ], description: "The coordinate convention of the referenced mapping, recorded." }
+  uncertainty:
+    type: object
+    additionalProperties: false
+    required: [ method, reported_per_interval ]
+    properties:
+      method: { type: string, minLength: 1, description: "How the per-interval uncertainty estimate is obtained." }
+      reported_per_interval: { const: true, description: "Outputs carry coverage AND uncertainty, not just a colour." }
+  primer_suitability:
+    type: object
+    additionalProperties: false
+    required: [ claimed, note ]
+    properties:
+      claimed: { const: false, description: "A declared column set is never a primer recommendation; primer suitability is paired and contextual and stays a human decision." }
+      note: { type: string, minLength: 1 }
