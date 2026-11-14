@@ -334,6 +334,8 @@ export interface RegisterAcquisitionPackageInput {
    */
   roles?: Record<string, PackageFileRole>;
   sampleRef?: { kind: 'record'; id: string; type: string; label?: string };
+  /** The MATERIAL that went in (RUN-IS-THE-PROVENANCE-RECORD, 2026-11-14: the acquisition names the material, not a sheet). */
+  materialRef?: { kind: 'record'; id: string; type: string; label?: string };
   sourceRunRef?: { kind: 'record'; id: string; type: string; label?: string };
 }
 
@@ -516,6 +518,10 @@ export async function registerAcquisitionPackage(
       : {}),
     ...(input.sourceRunRef ? { sourceRunRef: input.sourceRunRef } : {}),
     ...(input.sampleRef ? { sampleRef: input.sampleRef } : {}),
+    // u1matbind: the material that went in — carried the SAME way sampleRef
+    // is (one conditional spread on the package payload; never a second
+    // write path; ABSENT when not supplied — exactOptionalPropertyTypes).
+    ...(input.materialRef ? { materialRef: input.materialRef } : {}),
     registeredAt: new Date().toISOString(),
   };
   const packageResult = await ctx.store.create({
