@@ -438,7 +438,7 @@ function sanitizeFtsQuery(raw: string): string {
   // a literal.
   const tokens = trimmed
     .replace(/[\x00-\x1f]/g, ' ')
-    .replace(/["()*:^<>-]/g, ' ')
+    .replace(/["()*:^<>\-,\.]/g, ' ')
     .split(/\s+/)
     .filter(Boolean);
   if (tokens.length === 0) return '';

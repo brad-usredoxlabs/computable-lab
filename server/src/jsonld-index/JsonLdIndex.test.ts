@@ -155,6 +155,20 @@ describe('JsonLdIndex', () => {
     const res2 = index.query({ q: 'pcr<mix' });
     expect(res2.total).toBe(1);
     expect(res2.hits[0]?.recordId).toBe('A');
+    // Catalogue sentence with a literal period: FTS5 parses a bare "." as a
+    // column filter ("no such column") and threw at query time (gate-8 defect 3).
+    // The period must be neutralised so the catalogue-number token still matches.
+    index.upsert(
+      makeDoc({
+        recordId: 'LBW-THERMO',
+        kind: 'labware',
+        label: 'Thermo optical-quality imaging plate',
+        fullText: 'Thermo imaging plate, 384-well, clear bottom (cat. a58941)',
+      }),
+    );
+    const res3 = index.query({ q: 'thermo plate, clear bottom (cat. a58941)' });
+    expect(res3.total).toBeGreaterThanOrEqual(1);
+    expect(res3.hits.map((h) => h.recordId)).toContain('LBW-THERMO');
   });
 
   it('persists across reopen', () => {
