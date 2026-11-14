@@ -30,6 +30,7 @@ import type {
   OntologyRefProposal,
   AiConversationMessage,
   AiLabwareAddition,
+  AiRecordCreation,
   InstrumentApplianceJob,
   PromptMention,
   AiAgentActionEnvelope,
@@ -439,6 +440,18 @@ export interface AiProposalDraft {
    * the EXISTING record (keyed by recordId), never a re-creation.
    */
   resolvedLabwares?: Array<{ hint?: string; recordId: string; title?: string }>
+  /**
+   * L2-P1-CREATE-RECORD-LANDS-1 u1recordsdraft (decision
+   * STARTER-PACK-AND-PROMPT1-l2-20261114, prompt-1 / gate
+   * PROMPT1-GATE-20261114T051016Z finding R1-13): records the done result
+   * wants CREATED — carried VERBATIM from result.recordCreations (conditional
+   * spread: ABSENT when the done carried none — exactOptionalPropertyTypes).
+   * The deck ghost mount stages them on the preview (buildPreviewFromDraft
+   * already forwards them, draftPreview.ts:487) so a records-only draft is a
+   * reviewable proposal, never a dead end. "Proposal != commitment": staging
+   * writes nothing — Accept remains the one write path.
+   */
+  recordCreations?: AiRecordCreation[]
   /** The prompt that produced this draft. */
   prompt: string
   // NOTE (L2-CHAT-1 FIX1 D7): this draft carries NO `revisionHistory` field.
@@ -1932,7 +1945,13 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
             // the previous preview's trail + THIS draft's prompt, so the FIRST
             // draft's prompt rides as currentPreviewDraft.sourcePrompt and is
             // never in the trail (the trail starts at the 2nd draft).
-            if (normalizedPreviewEvents.length > 0 && !isConfirm) {
+            if ((normalizedPreviewEvents.length > 0 || (result.recordCreations?.length ?? 0) > 0) && !isConfirm) {
+              // L2-P1-CREATE-RECORD-LANDS-1 u1recordsdraft: a records-only turn
+              // (create_record with zero events) ALSO reaches the deck's
+              // proposal review — the SAME seam, SAME data path (draft ->
+              // preview -> modal). A surface with NO onProposalDrafted is
+              // unaffected: today's emptiness wall stands for it (the
+              // non-deck arm below).
               revisionTrailRef.current = revising
                 ? [...revisionTrailRef.current, { prompt, createdAt: new Date().toISOString() }]
                 : []
@@ -1945,6 +1964,11 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
                 events: normalizedPreviewEvents,
                 labwareAdditions: result.labwareAdditions ?? [],
                 ...(result.resolvedLabwares ? { resolvedLabwares: result.resolvedLabwares } : {}),
+                // L2-P1-CREATE-RECORD-LANDS-1 u1recordsdraft: conditional
+                // spread — the key stays ABSENT when the done carried no
+                // recordCreations (exactOptionalPropertyTypes), so a records-
+                // only draft is the ONLY shape that newly mounts.
+                ...(result.recordCreations?.length ? { recordCreations: result.recordCreations } : {}),
                 prompt,
               })
             } else {
@@ -2048,6 +2072,22 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
             // "produced something" because the LEGACY pane renders them; it is
             // jurisdiction-correct for AiTabPanel, not for this stack.
             const hasEvents = (result.events?.length ?? 0) > 0
+            // L2-P1-CREATE-RECORD-LANDS-1 u1recordsdraft: a records-only done
+            // that the deck surface just STAGED (the universal chat handed a
+            // draft carrying recordCreations to onProposalDrafted above — the
+            // SAME per-turn "a handled proposal frame already left the
+            // assistant a proposal" shape as the record-draft relay,
+            // handledProposalFrame :1635/:1801). The proposal panel IS the
+            // proposal — the wall and the "did not propose any changes"
+            // bubble must not contradict it. Suppression requires a DRAFT to
+            // have been handed (onProposalDrafted registered) AND recordCreations
+            // to have been carried — a turn that carried nothing (or a
+            // non-deck surface with no seam) still gets the wall (the
+            // existing empty legs stay green).
+            const recordDraftStaged =
+              (result.recordCreations?.length ?? 0) > 0 &&
+              onProposalDraftedRef.current !== undefined
+            if (recordDraftStaged) handledProposalFrame = true
             // SEQ-ANSWER-CONTRACT-1 D4: derive whether the turn streamed
             // answer text (visible to the user) from accumulated text_delta
             // frames. A whitespace-only delta is NOT an answer — trim before
