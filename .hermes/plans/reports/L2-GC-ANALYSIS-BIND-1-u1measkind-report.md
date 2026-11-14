@@ -357,3 +357,5 @@ increase; pre-existing errors NOT fixed, per the brief.
 - **AC3** — artifact arm / `dataKind`-absent⇒skip unchanged (byte-identical code path); suite counts
   grew only by the 3 pins (47 → 50). CAVEAT per D8: the `src/analysis/` directory is pre-existing-red
   (the 5 D9 failures) — that is a caveat on the adjacent suite, not a regression from this unit.
+
+L2-GC-ANALYSIS-BIND-1-u1measkindfix1 UNIT unit DONE 8b3e6f57ec52d92a59dca333b06095375bc6fa59
