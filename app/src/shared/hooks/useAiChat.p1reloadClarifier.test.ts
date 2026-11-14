@@ -50,7 +50,6 @@ import { renderHook, render, screen, waitFor, cleanup, within, act } from '@test
 import * as React from 'react'
 import type { AiContext } from '../../types/aiContext'
 import type { AiClarificationRequest, ChatMessage } from '../../types/ai'
-import { streamAssist } from '../api/aiClient'
 import { ChatLog } from '../../agent/ChatLog'
 
 const mocked = vi.hoisted(() => ({
