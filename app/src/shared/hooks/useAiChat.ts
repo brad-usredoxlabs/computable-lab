@@ -2119,6 +2119,15 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
                 Boolean(result.clarificationNeeded?.trim()) ||
                 (result.clarificationRequests?.length ?? 0) > 0
               const surfacedError = Boolean(result.error?.trim())
+              // onevoice (L2-P1-CREATE-RECORD-LANDS-1): records-to-create is a
+              // DELIVERY the wall names ("it delivered only records to create").
+              // It is a staged draft — nothing is written before an accept (the
+              // §2.5 proposal≠commitment line) — so the applied-truth ("nothing
+              // was applied") stays true, but the wall must not DENY the
+              // delivery it just named ("Nothing was proposed …"), and the
+              // "did not propose any changes" bubble must not contradict it in
+              // the same turn. The two emptiness gates key on this ONE fact.
+              const recordCreationsDelivered = (result.recordCreations?.length ?? 0) > 0
               // Lane-1 GATE-FIX-1 D1 carried through the merge: when this turn's
               // intent frame was HANDLED by a proposal relay, the card the host
               // renders IS the proposal — the wall must not say nothing was
@@ -2160,7 +2169,17 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
                   // on reload (gate D1: freeform in session, Single SBS
                   // Plate after reload, same wall text). Scope it to the view.
                   ? ' The deck layout was applied to this view.'
-                  : ' Nothing was proposed and nothing was applied.'
+                  // onevoice (L2-P1-CREATE-RECORD-LANDS-1): the wall just NAMED
+                  // the records it delivered ("it delivered only records to
+                  // create"), so appending "Nothing was proposed …" would deny
+                  // the delivery it just named — the same contradiction the
+                  // bubble gate below guards. Keep the applied-truth (a staged
+                  // record-creation is not an applied/mounted change, so
+                  // "nothing was applied" stays true) and drop the false
+                  // "nothing was proposed."
+                  : recordCreationsDelivered
+                    ? ' Nothing was applied.'
+                    : ' Nothing was proposed and nothing was applied.'
                 setHonestWall(
                   `Draft produced no events${
                     unmountable.length > 0
@@ -2194,9 +2213,16 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
               // additions and appliance jobs ARE proposals, so the "did not propose
               // any changes" bubble would contradict them. The wall above already
               // names them in plain language; the bubble stays silent for them.
+              // onevoice (L2-P1-CREATE-RECORD-LANDS-1): recordCreations too — the
+              // honest wall above NAMES "records to create" this turn, so the
+              // bubble would be a SECOND statement contradicting the delivery it
+              // just named (today both fired on one screen). Extending this same
+              // suppression set keeps the two gates mutually exclusive: when the
+              // wall fired for a records-only turn, the bubble must not also fire.
               const labwareOrApplianceDelivered =
                 (result.labwareAdditions?.length ?? 0) > 0 ||
-                (result.instrumentApplianceJobs?.length ?? 0) > 0
+                (result.instrumentApplianceJobs?.length ?? 0) > 0 ||
+                recordCreationsDelivered
               if (!askedQuestion && !deckLayoutDelivered && !navActionDelivered && !answerDelivered && !labwareOrApplianceDelivered && !handledProposalFrame) {
                 setMessages((prev) => [
                   ...prev,

@@ -82,6 +82,28 @@ describe('useAiChat — L2-CHAT-1 FIX1 D4: honest wall reachable for every recei
     expect(hook.current.hasPreview).toBe(false)
   })
 
+  it('onevoice (L2-P1-CREATE-RECORD-LANDS-1): a recordCreations-only success is ONE voice — the wall names the records and the "did not propose any changes" bubble does NOT also fire', async () => {
+    const hook = await drive({
+      success: true,
+      notes: [],
+      recordCreations: [{ kind: 'material', name: 'Lysis buffer', curie: 'cl:lysis-1' }],
+    })
+    await waitFor(() => expect(hook.current.isStreaming).toBe(false))
+    // The wall still fires (the anti-silence gate) and NAMES the delivery.
+    await waitFor(() => expect(hook.current.honestWall).toBeTruthy())
+    expect(hook.current.honestWall).toContain('records to create')
+    // The wall no longer DENIES the delivery it just named (the gate's
+    // contradiction: "it delivered only records to create … Nothing was
+    // proposed and nothing was applied.").
+    expect(hook.current.honestWall).not.toContain('Nothing was proposed')
+    // THE one-voice fix: the second statement (the "did not propose any
+    // changes" system bubble) must NOT fire in the same turn as the wall.
+    const bubble = hook.current.messages.find(
+      (m) => m.role === 'system' && m.content === 'AI completed the task but did not propose any changes.',
+    )
+    expect(bubble).toBeUndefined()
+  })
+
   it('D4: a deckLayout-only success is a REPORTED wall (no universal render arm)', async () => {
     const hook = await drive({
       success: true,
