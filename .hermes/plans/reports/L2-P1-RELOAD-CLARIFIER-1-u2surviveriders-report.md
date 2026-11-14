@@ -52,3 +52,6 @@ Files this unit adds (2 commits; no source/test file changed in either):
 2. the same file, final marker line appended (commit 2)
 
 This report closes the launcher's EXIT-MARKER-LOG-ONLY note for unit u2surviveriders.
+
+L2-P1-RELOAD-CLARIFIER-1-u2rp-report-l2t2390.txt UNIT unit DONE 12537d5e1bfe5d48d90fcf7ff2f760e50f753c4f
+DONE L2-P1-RELOAD-CLARIFIER-1 u2surviveriders 12537d5e1bfe5d48d90fcf7ff2f760e50f753c4f
