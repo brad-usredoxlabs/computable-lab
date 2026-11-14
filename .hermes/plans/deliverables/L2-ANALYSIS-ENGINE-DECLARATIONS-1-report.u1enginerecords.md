@@ -59,7 +59,7 @@ ENG-QUANT-1 (quantification.py, GC-8):
 ## STEP 2 — records written (3 new files, the only `records/` change)
 
 - records/seed/analysis-engine/ENG-PEAKINTEG-1.yaml (37 lines)
-- records/seed/analysis-engine/ENG-CALIBFIT-1.yaml (32 lines)
+- records/seed/analysis-engine/ENG-CALIBFIT-1.yaml (33 lines)
 - records/seed/analysis-engine/ENG-QUANT-1.yaml (32 lines)
 
 Shape = analysisRunner.engine.test.ts:111-119 worked record. Every record:
@@ -99,10 +99,12 @@ server/src/analysis/analysisEngineDeclarations.test.ts (237 lines, `// @vitest-e
 Pins:
 1. DRIFT (required): parses each record YAML from `records/seed/analysis-engine/`; the app is
    initialized through the same store+schema wiring as analysisRunner.engine.test.ts:85-89
-   (`initializeApp(wsDir, { recordsDir: 'records', schemaDir: resolve(cwd,'..','schema') })`),
-   and the store-visibility test fetches each id through `ctx.store.get/list` — which runs the
-   record through the store's create-time validation pipeline (seed records are
-   index-rebuilt: raw log line "Index rebuilt: 155 records" = 152 base + 3 engines).
+   (`initializeApp(wsDir, { recordsDir: 'records', schemaDir: resolve(cwd,'..','schema') })`).
+   The store-visibility test fetches each id through `ctx.store.get/list` — PARSE-ONLY:
+   the seed read path (parseRecord) never validates (the index rebuild, raw log line
+   "Index rebuilt: 155 records" = 152 base + 3 engines, is parse-only too; the sole Ajv
+   call site createUnlocked is never reached for seed records). The schema gate on these
+   records is the SCHEMA pin (item 4, added by FIX LEG u1fix1).
    For every `capabilities.declared` entry with `support === 'supported'` the test asserts a
    NAMED marker from the DRIFT table exists in the module source (capability → {module, marker};
    markers are the first-hand lines quoted in STEP 1). A `supported` capability with no pin or
@@ -208,6 +210,82 @@ Restore proven byte-identical by sha256 before and after:
 1. aecf238c2 — records/seed/analysis-engine/*.yaml (3 records) + probe facts in this report's lineage
 2. 92252144d — server/src/analysis/analysisEngineDeclarations.test.ts
 3. d36825fa0cccca62e382939617ca2ececb9c2532 — this report (the commit the DONE marker references)
+
+## FIX LEG u1fix1 (adversarial review c1: FIX-FUNCTIONAL — DEFECT 1 MAJOR + DEFECT 2 required; D3/D4 evidence corrections folded in; D5-D7 improvement-class skipped per the fix brief)
+
+### DEFECT 1 — the missing schema-validation leg (added; suite is now 4 tests)
+
+The seed read path never validates (store.list/get -> parseRecord; the index rebuild is
+parse-only; the sole Ajv call site createUnlocked is never reached for seeds) — the false
+"create-time validation pipeline" sentence above (STEP 4 item 1) was DELETED and replaced
+with the parse-only statement. The new leg (server/src/analysis/analysisEngineDeclarations.test.ts,
+file now 285 lines vs 237 at unit commit 92252144d) uses the repo's own idiom —
+createSchemaRegistry + loadAllSchemas + createValidator (precedent
+FulfillmentAccept.test.ts:75-85; DerivationSeedRecords.test.ts:28-52). loadAllSchemas is
+REQUIRED here (not the single-file loadSchemasFromContent): analysis-engine.schema.yaml:19
+`$ref`s ./common.schema.yaml#/$defs/FAIRCommon. Wiring in beforeAll:
+`expect(loaded.errors).toEqual([])`, then addSchema per topological order. The pin
+("schema pin — every seed record is Ajv-valid"): for each of the three files, fresh
+`parseYaml` of the FILE (not the beforeAll map), strip `$schema` (RecordParser.ts:113),
+`validator.validate(record, 'https://computable-lab.com/schema/computable-lab/analysis-engine.schema.yaml')`,
+assert `valid === true` per record.
+
+NEGATIVE probe (same test — proves the leg is not vacuous): ENG-QUANT-1 declares no term
+(declared: [] — honesty pin), so the probe injects `[{capability: 'invented_vendor_term',
+support: 'supported'}]` into a structuredClone of the payload and asserts `valid === false`
+with an `enum` error at `/capabilities/declared/0/capability`. Raw (green run, 13:47:36):
+
+```
+u1fix1 NEGATIVE PROBE: invented_vendor_term -> valid = false errors = [{"path":"/capabilities/declared/0/capability","message":"Must be one of: baseline_control, width_slope_sensitivity, area_height_reject, timed_integration_windows, peak_detection, deconvolution, curve_fitting, weighted_regression","keyword":"enum",...}]
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+```
+
+### RED mutation probe (file-level, reverted after)
+
+`sed -i 's/capability: curve_fitting/capability: invented_vendor_term/' records/seed/analysis-engine/ENG-CALIBFIT-1.yaml`
+(13:50:24) — the suite turned RED:
+
+```
+ FAIL  ... > schema pin ... > all three seed payloads validate ...
+AssertionError: ENG-CALIBFIT-1 invalid: [{"path":"/capabilities/declared/0/capability","message":"Must be one of: baseline_control, ... weighted_regression","keyword":"enum",...}]: expected false to be true // Object.is equality
+ ❯ src/analysis/analysisEngineDeclarations.test.ts:267:81
+ Test Files  1 failed (1)
+      Tests  2 failed | 2 passed (4)
+```
+
+(2nd failure = the drift pin: no DRIFT table pin for the invented term — the invented
+capability now fails TWO legs.) Restored via `git checkout -- records/seed/analysis-engine/ENG-CALIBFIT-1.yaml`;
+`git diff` on records/ clean (only the committed citation edits remain); re-run: `Tests 4 passed (4)` (13:50:45).
+
+### DEFECT 2 — stale citation (2 lines)
+
+`spec 2026-10-27_GC-8` does not name an existing file (review §DEFECT 2: find → the GC-8
+spec is .hermes/plans/2026-10-28_GC-8-calibration-revision.md; sibling ENG-PEAKINTEG-1.yaml
+cites the resolvable 2026-10-28_GC-7). Both lines now cite
+`2026-10-28_GC-8-calibration-revision`, sentence intact (ENG-CALIBFIT-1.yaml:7,
+ENG-QUANT-1.yaml:7). Commit dde634a36.
+
+### D4 evidence correction
+
+ENG-CALIBFIT-1.yaml is 33 lines (STEP 2 line corrected 32 → 33; wc -l = 33, unchanged by
+the one-line citation edit).
+
+### VERIFY (u1fix1 final state, after dde634a36)
+
+- Declarations suite: `cd server && npx vitest run src/analysis/analysisEngineDeclarations.test.ts`
+  → `Test Files 1 passed (1) / Tests 4 passed (4)` (17.87s, 13:48:19 — after the citation
+  commit, so the edited records still pass the new validator leg).
+- Untouched AC3 suite: `npx vitest run src/analysis/analysisRunner.engine.test.ts`
+  → `Tests 14 passed (14)` (48.74s, 13:48:40) — unchanged from baseline (14/14).
+- `git status --short` clean; `git diff --stat aaf617ab8..HEAD` = 3 files (test +48,
+  two YAMLs ±1 line each).
+
+### Commits (u1fix1)
+
+1. 8b00252ec — validator leg + negative probe (test only)
+2. dde634a36 — the two citation one-liners
+3. (this section) — report corrections + FIX LEG
 
 ## Next actions
 
