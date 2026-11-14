@@ -13,26 +13,51 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { ThemeProvider } from '../shared/shell'
 import { OpenTabsProvider } from '../shared/shell/OpenTabsContext'
 import { LabLabwareNewPage } from './LabLabwareNewPage'
-import * as clientModule from '../shared/api/client'
+
+// u3anchorfix (ruling A): preserve-resolve vi.mock idiom (the old spyOn stub
+// stripped apiClient.resolve, so no anchor row could render); every save-asserting
+// test picks the anchor row first.
+const { mockExtract, mockCreateRecord, mockGetSchema, mockResolve } = vi.hoisted(() => ({
+  mockExtract: vi.fn(),
+  mockCreateRecord: vi.fn(),
+  mockGetSchema: vi.fn(),
+  mockResolve: vi.fn(),
+}))
+
+vi.mock('../shared/api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../shared/api/client')>()
+  return {
+    ...actual,
+    apiClient: {
+      ...(actual as Record<string, unknown>).apiClient as object,
+      resolve: (...args: unknown[]) => mockResolve(...args),
+      searchMaterials: vi.fn().mockResolvedValue({ items: [] }),
+      getFormulationsSummary: vi.fn().mockResolvedValue([]),
+      extractSpecSheetProposals: (...args: unknown[]) => mockExtract(...args),
+      getSchema: (...args: unknown[]) => mockGetSchema(...args),
+      createRecord: (...args: unknown[]) => mockCreateRecord(...args),
+    },
+  }
+})
 
 afterEach(() => {
   cleanup()
   history.replaceState(null, '', '/')
 })
 
-const mockExtract = vi.fn()
-const mockCreateRecord = vi.fn()
-const mockGetSchema = vi.fn()
+const ANCHOR_CANDIDATE = { curie: 'FOO:1', label: 'Test term A', namespace: 'FOO', tier: 2 as const, level: 'concept' as const, score: 10, source: 'local-obo' as const }
 
 beforeEach(() => {
   vi.resetAllMocks()
-  vi.spyOn(clientModule, 'apiClient', 'get').mockReturnValue({
-    ...clientModule.apiClient,
-    extractSpecSheetProposals: mockExtract,
-    getSchema: mockGetSchema,
-    createRecord: mockCreateRecord,
-  } as any)
+  mockResolve.mockResolvedValue({ candidates: [ANCHOR_CANDIDATE] })
 })
+
+// One explicit row click, no autopick (D8) — so the no-anchor refusal (page:457) is not what a save test observes.
+async function pickAnchor() {
+  fireEvent.change(screen.getByTestId('lab-labware-ontology-search-input'), { target: { value: 'test term' } })
+  fireEvent.click(screen.getByTestId('lab-labware-ontology-search-button'))
+  await fireEvent.click((await screen.findAllByTestId('lab-labware-ontology-candidate'))[0])
+}
 
 // Mirrors schema/workflow/labware-definition.schema.yaml (root + nested required)
 const labwareSchemaShape = {
@@ -93,6 +118,7 @@ describe('LabLabwareNewPage manual geometry (u2geom)', () => {
     renderAt('/lab/labware/new?prefillName=Generic%20Test%20Plate')
     expect((screen.getByTestId('lab-labware-name-input') as HTMLInputElement).value).toBe('Generic Test Plate')
     fillManualGeometry()
+    await pickAnchor()
     fireEvent.click(screen.getByTestId('lab-labware-save-button'))
     await waitFor(() => {
       expect(mockCreateRecord).toHaveBeenCalledTimes(1)
@@ -132,6 +158,9 @@ describe('LabLabwareNewPage manual geometry (u2geom)', () => {
     // The pre-flight names the missing slot; no POST.
     fireEvent.change(screen.getByTestId('lab-labware-geometry-rows'), { target: { value: '8' } })
     fireEvent.change(screen.getByTestId('lab-labware-geometry-max-volume'), { target: { value: '2000' } })
+    // u3anchorfix: the no-anchor refusal fires before the field-name pre-flight —
+    // pick the anchor so THIS leg's named refusal is the one observed.
+    await pickAnchor()
     fireEvent.click(screen.getByTestId('lab-labware-save-button'))
     await waitFor(() => {
       expect(screen.getByTestId('lab-labware-error')).toBeInTheDocument()
@@ -149,6 +178,9 @@ describe('LabLabwareNewPage manual geometry (u2geom)', () => {
     fireEvent.change(screen.getByTestId('lab-labware-geometry-addressing') as HTMLSelectElement, {
       target: { value: 'single' },
     })
+    // u3anchorfix: pick the anchor so the capacity named-refusal is the one
+    // observed (the no-anchor refusal fires first otherwise).
+    await pickAnchor()
     fireEvent.click(screen.getByTestId('lab-labware-save-button'))
     await waitFor(() => {
       expect(screen.getByTestId('lab-labware-error')).toBeInTheDocument()
@@ -167,6 +199,7 @@ describe('LabLabwareNewPage manual geometry (u2geom)', () => {
       target: { value: 'single' },
     })
     fireEvent.change(screen.getByTestId('lab-labware-geometry-max-volume'), { target: { value: '2000' } })
+    await pickAnchor()
     fireEvent.click(screen.getByTestId('lab-labware-save-button'))
     await waitFor(() => {
       expect(mockCreateRecord).toHaveBeenCalledTimes(1)
@@ -199,6 +232,7 @@ describe('LabLabwareNewPage manual geometry (u2geom)', () => {
     // last-writer-wins loop: the typed value is what the builder writes.
     fireEvent.change(screen.getByTestId('lab-labware-geometry-max-volume'), { target: { value: '2000' } })
     fireEvent.change(screen.getByTestId('lab-labware-geometry-well-pitch'), { target: { value: '9' } })
+    await pickAnchor()
     fireEvent.click(screen.getByTestId('lab-labware-save-button'))
     await waitFor(() => {
       expect(mockCreateRecord).toHaveBeenCalledTimes(1)
