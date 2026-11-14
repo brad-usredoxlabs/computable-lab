@@ -4,7 +4,7 @@ id: ENG-QUANT-1
 title: GC-8 quantification engine — cross-run consumer of a promoted calibration model (stdlib)
 description: >-
   Shipped GC-8 quantification module (computable_lab_analysis.quantification,
-  spec 2026-10-27_GC-8): the cross-run consumer of a PROMOTED calibration
+  spec 2026-10-28_GC-8-calibration-revision): the cross-run consumer of a PROMOTED calibration
   model, applying the ISTD rule exactly once (bidirectional
   ISTD_DOUBLE_APPLICATION guard) under the declared extrapolation policy.
   capabilities.declared is EMPTY on purpose: no term in the closed capability

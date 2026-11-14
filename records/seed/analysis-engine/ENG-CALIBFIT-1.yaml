@@ -4,7 +4,7 @@ id: ENG-CALIBFIT-1
 title: GC-8 calibration-curve fitting engine (stdlib)
 description: >-
   Shipped GC-8 calibration module (computable_lab_analysis.calibration_fit,
-  spec 2026-10-27_GC-8): weighted least squares via the normal equations on
+  spec 2026-10-28_GC-8-calibration-revision): weighted least squares via the normal equations on
   stdlib floats (linear, linear-through-origin, quadratic), declared
   weightings (none, 1/x, 1/x^2, 1/y^2, per-level weights), the ISTD
   combination applied as the ONLY division by an ISTD area. Stdlib-only.
