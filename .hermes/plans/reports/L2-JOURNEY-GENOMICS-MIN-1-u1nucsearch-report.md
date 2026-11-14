@@ -259,3 +259,5 @@ After both mutations: `git -c core.fileMode=false status --short` → 0 lines
 Commits (base 7e9bfc60 → final): 87ecca2a (RED), 08595c68 (descriptor),
 ad32b13e (allowlist entry), 4594e47c (declaration), 8863c8e8 (count pins +
 seed fixture re-point).
+
+L2-JOURNEY-GENOMICS-MIN-1-u1nucsearch UNIT u1nucsearch DONE e8f96d3047ea3a3744cb40279be244c727eb91ec
