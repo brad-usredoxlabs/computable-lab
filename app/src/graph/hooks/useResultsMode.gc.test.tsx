@@ -66,11 +66,11 @@ function workspaceWithMeasurement() {
   }
 }
 
-function mockFetch(): (input: unknown, init?: RequestInit) => Promise<Response> {
+function mockFetch(): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
   const json = (status: number, body: unknown) =>
     new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
-  const url = (input: unknown) => (typeof input === 'string' ? input : input instanceof URL ? input.pathname : input.url ?? '')
-  return async (input: unknown, init?: RequestInit) => {
+  const url = (input: RequestInfo | URL) => (typeof input === 'string' ? input : input instanceof URL ? input.pathname : input.url)
+  return async (input, init?) => {
     const path = url(input)
     const method = init?.method ?? 'GET'
     if (method === 'POST' && path.endsWith('/measurements/upload-raw')) {
@@ -106,7 +106,7 @@ describe('useResultsMode — GC attach (L2-GC-UPLOAD-UI-1 attachbinary)', () => 
 
   it('(a) offers the real agilent6890 parser id and drops the _csv_stub stub id', () => {
     const { result } = renderHook(() =>
-      useResultsMode({ runId: 'RUN-000001', eventGraphId: 'EVTG-000001', events: [] }),
+      useResultsMode({ runId: 'RUN-000001', eventGraphId: 'EVTG-000001', events: [], selectedWells: [] }),
     )
     const values = result.current.parserOptions.map((option) => option.value)
     expect(values).toContain('agilent6890')
@@ -127,7 +127,7 @@ describe('useResultsMode — GC attach (L2-GC-UPLOAD-UI-1 attachbinary)', () => 
         mode: 'binary',
       })
     const { result } = renderHook(() =>
-      useResultsMode({ runId: 'RUN-000001', eventGraphId: 'EVTG-000001', events: [] }),
+      useResultsMode({ runId: 'RUN-000001', eventGraphId: 'EVTG-000001', events: [], selectedWells: [] }),
     )
     await act(async () => {
       await result.current.uploadFile(new File(['Instrument: 6890\nRetTime [min],Signal [pA]\n1.2,12.5\n5.6,480.25\n'], 'run-gc.ch'))
@@ -142,7 +142,7 @@ describe('useResultsMode — GC attach (L2-GC-UPLOAD-UI-1 attachbinary)', () => 
   it('(c) after ingest exposes a parse summary read back from the created measurement record', async () => {
     const ingestSpy = vi.spyOn(apiClient, 'ingestMeasurement').mockResolvedValue({ success: true, recordId: 'MEAS-000042' })
     const { result } = renderHook(() =>
-      useResultsMode({ runId: 'RUN-000001', eventGraphId: 'EVTG-000001', events: [] }),
+      useResultsMode({ runId: 'RUN-000001', eventGraphId: 'EVTG-000001', events: [], selectedWells: [] }),
     )
     await act(async () => {
       await result.current.uploadFile(new File(['RetTime [min],Signal [pA]\n1.2,12.5\n'], 'run-gc.ch'))
