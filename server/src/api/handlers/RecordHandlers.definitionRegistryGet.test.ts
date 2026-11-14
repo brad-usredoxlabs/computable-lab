@@ -12,7 +12,7 @@ import type { RecordEnvelope, RecordStore } from '../../store/types.js';
 import { createRecordHandlers } from './RecordHandlers.js';
 
 const SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml';
-const REGISTRY_RECORD_ID = 'lbw-def-generic-96-well-deepwell-plate';
+const REGISTRY_RECORD_ID = 'lbw-def-generic-96-well-deep-plate';
 
 /** Store stub: every get() MISSES (null) — the miss path under test.
  *  Counts write attempts so "nothing is written" is a real check. */
