@@ -50,7 +50,7 @@ editor:
         The manifest-level signal-collection data-reference (its contentHash is
         the sha256 of the canonical per-file manifest string, not a hash of the
         directory) and the optional run/sample links.
-      slots: ["signal-collection-ref-slot", "source-run-ref-slot", "sample-ref-slot"]
+      slots: ["signal-collection-ref-slot", "source-run-ref-slot", "sample-ref-slot", "material-ref-slot"]
     - id: "acquisition-status"
       kind: "section"
       label: "Acquisition Status"
@@ -148,6 +148,11 @@ editor:
       label: "Sample Ref"
       widget: "ref"
       help: "Optional record ref to the sample (plain record ref — no CHEBI minting; compound/sample identity lives on gc-method / instrument-sequence-entry)."
+    - id: "material-ref-slot"
+      path: "$.materialRef"
+      label: "Material Ref"
+      widget: "ref"
+      help: "Optional record ref to the material this acquisition was taken from."
     - id: "acquisition-status-slot"
       path: "$.acquisitionStatus"
       label: "Acquisition Status"

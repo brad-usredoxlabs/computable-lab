@@ -58,6 +58,19 @@ properties:
         path: readEventRef
         graphPath: eventGraphRef
 
+  # L2-RUN-ATTACH-CAPABILITY-1 (RUN-IS-THE-PROVENANCE-RECORD): which material
+  # (material/aliquot record) went INTO the read this measurement came from.
+  # Plain record ref pinned to the material kinds — the same ref-slot precedent
+  # as equipmentRef above, minus the capability gate (no capability governs it).
+  materialRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { enum: [material, aliquot] }
+    description: "Which material (record) this measurement was taken from. Optional: legacy measurements predate the binding."
+
   labwareInstanceRef:
     $ref: "./datatypes/ref.schema.yaml"
     description: "Which plate was read."

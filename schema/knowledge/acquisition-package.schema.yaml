@@ -141,6 +141,9 @@ properties:
   sampleRef:
     $ref: "./datatypes/ref.schema.yaml"
     description: "Optional record ref to the sample (plain record ref — no CHEBI minting; compound/sample identity lives on gc-method / instrument-sequence-entry)."
+  materialRef:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Optional record ref to the material (plate+wells/aliquot) this acquisition was taken from (RUN-IS-THE-PROVENANCE-RECORD: acquisitions attach to the run AND name their material)."
 
   registeredAt:
     type: string
