@@ -27,6 +27,7 @@ import { checkEnvelopeAuthorization, type CompiledJourneyEnvelope, type JourneyE
 export const RULE_DISPATCH_REFUSED = 'journey_dispatch_refused';
 export const RULE_DISPATCH_UNCLASSIFIED = 'journey_dispatch_unclassified';
 export const RULE_DISPATCH_POLICY_UNAVAILABLE = 'journey_dispatch_policy_unavailable';
+export const RULE_DISPATCH_CAPABILITY_UNAVAILABLE = 'journey_dispatch_capability_unavailable';
 
 const SCHEMA_DIR = join(fileURLToPath(new URL('.', import.meta.url)), '../../../../schema/governance');
 type PolicyEffectKind = NonNullable<PolicyAttributes['effect_kind']>;
@@ -196,4 +197,30 @@ export function guardJourneyDispatch(input: {
   }));
   const record = records.reduce((worst, next) => (moreRestrictive(next, worst) ? next : worst));
   return { allowed: record.outcome === 'allowed', record, diagnostics: refusalDiagnostics(envelope, record) };
+}
+
+/**
+ * L2-JOURNEY-NOUN-CREATE-1 (unit capguard): an availability precondition, read
+ * from the admitted descriptor ONLY. A descriptor that exists in
+ * config/journey/capabilities/ is not a capability the journey may EXECUTE —
+ * status.available_now: false means declared, not enabled (schema/workflow/
+ * capability-descriptor.schema.yaml:104 makes status required, so an ABSENT
+ * status is a malformed descriptor and must NOT read as permission: only
+ * exactly `true` passes). This is a precondition, not a policy outcome: the
+ * route consults it AHEAD of loadPolicySetsDir and it returns a diagnostic —
+ * never a PolicyDecisionRecord — because no policy set is evaluated here and
+ * fabricating one would claim an evaluation that never happened. It is
+ * deliberately NOT called from inside guardJourneyDispatch.
+ */
+export function refuseUnavailableCapability(
+  capability: CapabilityDescriptor,
+  stepId: string,
+): JourneyEnvelopeDiagnostic | undefined {
+  const availableNow: unknown = (capability.status as { available_now?: unknown } | undefined)?.available_now;
+  if (availableNow === true) return undefined;
+  return {
+    rule: RULE_DISPATCH_CAPABILITY_UNAVAILABLE,
+    message: `step ${stepId}: capability ${capability.capability_id} is declared but not enabled (status.available_now: false); dispatch is refused as an execution precondition before any policy set is evaluated`,
+    step_id: stepId,
+  };
 }

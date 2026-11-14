@@ -92,7 +92,7 @@ import { AGENT_ALLOWED_TOOLS } from '../ai/index.js';
 import { loadCapabilityCatalogueDir } from '../compiler/journey/capabilityCatalogue.js';
 import { compileJourneyStructure } from '../compiler/journey/journeyCompiler.js';
 import { compileJourneyEnvelope, type ResolvedInputVersion } from '../compiler/journey/journeyEnvelope.js';
-import { guardJourneyDispatch, loadPolicySetsDir, RULE_DISPATCH_POLICY_UNAVAILABLE } from '../compiler/journey/journeyDispatch.js';
+import { guardJourneyDispatch, loadPolicySetsDir, refuseUnavailableCapability, RULE_DISPATCH_POLICY_UNAVAILABLE } from '../compiler/journey/journeyDispatch.js';
 import { JourneyEvidenceStore, JourneyEvidenceStoreError } from '../compiler/journey/journeyEvidenceStore.js';
 
 /**
@@ -428,6 +428,15 @@ export function registerRoutes(
       const capability = admitted.capabilities.find((d) => d.capability_id === built.envelope.capability_ref);
       if (capability === undefined) {
         return reply.code(403).send({ ok: false, diagnostics: [{ rule: RULE_DISPATCH_POLICY_UNAVAILABLE, message: `${built.envelope.capability_ref}: capability descriptor is not admitted; dispatch is refused`, step_id: stepId }] });
+      }
+      // L2-JOURNEY-NOUN-CREATE-1 (unit capguard): declared is not enabled.
+      // An execution precondition, consulted AHEAD of policy: a descriptor
+      // that exists in the catalogue but declares status.available_now: false
+      // may never be handed on, and the refusal is a diagnostic — no policy
+      // set is evaluated here, and none is fabricated to carry the refusal.
+      const refusal = refuseUnavailableCapability(capability, stepId);
+      if (refusal !== undefined) {
+        return reply.code(403).send({ ok: false, diagnostics: [refusal] });
       }
       const sets = await loadPolicySetsDir(policyDir);
       if (sets.length === 0) {
