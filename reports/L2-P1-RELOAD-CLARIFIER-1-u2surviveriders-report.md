@@ -214,3 +214,5 @@ both paths are gitignored so the tree stayed clean throughout.
   cardsurvive precedent.
 
 ---
+
+L2-P1-RELOAD-CLARIFIER-1-u2surviveriders UNIT u2surviveriders DONE 9bddc76dce11a3f8482aaf388b305bc975d737be
