@@ -37,12 +37,10 @@ type PdfExtractor = (buffer: Buffer, fileName: string) => Promise<{ pages: PdfPa
 // to the SHARED intake-backed reader (`readVendorPdfIntake`, defined in
 // VendorProtocolPdf.js so both protocol callers share ONE layout reader — no
 // second front half beside the shared intake service). It keeps the canonical
-// `{pages, sha256}` shape the evidence-citation leg and the inner
-// ProtocolImportService expect: `pages` is the document's own layout page
-// model (byte-identical to what pdftotext -layout produced) and `sha256` is the
-// hash of the acquired bytes. A failed intake (storage/tool/diagnostic — no
-// pages) surfaces as the service's own failure via a THROW, never an empty
-// success and never fabricated page text.
+// `{pages, sha256}` shape: `pages` is the document's own layout page model
+// (byte-identical to what pdftotext -layout produced), `sha256` hashes the
+// acquired bytes. A failed intake (no pages) surfaces as the service's own
+// failure via a THROW — never an empty success, never fabricated page text.
 async function defaultIntakePdfExtractor(buffer: Buffer, fileName: string): Promise<{ pages: PdfPageText[]; sha256: string; pageMethods: DocumentPageMethod[] }> {
   const intake = await readVendorPdfIntake(buffer, fileName);
   const pages: PdfPageText[] = intake.pages.map((page) => ({ pageNumber: page.page, text: page.text }));
@@ -139,13 +137,11 @@ export interface SourceImportResult {
   protocolImportState: 'ready' | 'low_confidence' | 'partial' | null;
   protocolImportConfidence: number | null;
   /**
-   * L2-PROTOCOL-ADOPT-INTAKE-1 u1docintake — per-page extraction METHOD recorded
-   * by the shared intake seam, aligned 1:1 with `evidenceCitations[].sourcePage`
-   * (same page order as the extractor's `pages`). Present only when a PDF was
-   * actually imported through the intake-backed reader; absent (never
-   * `undefined`) for non-PDF sources, failed intake, or injectable-test fakes
-   * that do not supply it — so `pageMethods` is a declared sidecar of provenance,
-   * never a value invented on a page that the intake did not extract.
+   * L2-PROTOCOL-ADOPT-INTAKE-1 u1docintake — per-page extraction METHOD from the
+   * shared intake seam, aligned 1:1 with the extractor's `pages` (same order as
+   * `evidenceCitations[].sourcePage`). Present only when a PDF was imported
+   * through the intake-backed reader; absent (never `undefined`) otherwise — a
+   * declared sidecar of provenance, never a value invented on an unextracted page.
    */
   pageMethods?: DocumentPageMethod[];
 }

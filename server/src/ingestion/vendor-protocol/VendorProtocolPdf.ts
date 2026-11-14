@@ -307,14 +307,13 @@ function extractVersion(text: string): string | undefined {
 // per-page METHOD decision and the diagnostics; it never re-derives layout —
 // its plain pdf-parse default would silently change the goldens.
 /**
- * The intake seam over the buffer's PDF pages. The page TEXT the step logic
- * consumes stays EXACTLY what `extractPdfLayoutText` (pdftotext -layout)
- * produces today (byte-identical). The intake is injected with a reader that
- * hands it that same layout text, split into the document's own page model
- * (`splitPdfPages`), so the per-page method lands 1:1 with `document.pages`
- * and a genuinely blank page routes to `ocr`/a diagnostic (never `pdf_text`
- * with empty text). The intake decides the method; it decides nothing about
- * the text string.
+ * The page TEXT the step logic consumes stays EXACTLY what `extractPdfLayoutText`
+ * (pdftotext -layout) produces today (byte-identical). The intake is injected
+ * with a reader that hands it that same layout text, split into the document's
+ * own page model (`splitPdfPages`), so the per-page method lands 1:1 with
+ * `document.pages` and a genuinely blank page routes to `ocr`/a diagnostic
+ * (never `pdf_text` with empty text). The intake decides the method; it
+ * decides nothing about the text string.
  */
 export async function readVendorPdfIntake(
   buffer: Buffer | Uint8Array,
@@ -426,15 +425,12 @@ export async function decodeVendorProtocolPdf(
 ): Promise<VendorProtocolDocument & { pageMethods?: DocumentPageMethod[] }> {
   // DOCINGEST-A convergence site 2 + L2-PROTOCOL-ADOPT-INTAKE-1 u1docintake
   // (OQ1: delegation, not import-swapping). PDF bytes keep the EXACT current
-  // layout TEXT (extractPdfLayoutText) — the shared intake seam
-  // (extractDocumentPages) is injected with that layout reader so it owns ONLY
-  // the per-page METHOD decision and the diagnostics; it never re-derives the
-  // page text (routing it through the seam's plain pdf-parse default would
-  // silently degrade vendor-PDF extraction and change the goldens). The method
-  // rides the document's own sidecar `pageMethods` (per PAGE, never per
-  // document) so `pages` and the golden candidate stay byte-identical.
-  // Non-PDF bytes (or an unknown extension) route through the ONE dispatcher
-  // (decodeAttachmentText) and carry no per-page method.
+  // layout TEXT (extractPdfLayoutText); the shared intake seam (extractDocumentPages)
+  // is injected with that reader so it owns ONLY the per-page METHOD decision +
+  // diagnostics (its plain pdf-parse default would change the goldens). The
+  // method rides the document's own sidecar `pageMethods` (per PAGE, never per
+  // document) so `pages` and the golden candidate stay byte-identical. Non-PDF
+  // bytes route through the ONE dispatcher (decodeAttachmentText), no method.
   const filename = options.filename ?? 'vendor-protocol.pdf';
   if (filename.toLowerCase().endsWith('.pdf')) {
     const intake = await readVendorPdfIntake(buffer, filename);
