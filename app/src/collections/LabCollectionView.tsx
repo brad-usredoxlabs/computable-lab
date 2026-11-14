@@ -20,6 +20,7 @@ import { apiClient } from '../shared/api/client'
 import { VisibilityBadge } from '../shared/sharing/VisibilityBadge'
 import { useRecordVisibilities } from '../shared/sharing/useRecordVisibility'
 import { LabwareInstanceCreateModal } from './LabwareInstanceCreateModal'
+import { VendorProductCreateModal } from './VendorProductCreateModal'
 import { LabShelfLookup } from './LabShelfLookup'
 import { MaterialReceivingDoor } from './MaterialReceivingDoor'
 import type { RecordEnvelope } from '../types/kernel'
@@ -238,6 +239,10 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
 
   // Labware-instance create modal state
   const [showInstanceModal, setShowInstanceModal] = useState(false)
+  // Vendor-product create door state (labware category): writes a labware-kind
+  // record carrying the manufacturer block + definitionRecordId pointer.
+  const [showProductModal, setShowProductModal] = useState(false)
+  const [productDefinitions, setProductDefinitions] = useState<RecordEnvelope[]>([])
   // Receive-a-lot door state (materials category) — stages a receiving draft only
   const [showReceiveModal, setShowReceiveModal] = useState(false)
   // Discard cue (L2-LABINV-discardfix): the door reports a staged-draft
@@ -272,6 +277,15 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
       void apiClient.listRecordsByKind('labware-definition', 200).then((r) => setLabwareDefinitions(r.records))
     }
   }, [showInstanceModal])
+
+  // Load labware records when the product door opens — the definition select
+  // lists existing labware records (definitions and products alike) as
+  // name+recordId, matching the brief.
+  useEffect(() => {
+    if (showProductModal) {
+      void apiClient.listRecordsByKind('labware', 200).then((r) => setProductDefinitions(r.records))
+    }
+  }, [showProductModal])
 
   // Filter by search query, then sort
   const query = searchQuery.toLowerCase().trim()
@@ -433,6 +447,16 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
               + New labware
             </button>
           )}
+          {activeCategory === 'labware' && (
+            <button
+              type="button"
+              className="lab-collection__category lab-collection__category--new"
+              data-testid="lab-category-new-product"
+              onClick={() => setShowProductModal(true)}
+            >
+              + New product
+            </button>
+          )}
           {activeCategory === 'labware-instances' && (
             <button
               type="button"
@@ -566,6 +590,12 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
             isOpen={showInstanceModal}
             onClose={() => setShowInstanceModal(false)}
             onSuccess={() => void fetchRecords('labware-instance')}
+          />
+          <VendorProductCreateModal
+            definitions={productDefinitions}
+            isOpen={showProductModal}
+            onClose={() => setShowProductModal(false)}
+            onSuccess={() => void fetchRecords('labware')}
           />
           <MaterialReceivingDoor
             isOpen={showReceiveModal}
