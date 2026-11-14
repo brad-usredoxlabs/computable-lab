@@ -349,4 +349,30 @@ describe('analysis-revision FAME-7 (OQ-3) input-item keys', () => {
       inputs: [{ name: 'x', dataKind: 'table', bogusKey: true }],
     }).valid).toBe(false);
   });
+
+  // L2-GC-ANALYSIS-BIND-1 (u1measkindfix1 D3): the `measurement` enum member
+  // on inputs[].dataKind (analysis-revision.schema.yaml:72 — AC1's enabling
+  // change) is pinned by committed tests here, not only by a scratch probe.
+  // Reverting that enum member must turn the positive case RED.
+  it('accepts a revision whose input slot declares dataKind: measurement (the AC1 enum member is creatable)', () => {
+    expect(validateFor(IDS.rev)({
+      kind: 'analysis-revision',
+      id: 'ANREV-000025',
+      title: 'measurement slot',
+      entryScript: 'def run(ctx):\n    return ctx',
+      sdkVersion: '0.1.0',
+      inputs: [{ name: 'chromatogram', dataKind: 'measurement', required: true }],
+    }).valid).toBe(true);
+  });
+
+  it('rejects a revision whose input slot declares a bogus dataKind (the enum is closed — the positive case is load-bearing)', () => {
+    expect(validateFor(IDS.rev)({
+      kind: 'analysis-revision',
+      id: 'ANREV-000026',
+      title: 'bogus dataKind',
+      entryScript: 'def run(ctx):\n    return ctx',
+      sdkVersion: '0.1.0',
+      inputs: [{ name: 'chromatogram', dataKind: 'measurementz', required: true }],
+    }).valid).toBe(false);
+  });
 });
