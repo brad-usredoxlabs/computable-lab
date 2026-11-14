@@ -58,12 +58,13 @@ const declaration = (overrides: Record<string, any> = {}): Record<string, any> =
 
 /** Three rows of equal length; literal coordinateMap arrays — the per-sequence
  *  mapping the compute must COPY, never recompute (MAFFT rows ship it from
- *  server/src/sequences/sequenceRuntime.ts). Column 4 is a gap in every row,
- *  column 5 carries an ambiguous base in one row. */
+ *  server/src/sequences/sequenceRuntime.ts:137, where a null entry is exactly
+ *  a gap '-' in aligned). Column 6 is gapped in row 1, column 7 in row 2, and
+ *  column 5 carries an ambiguous base (R) in row 3. */
 const rows = (): AlignmentRow[] => [
-  { sequenceId: 'seq-1', revisionId: 'rev-1', aligned: 'ATGCGTGCATGC', coordinateMap: [1, 2, 3, 4, 5, null, 7, 8, 9, 10, 11, 12] },
-  { sequenceId: 'seq-2', revisionId: 'rev-2', aligned: 'ATGCGTGATGAC', coordinateMap: [1, 2, 3, 4, 5, 6, null, 8, 9, 10, 11, 12] },
-  { sequenceId: 'seq-3', revisionId: 'rev-3', aligned: 'ATGCGTGCGAGC', coordinateMap: [1, 2, 3, 4, null, 6, 7, 8, 9, 10, 11, 12] },
+  { sequenceId: 'seq-1', revisionId: 'rev-1', aligned: 'ATGCG-TGCATG', coordinateMap: [1, 2, 3, 4, 5, null, 7, 8, 9, 10, 11, 12] },
+  { sequenceId: 'seq-2', revisionId: 'rev-2', aligned: 'ATGCGG-GATGC', coordinateMap: [1, 2, 3, 4, 5, 6, null, 8, 9, 10, 11, 12] },
+  { sequenceId: 'seq-3', revisionId: 'rev-3', aligned: 'ATGCRGGGCGCT', coordinateMap: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
 ];
 
 describe('computeConservationIntervals (declaration is the contract; no defaults anywhere)', () => {
@@ -74,12 +75,13 @@ describe('computeConservationIntervals (declaration is the contract; no defaults
     expect(r.intervals).toHaveLength(1);
     const iv = r.intervals[0]!;
     // hand-computed (region 1..12, gap_policy.exclude_column, ambiguity.count_as_partial_match,
-    // coverage.denominator.defined_bases): column 4 is gapped in all rows -> excluded;
-    // column 5 is ambiguous in row 3 -> partial match (set intersect); the other 10 columns:
-    // c1 A/A/A match, c2 T/T/T, c3 G/G/G, c5 G/G/G (partial counts), c6 -/-/G mismatch,
-    // c7 C/C/C, c8 T/G/G mismatch, c9 A/A/C mismatch, c10 G/T/G mismatch, c11 C/G/G mismatch,
-    // c12 C/C/C -> 6 weighted matches / 11 weighted denominator.
-    expect(iv.metricValue).toBeCloseTo(6 / 11);
+    // weighting.sequence_count, coverage.denominator.defined_bases): columns 6 (gap in row 1)
+    // and 7 (gap in row 2) are dropped by the declared gap treatment; column 5 (R in row 3)
+    // stays and partial-matches. The 10 counted columns (1-5, 8-12):
+    // c1 A,A,A -> 3; c2 T,T,T -> 3; c3 G,G,G -> 3; c4 C,C,C -> 3; c5 G,G,R -> 3 (R intersects);
+    // c8 T,G,G -> 2; c9 C,A,C -> 2; c10 G,T,G -> 2; c11 A,C,G -> 1 (modal A, first-row tie);
+    // c12 G,C,T -> 1 -> 23 weighted matches / 30 weighted denominator.
+    expect(iv.metricValue).toBeCloseTo(23 / 30);
     expect(iv.declarationVersion).toBe('1.0.0');
     expect(iv.declarationId).toBe('CONSERV-DECL-1');
     expect(iv.regionStart).toBe(1);
@@ -87,9 +89,9 @@ describe('computeConservationIntervals (declaration is the contract; no defaults
     // the declared metric statement is recorded verbatim, not restated
     expect(iv.metricDenominator).toBe('non_gap_columns');
     expect(iv.uncertaintyMethod).toBe('jackknife resampling over sequences per column');
-    // coverage: 11 counted (defined) columns / 12 region columns
-    expect(iv.coverage).toBeCloseTo(11 / 12);
-    expect(iv.uncertainty).toBeCloseTo(Math.sqrt((6 / 11) * (1 - 6 / 11) / 11));
+    // coverage: 10 counted columns / 12 defined region columns (all 12 carry defined bases)
+    expect(iv.coverage).toBeCloseTo(10 / 12);
+    expect(iv.uncertainty).toBeCloseTo(Math.sqrt((23 / 30) * (1 - 23 / 30) / 30));
   });
 
   it('leg 2 — an invalid declaration (metric.denominator deleted) refuses with the reader OWN diagnostics and NO intervals', () => {
@@ -111,12 +113,16 @@ describe('computeConservationIntervals (declaration is the contract; no defaults
     expect(b.ok).toBe(true);
     if (!a.ok || !b.ok) return;
     const [ia, ib] = [a.intervals[0]!, b.intervals[0]!];
-    // exclude_column: 6/11 with coverage 11/12; count_as_mismatch: the all-gapped
-    // column counts in the denominator with no matches -> 6/12 with coverage 12/12.
+    // exclude_column: columns 6 (gap in row 1) and 7 (gap in row 2) leave the
+    // numerator AND denominator -> 23/30 with coverage 10/12. count_as_mismatch
+    // counts them in the denominator (gapped rows never match; modal c6 G ->
+    // rows 2,3 = +2, modal c7 T -> row 1 = +1, first-row tie) -> 26/36 with
+    // coverage 12/12.
     expect(ia.metricValue).not.toEqual(ib.metricValue);
     expect(ia.coverage).not.toEqual(ib.coverage);
-    expect(ia.metricValue).toBeCloseTo(6 / 11);
-    expect(ib.metricValue).toBeCloseTo(6 / 12);
+    expect(ia.metricValue).toBeCloseTo(23 / 30);
+    expect(ib.metricValue).toBeCloseTo(26 / 36);
+    expect(ia.coverage).toBeCloseTo(10 / 12);
     expect(ib.coverage).toBeCloseTo(1);
   });
 
@@ -147,27 +153,39 @@ describe('computeConservationIntervals (declaration is the contract; no defaults
   it('leg 5 — ambiguity: a column containing R is dropped under exclude_column and counted under count_as_partial_match; the two metricValues differ', () => {
     // column 5 of the rows is ambiguous in row 3 (G vs R); the other rows agree on G
     const base = declaration();
-    const a = computeConservationIntervals({ ...base, ambiguity_policy: { ...base.ambiguity_policy, treatment: 'exclude_column' } }, rows(), { start: 1, end: 12 });
-    const b = computeConservationIntervals({ ...base, ambiguity_policy: { ...base.ambiguity_policy, treatment: 'count_as_partial_match' } }, rows(), { start: 1, end: 12 });
+    // threshold 0.5 (declared in this leg) keeps BOTH sides reported as
+    // numbers — 9/12 = 0.75 and 10/12 = 0.8333 both satisfy it — so the leg
+    // isolates the ambiguity treatment itself, not the coverage threshold.
+    const thresholded = { ...base, coverage: { ...base.coverage, threshold: 0.5 } };
+    const a = computeConservationIntervals({ ...thresholded, ambiguity_policy: { ...base.ambiguity_policy, treatment: 'exclude_column' } }, rows(), { start: 1, end: 12 });
+    const b = computeConservationIntervals({ ...thresholded, ambiguity_policy: { ...base.ambiguity_policy, treatment: 'count_as_partial_match' } }, rows(), { start: 1, end: 12 });
     expect(a.ok).toBe(true);
     expect(b.ok).toBe(true);
     if (!a.ok || !b.ok) return;
     const [ia, ib] = [a.intervals[0]!, b.intervals[0]!];
-    // exclude_column drops column 5 too: 10 region columns, col6 -/-/G mismatch, col4 gapped ->
-    // denominator 9, matches c1,c2,c3,c7,c12 = 5 -> 5/9. Partial match keeps column 5 -> 6/11.
+    // exclude_column drops the ambiguous column 5 AND the gapped columns 6, 7
+    // (the gap policy applies too) -> 9 counted columns (1-4, 8-12) ->
+    // 20/27 with coverage 9/12. count_as_partial_match keeps column 5 (R
+    // partial-matches all three rows) -> 23/30 with coverage 10/12.
+    // The declared threshold 0.5 keeps both sides reported as numbers
+    // (0.75 and 0.8333 both satisfy it) so the leg isolates the ambiguity
+    // treatment itself, not the threshold.
     expect(ia.metricValue).not.toEqual(ib.metricValue);
-    expect(ia.metricValue).toBeCloseTo(5 / 9);
-    expect(ib.metricValue).toBeCloseTo(6 / 11);
-    expect(ia.coverage).toBeCloseTo(10 / 12);
-    expect(ib.coverage).toBeCloseTo(11 / 12);
+    expect(ia.metricValue).toBeCloseTo(20 / 27);
+    expect(ib.metricValue).toBeCloseTo(23 / 30);
+    expect(ia.coverage).toBeCloseTo(9 / 12);
+    expect(ib.coverage).toBeCloseTo(10 / 12);
   });
 
-  it('leg 6 — below threshold: with coverage.threshold 1 and a dropped column the metricValue is the STRING unresolved (never a number, never null); with the threshold satisfied it is a number', () => {
+  it('leg 6 — below threshold: with coverage.threshold 1 and a region that has a dropped column the metricValue is the STRING unresolved (never a number, never null); with the threshold satisfied it is a number', () => {
+    // gap_policy exclude_column drops columns 6 and 7 -> coverage 10/12.
+    // threshold 1: 10/12 < 1 -> below threshold; threshold 0.8: 10/12 >= 0.8
+    // -> the number is reported.
     const below = computeConservationIntervals({ ...declaration(), coverage: { threshold: 1, denominator: 'defined_bases', below_threshold: 'unresolved' } }, rows(), { start: 1, end: 12 });
     expect(below.ok).toBe(true);
     if (!below.ok) return;
     const ivBelow = below.intervals[0]!;
-    expect(ivBelow.coverage).toBeCloseTo(11 / 12); // below the declared threshold
+    expect(ivBelow.coverage).toBeCloseTo(10 / 12); // below the declared threshold
     expect(ivBelow.metricValue).toBe('unresolved');
     expect(typeof ivBelow.metricValue).toBe('string');
     // uncertainty is still reported alongside the unresolved metric
@@ -175,14 +193,15 @@ describe('computeConservationIntervals (declaration is the contract; no defaults
     const above = computeConservationIntervals({ ...declaration(), coverage: { threshold: 0.8, denominator: 'defined_bases', below_threshold: 'unresolved' } }, rows(), { start: 1, end: 12 });
     expect(above.ok).toBe(true);
     if (!above.ok) return;
+    expect(above.intervals[0]!.coverage).toBeCloseTo(10 / 12); // threshold satisfied
     expect(typeof above.intervals[0]!.metricValue).toBe('number');
   });
 
   it('leg 7 — weighting.unique_taxa with a row missing taxonId refuses conservation_taxa_unresolved (no silent unweighted fallback)', () => {
     const r = computeConservationIntervals({ ...declaration(), metric: { id: 'conservation-fraction', unit: 'per_column', numerator: 'columns in which every aligned residue is the identical base', denominator: 'non_gap_columns', weighting: 'unique_taxa' } }, [
-      { sequenceId: 'seq-1', revisionId: 'rev-1', aligned: 'ATGCGTGCATGC', coordinateMap: [1, 2, 3, 4, 5, null, 7, 8, 9, 10, 11, 12], taxonId: 'taxon-1' },
-      { sequenceId: 'seq-2', revisionId: 'rev-2', aligned: 'ATGCGTGATGAC', coordinateMap: [1, 2, 3, 4, 5, 6, null, 8, 9, 10, 11, 12] },
-      { sequenceId: 'seq-3', revisionId: 'rev-3', aligned: 'ATGCGTGCGAGC', coordinateMap: [1, 2, 3, 4, null, 6, 7, 8, 9, 10, 11, 12], taxonId: 'taxon-1' },
+      { sequenceId: 'seq-1', revisionId: 'rev-1', aligned: 'ATGCG-TGCATG', coordinateMap: [1, 2, 3, 4, 5, null, 7, 8, 9, 10, 11, 12], taxonId: 'taxon-1' },
+      { sequenceId: 'seq-2', revisionId: 'rev-2', aligned: 'ATGCGG-GATGC', coordinateMap: [1, 2, 3, 4, 5, 6, null, 8, 9, 10, 11, 12] },
+      { sequenceId: 'seq-3', revisionId: 'rev-3', aligned: 'ATGCG-GCGAGC', coordinateMap: [1, 2, 3, 4, null, 6, 7, 8, 9, 10, 11, 12], taxonId: 'taxon-1' },
     ], { start: 1, end: 12 });
     expect(r.ok).toBe(false);
     if (r.ok) return;
