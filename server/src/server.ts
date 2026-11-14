@@ -1655,6 +1655,8 @@ export async function createServer(
     registerDraftRoutes(instance, ctx);
     const routeOpts: import('./api/routes.js').RouteOptions = {
       recordHandlers,
+      // labware-definition search's second source; the route has no other reader.
+      recordStore: ctx.store,
       recordSearchHandlers,
       relatedRecordsHandlers,
       schemaHandlers,
