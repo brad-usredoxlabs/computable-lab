@@ -24,7 +24,6 @@ const LABWARE_ALIAS_MAP: Record<string, string> = {
   generic_96_well_plate: 'lbw-def-generic-96-well-plate',
   generic_384_well_plate: 'lbw-def-generic-384-well-plate',
   generic_24_well_plate: 'lbw-def-generic-24-well-plate',
-  generic_96_well_deep_plate: 'lbw-def-generic-96-well-deep-plate',
   // Reservoir hints
   generic_1_well_reservoir: 'lbw-def-generic-reservoir-1-v1',
   generic_8_well_reservoir: 'lbw-def-generic-8-reservoir',
@@ -42,7 +41,6 @@ const LABWARE_ALIAS_MAP: Record<string, string> = {
   integra_tiprack_300ul_96: 'lbw-def-integra-tiprack-300ul-96-v1',
   // Nest plate hints
   nest_96_wellplate_200ul_flat: 'lbw-def-opentrons-nest-96-wellplate-200ul-flat-v1',
-  nest_96_wellplate_2ml_deep: 'lbw-def-opentrons-nest-96-wellplate-2ml-deep-v1',
   // Nest reservoir hints
   nest_12_reservoir_22ml: 'lbw-def-opentrons-nest-12-reservoir-22ml-v1',
   nest_8_reservoir_22ml: 'lbw-def-opentrons-nest-8-reservoir-22ml-v1',
