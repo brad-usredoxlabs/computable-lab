@@ -32,7 +32,7 @@ version: 1
 status: adopted
 adopted_by: "Brad, 2026-11-13, verbatim: \"The shape is correct.\""
 source_file: test-prompts/AI-Chat-Corpus2.md
-source_sha256: 01cb85fe7ddb38f9cb3ee2a2cd68aa42fbd6be2a20940a666e83e171605812b2   # AI-Chat-Corpus2.md after the prompt-1 rewrite (Thermo A58941)
+source_sha256: 202bcbfdb0e1383041637b1df221cdcc8428fccb620624d8eb150d79f463d5e8   # AI-Chat-Corpus2.md after the prompt-1 rewrite (Thermo A58941)
 
 scenarios:
   - id: prompt-1
