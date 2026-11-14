@@ -111,7 +111,17 @@ properties:
 
 # A domain mutation must go through a governed write path; an agent tool that
 # happens to write is not that path. The contract, not a test, owns this rule.
+# A capability declaring two or more MUTATING effects (the four names are
+# declared here, the only place they may be re-listed) is a whole sequence of
+# steps wearing one step's clothing; the second step belongs in the journey.
+# read and external_disclosure are not mutations (they may co-occur freely).
 allOf:
+- if:
+    properties:
+      effects: { type: array, contains: { enum: [workflow_state_change,
+        domain_mutation, compute_submission, deployment] }, minContains: 2 }
+    required: [effects]
+  then: false
 - if:
     properties:
       effects: { type: array, contains: { const: domain_mutation } }

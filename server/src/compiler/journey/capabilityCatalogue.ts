@@ -36,8 +36,17 @@ function pathOf(error: ErrorObject): string {
   const named = params.unevaluatedProperty ?? params.additionalProperty ?? params.missingProperty;
   return typeof named === 'string' ? `/${named}` : '/';
 }
-/** Ajv errors are named one per line: file, JSON path, message. */
+/** Ajv errors are named one per line: file, JSON path, message. The
+ * journey-hiding rule closes with `then: false`, so its failure lands as a
+ * root-level `false schema` error (plus the companion `if` error, which is
+ * the same finding and not a second one); that failure is mapped here to its
+ * named diagnostic. The rule's effect set lives in the descriptor schema's
+ * allOf — only the diagnostic string lives in TS. */
+const JOURNEY_HIDING = '/effects: journey_capability_hides_journey: a capability may declare at most one mutating effect; a second step belongs in the journey, not inside this capability';
 function describe(file: string, errors: readonly ErrorObject[]): string[] {
+  if (errors.some((error) => error.keyword === 'false schema')) {
+    return [`${file}: ${JOURNEY_HIDING}`];
+  }
   return errors.map((error) => `${file}: ${pathOf(error)}: ${error.message ?? error.keyword}`);
 }
 export async function admitCapabilityCatalogue(
