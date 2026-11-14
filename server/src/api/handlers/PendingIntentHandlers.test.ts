@@ -14,6 +14,7 @@ import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { ContextDelta, PendingIntentCheckpoint } from '../../compiler/journey/checkpointContract.js';
+import type { RecordEnvelope } from '../../store/types.js';
 import { createPendingIntentHandlers } from './PendingIntentHandlers.js';
 
 const roots: string[] = [];
@@ -159,5 +160,87 @@ describe('PendingIntentHandlers — HTTP surface over the checkpoint store (cpro
     await handlers.resume(fakeRequest({ endpoint: 'protocols', checkpointId: 'ghost' }, { body: { checkpointId: 'ghost', expectedVersion: 1 } }), r as unknown as FastifyReply);
     expect(r.statusCode).toBe(400);
     expect((r.body as { codes: string[] }).codes).toContain('checkpoint-not-found');
+  });
+
+  // L2-JOURNEY-FALSIFY-1 (u1refdrill): the FALSIFY-1 reference drill at the HTTP surface.
+  // A fake record store (the real RecordStore's `get` seam) whose live token no longer
+  // equals the checkpoint's declared origin revision — restoreCheckpoint is called, never re-implemented.
+  function fakeRecordStore(contentSha: string): { get: (recordId: string) => Promise<RecordEnvelope | null> } {
+    return {
+      get: async (recordId: string) =>
+        recordId === 'rec-1'
+          ? { recordId: 'rec-1', schemaId: 'https://computable-lab.com/schema/unknown', payload: {}, meta: { contentSha } }
+          : null,
+    };
+  }
+
+  it('a changed origin record => 409 origin-record-changed naming the record, NO receipt; the checkpoint re-reads pending with the version unchanged (u1refdrill drill)', async () => {
+    const root = await makeRoot('cproute-refdrill-');
+    const handlers = createPendingIntentHandlers({ rootDir: root, recordStore: fakeRecordStore('9') });
+    // BEFORE: a pending checkpoint declaring origin rec-1 at revision '7' (the live token is '9').
+    const cp = makeCheckpoint({
+      status: 'pending',
+      origin: { surface: 'deck-surface', route: '/decks', active_tab: 'tab-1', record_revisions: [{ record_id: 'rec-1', revision: '7' }] },
+    });
+    await handlers.save(fakeRequest({ endpoint: 'protocols' }, { body: cp }), fakeReply() as unknown as FastifyReply);
+    const before = fakeReply();
+    await handlers.load(fakeRequest({ endpoint: 'protocols', checkpointId: 'cp-journey-1' }), before as unknown as FastifyReply);
+    expect(before.statusCode).toBe(200);
+    const blocked = fakeReply();
+    await handlers.resume(fakeRequest({ endpoint: 'protocols', checkpointId: 'cp-journey-1' }, { body: { checkpointId: 'cp-journey-1', expectedVersion: 1, resumedBy: 'brad' } }), blocked as unknown as FastifyReply);
+    // AC1: 409 with the NAMED code, the record id in the reason, and NO receipt field in the body.
+    expect(blocked.statusCode).toBe(409);
+    expect(blocked.body).toMatchObject({ error: 'origin-record-changed', code: 'origin-record-changed' });
+    expect((blocked.body as { reason: string }).reason).toContain('rec-1');
+    expect(blocked.body).not.toHaveProperty('receipt');
+    // AC2/AC4: AFTER — the stored document is untouched: status pending, version unchanged, no resume_receipt.
+    const after = fakeReply();
+    await handlers.load(fakeRequest({ endpoint: 'protocols', checkpointId: 'cp-journey-1' }), after as unknown as FastifyReply);
+    expect(after.statusCode).toBe(200);
+    expect(after.body).toMatchObject({ status: 'pending', concurrency_version: 1 });
+    expect(after.body).not.toHaveProperty('resume_receipt');
+  });
+
+  it('a vanished origin record => 409 origin-record-vanished, no receipt, checkpoint untouched (u1refdrill)', async () => {
+    const root = await makeRoot('cproute-refdrillvanish-');
+    // get() resolves null: the record is gone from the store entirely.
+    const handlers = createPendingIntentHandlers({ rootDir: root, recordStore: fakeRecordStore('7') });
+    const cp = makeCheckpoint({
+      status: 'pending',
+      origin: { surface: 'deck-surface', route: '/decks', active_tab: 'tab-1', record_revisions: [{ record_id: 'rec-9', revision: 'r1' }] },
+    });
+    await handlers.save(fakeRequest({ endpoint: 'protocols' }, { body: cp }), fakeReply() as unknown as FastifyReply);
+    const blocked = fakeReply();
+    await handlers.resume(fakeRequest({ endpoint: 'protocols', checkpointId: 'cp-journey-1' }, { body: { checkpointId: 'cp-journey-1', expectedVersion: 1 } }), blocked as unknown as FastifyReply);
+    expect(blocked.statusCode).toBe(409);
+    expect(blocked.body).toMatchObject({ error: 'origin-record-vanished', code: 'origin-record-vanished' });
+    expect(blocked.body).not.toHaveProperty('receipt');
+    const after = fakeReply();
+    await handlers.load(fakeRequest({ endpoint: 'protocols', checkpointId: 'cp-journey-1' }), after as unknown as FastifyReply);
+    expect(after.body).toMatchObject({ status: 'pending', concurrency_version: 1 });
+    expect(after.body).not.toHaveProperty('resume_receipt');
+  });
+
+  it('all origin revisions still match => 200 with the receipt exactly as today (check wired, no behaviour change); absent recordStore => identical resume (u1refdrill)', async () => {
+    const root = await makeRoot('cproute-refdrillmatch-');
+    // Matching token: the real restoreCheckpoint runs and passes.
+    const handlers = createPendingIntentHandlers({ rootDir: root, recordStore: fakeRecordStore('7') });
+    const cp = makeCheckpoint({
+      origin: { surface: 'deck-surface', route: '/decks', active_tab: 'tab-1', record_revisions: [{ record_id: 'rec-1', revision: '7' }] },
+    });
+    await handlers.save(fakeRequest({ endpoint: 'protocols' }, { body: cp }), fakeReply() as unknown as FastifyReply);
+    const ok = fakeReply();
+    await handlers.resume(fakeRequest({ endpoint: 'protocols', checkpointId: 'cp-journey-1' }, { body: { checkpointId: 'cp-journey-1', expectedVersion: 1, resumedBy: 'brad' } }), ok as unknown as FastifyReply);
+    expect(ok.statusCode).toBe(200);
+    expect(ok.body).toHaveProperty('receipt');
+    expect((ok.body as { receipt: { resumed_by: string; outcome: string } }).receipt).toMatchObject({ resumed_by: 'brad', outcome: 'resumed' });
+    // Absent recordStore: no check at all (bait 5) — the resume behaves exactly as today.
+    const root2 = await makeRoot('cproute-refdrillabsent-');
+    const handlers2 = createPendingIntentHandlers({ rootDir: root2 });
+    await handlers2.save(fakeRequest({ endpoint: 'protocols' }, { body: makeCheckpoint() }), fakeReply() as unknown as FastifyReply);
+    const ok2 = fakeReply();
+    await handlers2.resume(fakeRequest({ endpoint: 'protocols', checkpointId: 'cp-journey-1' }, { body: { checkpointId: 'cp-journey-1', expectedVersion: 1 } }), ok2 as unknown as FastifyReply);
+    expect(ok2.statusCode).toBe(200);
+    expect(ok2.body).toHaveProperty('receipt');
   });
 });

@@ -1017,7 +1017,11 @@ export async function createServer(
   // ai-threads root (the store derives its per-(user, endpoint, scope, thread) file
   // path from it); the HTTP handlers re-implement nothing — every write delegates
   // to the store (one Ajv seam, compare-and-set resume, injection-mode refusal).
-  const pendingIntentHandlers = createPendingIntentHandlers({ rootDir: aiThreadsRoot });
+  // L2-JOURNEY-FALSIFY-1 (u1refdrill): the SAME record store (created in initializeApp and
+  // carried here as ctx.store; NOT a second instance) is wired as the origin-record authority —
+  // a resume consults restoreCheckpoint against it BEFORE any 'resumed' write, so a journey
+  // whose origin record changed while away is blocked (409), not silently redirected.
+  const pendingIntentHandlers = createPendingIntentHandlers({ rootDir: aiThreadsRoot, recordStore: ctx.store });
 
   const jsonLdSearchHandlers = createJsonLdSearchHandlers(
     ctx.jsonLdIndex,
