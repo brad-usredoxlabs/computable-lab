@@ -57,7 +57,7 @@ const createRecordKinds = new Set(
 );
 
 describe('labware-definition journey capability declarations (u2acap2)', () => {
-  it('(a) admits the real shipped directory: seven descriptors, empty diagnostics', async () => {
+  it('(a) admits the real shipped directory: eight descriptors, empty diagnostics', async () => {
     const result = await loadCapabilityCatalogueDir(CAPABILITIES_DIR, new Set(AGENT_ALLOWED_TOOLS));
     // ok:true carries no diagnostics; name them if the catalogue refused.
     expect(result.ok ? [] : result.diagnostics).toEqual([]);
@@ -66,6 +66,7 @@ describe('labware-definition journey capability declarations (u2acap2)', () => {
     expect(result.capabilities.map((c) => c.capability_id)).toEqual([
       'journey.labware-definition-create',
       'journey.labware-instance-place',
+      'journey.material-create',
       'journey.material-library-search',
       'journey.ncbi-gene-search',
       'journey.noun-create-from-document',
@@ -128,5 +129,46 @@ describe('labware-definition journey capability declarations (u2acap2)', () => {
     if (result.ok) throw new Error(`expected rejection, got ${result.capabilities.length} admitted`);
     expect(result.diagnostics.join('\n')).toContain("unknown handler id 'records.creat'");
     expect(result.capabilities).toHaveLength(0);
+  });
+
+  it('(e) material-create: admitted handler, two committed outputs sharing ONE receipt, one staged draft input', async () => {
+    // L2-LAB-MATERIAL-CREATE-1 (capdesc): the shipped two-record material write
+    // (material concept + its vendor-product under one receipt) is DECLARED
+    // here. Everything below is read from the shipped files, never retyped.
+    const doc = (await readDescriptor('material-create.yaml')) as DescriptorDoc & {
+      status?: Record<string, unknown>;
+    };
+    expect(doc.capability_id).toBe('journey.material-create');
+    expect(
+      registryIds.has(doc.implementation.handler_ref),
+      `registry ids ${JSON.stringify([...registryIds])} must cover handler_ref '${doc.implementation.handler_ref}'`,
+    ).toBe(true);
+
+    // Input: exactly one staged draft — keys version/draft_id only, so a
+    // staged proposal can never satisfy a committed-record port.
+    expect(doc.ports.input).toHaveLength(1);
+    const input = doc.ports.input[0]!;
+    expect(Object.keys(input).sort()).toEqual(['draft_id', 'version']);
+    expect('record_id' in input).toBe(false);
+    expect('receipt_id' in input).toBe(false);
+
+    // Output: exactly two committed-record ports, closed shape, one receipt.
+    const out = doc.ports.output;
+    expect(out).toHaveLength(2);
+    for (const port of out) {
+      expect(Object.keys(port).sort()).toEqual(['receipt_id', 'record_id', 'record_type', 'version']);
+      expect(String(port.receipt_id).trim().length).toBeGreaterThan(0);
+    }
+    expect(out.map((port) => port.record_type).sort()).toEqual(['material', 'vendor-product']);
+    const receiptIds = new Set(out.map((port) => port.receipt_id));
+    expect(receiptIds.size, 'both records commit under ONE receipt').toBe(1);
+
+    // And the record kinds the ports name are ones the registered write may write.
+    for (const port of out) {
+      expect(
+        createRecordKinds.has(String(port.record_type)),
+        `record_kinds of records.create must cover '${String(port.record_type)}'`,
+      ).toBe(true);
+    }
   });
 });
