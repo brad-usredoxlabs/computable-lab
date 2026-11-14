@@ -5,7 +5,7 @@
 - **Worktree:** /home/brad/cl-wt/L2-GC-ANALYSIS-BIND-1-u1measkind-lane2
 - **Branch:** cl/lane2-gc-analysis-bind-1-u1measkind-0726
 - **Base:** 5389668cc41b4484067588ad0824458caf1a81c3
-- **Commits:** cd81f4f9d6b1f46f0218aa7a8f9ea13582606553 (RED) → e56d37f579751eac08a73b578e1fb6bc0fa6fb8a (GREEN) → <report commit> → <marker commit>
+- **Commits:** cd81f4f9d6b1f46f0218aa7a8f9ea13582606553 (RED) → e56d37f579751eac08a73b578e1fb6bc0fa6fb8a (GREEN) → 09bc7fe33ca302fc326fe7248df1af1dce7a76be (report, CONTAINS this report) → 471a92a67ec7beebbbe1a412d525f769a9d1a610 (marker append)
 
 ## Governing line (quoted from the grounding)
 
