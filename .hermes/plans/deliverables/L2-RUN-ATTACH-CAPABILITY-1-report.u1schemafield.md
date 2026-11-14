@@ -136,3 +136,5 @@ behavior (RunSheetHandlers.ts / acquisitionPackage.ts) — NOT this unit's scope
 ## Remaining blockers
 
 None. Tree clean at the marker commit; all verification green.
+
+L2-RUN-ATTACH-CAPABILITY-1-u1schemafield UNIT unit DONE ca1084a745f56d22d5ff77a9cd8a93101c8a0c4d
