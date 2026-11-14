@@ -84,3 +84,5 @@ checkout for environment reasons that pre-date the unit.
   fix bound records always carry full grid/linear addressing, so that fallback is no
   longer reachable from this path. Behaviour outside scope; left untouched.
 - Browser acceptance of prompt-1 deck journey remains with the browser reviewer.
+
+L2-SUBPROTOCOL-EXPAND-1 UNIT g4binddeckfix DONE 055b3488712b142e6676932988018e66c9b27b7f
