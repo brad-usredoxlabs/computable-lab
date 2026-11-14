@@ -149,3 +149,5 @@ post-reload verification.
 - `server/node_modules/.bin/vitest run server/src/compiler/pipeline/fixtures/FixtureRunner.test.ts` → expect the unchanged pre-existing 1 failed (extra=8)
 - `grep -rnE 'lbw-def-generic-96-well-deep-plate|lbw-def-opentrons-nest-96-wellplate-2ml-deep-v1' server/src app/src records config` → expect no matches
 - `npm run typecheck -w server` → expect exit 0
+
+L2-P1-SEED-ENTRY-1-seeddefs2 UNIT unit DONE a687a6b27730e1b66934075684aa1ec545379c9c
