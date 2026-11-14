@@ -3581,12 +3581,19 @@ export const apiClient = {
    * PUT). `deviceId` is the CONFIG storage device id (from GET /config) —
    * never a mount path. `entryRef` names the instrument-sequence-entry the
    * package attaches to; `sampleRef`/`sourceRunRef` ride the package record.
+   * u1matbind (RUN-IS-THE-PROVENANCE-RECORD, 2026-11-14): `entryRef` is
+   * OPTIONAL — the package may instead bind to the MATERIAL that went in via
+   * `materialRef` (the server's RegisterBody already declared it optional;
+   * this is the client side of the same contract — fixing only one side is
+   * the shipped drift this closes). NEITHER may be sent: the server refuses
+   * with the named token MATERIAL_OR_ENTRY_REQUIRED.
    */
   async registerAcquisitionPackage(body: {
     deviceId: string
     directoryKey: string
-    entryRef: { kind: 'record'; id: string; type: string }
+    entryRef?: { kind: 'record'; id: string; type: string }
     sampleRef?: { kind: 'record'; id: string; type: string; label?: string }
+    materialRef?: { kind: 'record'; id: string; type: string; label?: string }
   }): Promise<{ packageRecordId: string; packagePayload: Record<string, unknown>; entryRecordId: string }> {
     try {
       return await request<{ packageRecordId: string; packagePayload: Record<string, unknown>; entryRecordId: string }>(
