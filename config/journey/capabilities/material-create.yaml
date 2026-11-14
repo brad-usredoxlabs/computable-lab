@@ -1,0 +1,54 @@
+# L2-LAB-MATERIAL-CREATE-1 (capdesc) — governed-write capability descriptor.
+# WHAT IS TRUE: the two-record write itself is shipped and accepted — a material
+# concept plus the vendor-product that points at it, committed under ONE
+# receipt (merged 7b71911d; u3 adversarial cycle closed ACCEPT, 0 defects), and
+# its /lab door ("+ New material") merged with it. It executes through the
+# registered governed write (governed-writes.yaml -> records.create ->
+# POST /records, guards ajv-schema-validation + lint + ownership-acl), so both
+# records carry a receipt.
+# WHAT IS NOT TRUE YET: no journey names this capability. The declaration is
+# here so a journey can name it instead of inventing one or reaching around the
+# catalogue; status.implemented stays false until that wiring exists.
+# The input is a STAGED draft, never a committed record: the person accepts the
+# proposal first, and only the accept path mints. Both outputs therefore carry
+# the SAME receipt_id — one accept, one receipt, two records.
+capability_id: journey.material-create
+version: "1.0.0"
+display_name: Create a material and its vendor product from a staged draft
+justification: >-
+  The material create path writes TWO records per accept (the material concept
+  and the vendor-product that references it) through one governed write. No
+  shipped journey capability names that write: material-library-search only
+  returns existing records, and a domain mutation must go through the registry
+  (capability-descriptor.schema.yaml forbids an agent tool that writes). Naming
+  it here keeps one authority for the capability and its ports.
+ports:
+  input:
+  - version: "1.0.0"
+    draft_id: DRAFT-MAT-1
+  output:
+  - version: "1.0.0"
+    record_id: MAT-CONCEPT
+    record_type: material
+    receipt_id: RCPT-MAT-CREATE
+  - version: "1.0.0"
+    record_id: VEND-PRODUCT
+    record_type: vendor-product
+    receipt_id: RCPT-MAT-CREATE
+implementation:
+  handler_kind: governed_write
+  handler_ref: records.create
+effects: [domain_mutation]
+permissions: [journey.read, records.write]
+availability:
+  requires_records: [material, vendor-product]
+surfaces: [journey.workspace]
+idempotency: non_idempotent
+retry: none
+reconciliation: receipt_required
+evidence: [governed_write_receipt]
+status:
+  declared: true
+  implemented: false
+  available_now: false
+  browser_certified: false
