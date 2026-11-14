@@ -10,25 +10,50 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { ThemeProvider } from '../shared/shell'
 import { OpenTabsProvider } from '../shared/shell/OpenTabsContext'
 import { LabLabwareNewPage } from './LabLabwareNewPage'
-import * as clientModule from '../shared/api/client'
+
+// u3anchorfix (ruling A): preserve-resolve vi.mock idiom (the old spyOn stub
+// stripped apiClient.resolve, so no anchor row could render); every save-asserting
+// test picks the anchor row first.
+const { mockExtract, mockCreateRecord, mockGetSchema, mockResolve } = vi.hoisted(() => ({
+  mockExtract: vi.fn(),
+  mockCreateRecord: vi.fn(),
+  mockGetSchema: vi.fn(),
+  mockResolve: vi.fn(),
+}))
+
+vi.mock('../shared/api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../shared/api/client')>()
+  return {
+    ...actual,
+    apiClient: {
+      ...(actual as Record<string, unknown>).apiClient as object,
+      resolve: (...args: unknown[]) => mockResolve(...args),
+      searchMaterials: vi.fn().mockResolvedValue({ items: [] }),
+      getFormulationsSummary: vi.fn().mockResolvedValue([]),
+      extractSpecSheetProposals: (...args: unknown[]) => mockExtract(...args),
+      getSchema: (...args: unknown[]) => mockGetSchema(...args),
+      createRecord: (...args: unknown[]) => mockCreateRecord(...args),
+    },
+  }
+})
 
 afterEach(() => {
   cleanup()
 })
 
-const mockExtract = vi.fn()
-const mockCreateRecord = vi.fn()
-const mockGetSchema = vi.fn()
+const ANCHOR_CANDIDATE = { curie: 'FOO:1', label: 'Test term A', namespace: 'FOO', tier: 2 as const, level: 'concept' as const, score: 10, source: 'local-obo' as const }
 
 beforeEach(() => {
   vi.resetAllMocks()
-  vi.spyOn(clientModule, 'apiClient', 'get').mockReturnValue({
-    ...clientModule.apiClient,
-    extractSpecSheetProposals: mockExtract,
-    getSchema: mockGetSchema,
-    createRecord: mockCreateRecord,
-  } as any)
+  mockResolve.mockResolvedValue({ candidates: [ANCHOR_CANDIDATE] })
 })
+
+// One explicit row click, no autopick (D8) — so the no-anchor refusal (page:457) is not what a save test observes.
+async function pickAnchor() {
+  fireEvent.change(screen.getByTestId('lab-labware-ontology-search-input'), { target: { value: 'test term' } })
+  fireEvent.click(screen.getByTestId('lab-labware-ontology-search-button'))
+  await fireEvent.click((await screen.findAllByTestId('lab-labware-ontology-candidate'))[0])
+}
 
 describe('LabLabwareNewPage', () => {
   function renderPage() {
@@ -216,6 +241,8 @@ describe('LabLabwareNewPage', () => {
     })
     // Save button is enabled — no client-side required-field gate
     expect(screen.getByTestId('lab-labware-save-button')).not.toHaveAttribute('disabled')
+    // u3anchorfix: pick the row so the observed failure is the 422, not the no-anchor refusal.
+    await pickAnchor()
     fireEvent.click(screen.getByTestId('lab-labware-save-button'))
     await waitFor(() => {
       expect(screen.queryByTestId('lab-labware-error')).toBeInTheDocument()
@@ -243,6 +270,7 @@ describe('LabLabwareNewPage', () => {
     await waitFor(() => {
       expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument()
     })
+    await pickAnchor()
     fireEvent.click(screen.getByTestId('lab-labware-save-button'))
     await waitFor(() => {
       expect(mockCreateRecord).toHaveBeenCalled()
@@ -274,6 +302,7 @@ describe('LabLabwareNewPage', () => {
     await waitFor(() => {
       expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument()
     })
+    await pickAnchor()
     fireEvent.click(screen.getByTestId('lab-labware-save-button'))
     await waitFor(() => {
       expect(mockCreateRecord).toHaveBeenCalled()
@@ -303,6 +332,7 @@ describe('LabLabwareNewPage', () => {
     await waitFor(() => {
       expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument()
     })
+    await pickAnchor()
     fireEvent.click(screen.getByTestId('lab-labware-save-button'))
     await waitFor(() => {
       expect(mockCreateRecord).toHaveBeenCalledTimes(1)
@@ -339,6 +369,7 @@ describe('LabLabwareNewPage', () => {
     fireEvent.change(screen.getByTestId('lab-labware-url-input'), {
       target: { value: '' },
     })
+    await pickAnchor()
     fireEvent.click(screen.getByTestId('lab-labware-save-button'))
     await waitFor(() => {
       expect(mockCreateRecord).toHaveBeenCalledTimes(1)
@@ -376,6 +407,7 @@ describe('LabLabwareNewPage', () => {
       target: { value: 'https://example.com/sheet-b' },
     })
     // Save — provenance must be frozen at sheet-a, not the live sheet-b
+    await pickAnchor()
     fireEvent.click(screen.getByTestId('lab-labware-save-button'))
     await waitFor(() => {
       expect(mockCreateRecord).toHaveBeenCalled()
@@ -417,6 +449,7 @@ describe('LabLabwareNewPage', () => {
     await waitFor(() => {
       expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument()
     })
+    await pickAnchor()
     fireEvent.click(screen.getByTestId('lab-labware-save-button'))
     await waitFor(() => {
       expect(mockCreateRecord).toHaveBeenCalled()
@@ -462,6 +495,7 @@ describe('LabLabwareNewPage', () => {
     await waitFor(() => {
       expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument()
     })
+    await pickAnchor()
     fireEvent.click(screen.getByTestId('lab-labware-save-button'))
     await waitFor(() => {
       expect(mockCreateRecord).toHaveBeenCalled()
@@ -510,6 +544,7 @@ describe('LabLabwareNewPage', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('lab-labware-proposals')).toBeDefined()
     })
+    await pickAnchor()
     fireEvent.click(screen.getByTestId('lab-labware-save-button'))
     await waitFor(() => {
       expect(mockCreateRecord).toHaveBeenCalled()
@@ -554,6 +589,7 @@ describe('LabLabwareNewPage', () => {
       target: { value: 'https://example.com/sheet-b' },
     })
     // Save — provenance must prefer the first proposal's sourceUrl
+    await pickAnchor()
     fireEvent.click(screen.getByTestId('lab-labware-save-button'))
     await waitFor(() => {
       expect(mockCreateRecord).toHaveBeenCalled()
@@ -590,6 +626,7 @@ describe('LabLabwareNewPage', () => {
       target: { value: 'https://example.com/sheet-b' },
     })
     // Save — provenance must fall back to the frozen extraction URL, not use '' or sheet-b
+    await pickAnchor()
     fireEvent.click(screen.getByTestId('lab-labware-save-button'))
     await waitFor(() => {
       expect(mockCreateRecord).toHaveBeenCalled()
@@ -638,6 +675,9 @@ describe('LabLabwareNewPage', () => {
     await waitFor(() => {
       expect(screen.getByTestId('lab-labware-proposals')).toBeInTheDocument()
     })
+    // u3anchorfix: pick the anchor row so the named field refusal (not the
+    // no-anchor refusal) is what this leg observes.
+    await pickAnchor()
     fireEvent.click(screen.getByTestId('lab-labware-save-button'))
   }
 
