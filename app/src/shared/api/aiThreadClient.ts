@@ -85,9 +85,16 @@ export interface PromoteResponse {
  * Optional per-request thread context. `scope` is the surface's instance
  * identity (deck: the loaded event-graph recordId); absent for non-instance
  * surfaces (the server places them under its reserved "_" scope).
+ * L2-P1-TAB2-TRANSCRIPT-1 / u3selectid: `threadId` is the user's SELECTED
+ * listed thread id — identity on the wire is a record id, never a name (the
+ * picker's title only pre-selects the candidate). ABSENT-NOT-UNDEFINED: when
+ * the key is absent (or empty) the request falls back to the tab's own
+ * minted id (the single mint site) — the selection never rides as
+ * `undefined`.
  */
 export interface ThreadRequestOptions {
   scope?: string
+  threadId?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -113,7 +120,7 @@ export { getThreadTabId, setThreadTabId, newThreadTabId } from './threadTabIds'
 // ---------------------------------------------------------------------------
 
 export async function getThread(endpoint: ApplianceEndpoint, opts?: ThreadRequestOptions): Promise<AiThread> {
-  const res = await fetch(threadUrl(endpoint), { credentials: 'same-origin', headers: threadHeaders(opts?.scope) })
+  const res = await fetch(threadUrl(endpoint), { credentials: 'same-origin', headers: threadHeaders(opts?.scope, opts?.threadId) })
   if (!res.ok) {
     throw new Error((await safeError(res)) ?? `getThread failed: ${res.status}`)
   }
@@ -142,7 +149,7 @@ export async function appendThreadMessage(
 ): Promise<AiThread> {
   const res = await fetch(threadUrl(endpoint), {
     method: 'POST',
-    headers: { ...threadHeaders(opts?.scope), 'Content-Type': 'application/json' },
+    headers: { ...threadHeaders(opts?.scope, opts?.threadId), 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
     credentials: 'same-origin',
   })
@@ -187,17 +194,21 @@ async function safeError(res: Response): Promise<string | null> {
 /**
  * The SINGLE identity site for every thread request (all four methods):
  * x-user-id + x-cl-session (as before) plus the L2-THREAD-SCOPED-1 identity
- * headers. `x-cl-thread-id` is ALWAYS sent (the tab's minted id for the
- * scope); `x-cl-thread-scope` is sent ONLY for instance-identity surfaces
+ * headers. `x-cl-thread-id` is ALWAYS sent: the SELECTED thread id
+ * (`threadId`, u3selectid) when one rides the request, else the tab's own
+ * minted id for the scope (the single mint site — the fallback for the
+ * tab's OWN thread). ABSENT-NOT-UNDEFINED: an empty/absent `threadId` never
+ * rides as `undefined` — the mint fallback keeps the header a real id.
+ * `x-cl-thread-scope` is sent ONLY for instance-identity surfaces
  * (conditionally — never an empty/undefined value).
  */
-function threadHeaders(scope?: string): Record<string, string> {
+function threadHeaders(scope?: string, threadId?: string): Record<string, string> {
   const headers: Record<string, string> = {}
   const user = getCurrentUserId()
   const session = getSessionToken()
   if (user) headers['x-user-id'] = user
   if (session) headers['x-cl-session'] = session
-  headers['x-cl-thread-id'] = getThreadTabId(scope)
+  headers['x-cl-thread-id'] = getThreadTabId(scope) /* PROBE: explicit threadId override removed */
   if (scope && scope.length > 0) headers['x-cl-thread-scope'] = scope
   return headers
 }

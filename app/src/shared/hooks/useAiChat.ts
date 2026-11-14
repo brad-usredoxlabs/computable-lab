@@ -919,11 +919,19 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
   const turnInFlightRef = useRef(false)
   // LEG F fix run 1 (advc D1): the thread scope the SYNC effect persists
   // into. Tracks the hydration effect's last ADVANCED binding — during a
-  // guarded re-key that binding stays the turn's minted (pre-flip) scope,
-  // so a surviving turn's whole persistence destination never splits
+  // guarded re-key that binding stays the turn's minted (pre-flip) scope, so
+  // a surviving turn's whole persistence destination never splits
   // across two server threads. Equals `activeThread.scope` whenever no
   // turn is in flight.
   const persistedScopeRef = useRef<string>('')
+  // L2-P1-TAB2-TRANSCRIPT-1 / u3selectid: the id twin of the binding above —
+  // the thread id the SYNC effect persists into. The wire identity is a
+  // record id (never a name, never "the tab's current mint"): the sync's
+  // threadOpts ride this so a deferred in-flight re-key (LEG F) keeps
+  // POSTing the surviving turn into the SAME (scope, id) pair the hydration
+  // bound — a post-flip id with the pre-flip scope would split the turn
+  // across two server threads (the cross-scope split, id axis).
+  const activeThreadIdRef = useRef<string | null>(null)
   // LEG F fix run 1 (advc D1): TRUE while the hydration effect has DEFERRED
   // a re-key because a turn was in flight. The binding (lastThreadKeyRef +
   // persistedScopeRef) is held on the turn's minted thread until the turn's
@@ -951,6 +959,19 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
   // read" state (not a fresh-mint new conversation — the honest blank pane).
   const [threadUnreadable, setThreadUnreadable] = useState<{ threadId: string; scope: string } | null>(null)
   const userSwitchRef = useRef(false)
+  // L2-P1-TAB2-TRANSCRIPT-1 / u3selectid: a user selection that lands
+  // DURING the scope's PROVISIONAL hold (switchThread below). The hold's
+  // effects (lazy-mint, hydration, sync) RETURN EARLY — C-2. The defect
+  // this ref closes: the pre-fix early `return` SILENTLY DROPPED the
+  // selection (recon R1-8, shots 83/86 — the picker moved, the wire read
+  // the tab's own minted id, the pane stayed blank). The selection is
+  // HELD here (a ref: the lazy-mint effect's settle re-run reads it) and
+  // applied THERE — the map entry is written AT APPLY, never during the
+  // hold (threadTabIds stays the single mint; the selection is not a
+  // mint). No IO during the hold (C-2): the wipe + the user-switch mark
+  // ride the hold, the hydration GET fires on the settle re-run with the
+  // SELECTED id.
+  const heldSelectionRef = useRef<string | null>(null)
 
   // L2-THREADSCOPE-FLIP-1 unit 2 (C-2/C-4): scope-DECISION status
   // (absent / 'settled' = default). While provisional the lazy-mint and
@@ -991,13 +1012,26 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
   const switchThread = useCallback(
     (id: string) => {
       if (!endpoint) return
-      if (scopeStatusRef.current === 'provisional') return
       // L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render: this activation is a
       // USER-initiated selection — if its read resolves EMPTY, the pane
       // shows the named reason (it is NOT a fresh-mint new conversation).
       userSwitchRef.current = true
-      writeTabThreadMapEntry(scope, id)
       resetChatState()
+      // L2-P1-TAB2-TRANSCRIPT-1 / u3selectid: the scope's PROVISIONAL hold
+      // makes the lazy-mint / hydration / sync effects RETURN EARLY (C-2).
+      // The pre-fix `return` SILENTLY DROPPED the selection here (recon
+      // R1-8, shots 83/86 — the picker moved, the wire read the tab's own
+      // minted id, the pane stayed blank). No IO and NO map write during the
+      // hold (C-2; threadTabIds stays the single mint — a selection is not a
+      // mint): HOLD the selection in a ref; the lazy-mint effect's settle
+      // re-run APPLIES it (map write + activation + the hydration GET
+      // carrying the SELECTED id). Settled: apply it now.
+      if (scopeStatusRef.current === 'provisional') {
+        heldSelectionRef.current = id
+        return
+      }
+      heldSelectionRef.current = null
+      writeTabThreadMapEntry(scope, id)
       setActiveThread({ scope: scope ?? '', id })
     },
     [endpoint, scope, resetChatState],
@@ -1006,6 +1040,10 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
   const newThread = useCallback(() => {
     if (!endpoint) return
     if (scopeStatusRef.current === 'provisional') return
+    // L2-P1-TAB2-TRANSCRIPT-1 / u3selectid: a fresh mint is the user
+    // ABANDONING any held selection — drop it so the settle re-run does not
+    // resurrect a thread the user just chose to leave.
+    heldSelectionRef.current = null
     const id = mintTabThreadEntry(scope)
     // L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render2: a fresh mint is a NEW
     // conversation — its empty read must stay an honest blank pane, never a
@@ -1039,7 +1077,22 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
   useEffect(() => {
     if (!endpoint) return
     if (scopeStatus === 'provisional') return
-    const id = resolveTabThreadId(scope)
+    // L2-P1-TAB2-TRANSCRIPT-1 / u3selectid: a selection that landed DURING
+    // the hold is APPLIED at the settle re-run — the map write + activation
+    // (the hydration GET then fires with the SELECTED id; the user-switch
+    // mark switchThread set is NOT cleared, so an empty read still shows
+    // the named reason). Cleared BEFORE the stable-pair return so a same-pair
+    // settle re-run cannot leave the held id dangling for a later flip.
+    const held = heldSelectionRef.current
+    if (held) {
+      heldSelectionRef.current = null
+      // u3selectid: the held selection is APPLIED at the settle — persist it
+      // to the tab map (so a RELOAD keeps it, AC4) exactly as the settled
+      // switchThread branch would. This is a selection WRITE (not a mint):
+      // threadTabIds stays the single mint site.
+      writeTabThreadMapEntry(scope, held)
+    }
+    const id = held ?? resolveTabThreadId(scope)
     const next = { scope: scope ?? '', id }
     // Stable activation (C-3): a settle re-run that resolves to the
     // ALREADY-ACTIVE pair does not re-activate → the hydration effect
@@ -1051,8 +1104,10 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
     // re-run) — its empty read is a new conversation (honest blank pane),
     // never a "could not read" named reason. Cleared on the activation, not
     // before the stable-pair early return, so a same-pair settle re-run
-    // cannot drop an in-flight user switch's flag.
-    userSwitchRef.current = false
+    // cannot drop an in-flight user switch's flag. (The held-selection
+    // branch above is the switchThread re-application: ITS flag — set by
+    // switchThread during the hold — must survive, so the clear is skipped.)
+    if (!held) userSwitchRef.current = false
     setActiveThread(next)
   }, [endpoint, scope, scopeStatus])
 
@@ -1113,6 +1168,10 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
       }
       lastThreadKeyRef.current = threadKey
       persistedScopeRef.current = activeThread.scope
+      // L2-P1-TAB2-TRANSCRIPT-1 / u3selectid: the id twin of the binding —
+      // the sync effect persists into the pair the hydration bound (the
+      // deferred in-flight re-key holds the minted id; see the ref).
+      activeThreadIdRef.current = activeThread.id
       // A resolved run (idle re-key, user switch, or plain mount/mint) is
       // the binding landing on the current thread — any pending deferral is
       // satisfied here, not just by the send-time resume.
@@ -1120,7 +1179,17 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
     }
     let cancelled = false
     hydratedRef.current = false
-    const threadOpts = { ...(activeThread.scope ? { scope: activeThread.scope } : {}) }
+    // L2-P1-TAB2-TRANSCRIPT-1 / u3selectid: the SELECTED thread's id rides
+    // the wire (identity is a record id, never a name — the picker's title
+    // only pre-selects the candidate). ABSENT-NOT-UNDEFINED: the id key is
+    // spread in only when activeThread holds a non-empty id, else the key is
+    // absent and the client's single header site falls back to the tab's own
+    // minted id (the single mint site — the tab's OWN thread, byte-unchanged
+    // contract).
+    const threadOpts = {
+      ...(activeThread.scope ? { scope: activeThread.scope } : {}),
+      ...(activeThread.id ? { threadId: activeThread.id } : {}),
+    }
     getThread(endpoint, threadOpts)
       .then((thread) => {
         if (cancelled) return
@@ -1229,7 +1298,17 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
     // POST to the same server thread. Identical to `activeThread.scope`
     // whenever no guard is active.
     const persistScope = persistedScopeRef.current
-    const threadOpts = { ...(persistScope ? { scope: persistScope } : {}) }
+    // L2-P1-TAB2-TRANSCRIPT-1 / u3selectid: the wire identity is a record id
+    // (never a name). The sync rides the binding the hydration effect last
+    // ADVANCED — both its scope (LEG F) and its id (u3selectid): a deferred
+    // in-flight re-key keeps POSTing the surviving turn into the SAME
+    // (scope, id) pair the hydration bound, so the turn's persistence never
+    // splits across two server threads (the cross-scope split, id axis).
+    const persistThreadId = activeThreadIdRef.current
+    const threadOpts = {
+      ...(persistScope ? { scope: persistScope } : {}),
+      ...(persistThreadId ? { threadId: persistThreadId } : {}),
+    }
     const unsynced = messages.filter(
       (m) => !persistedIdsRef.current.has(m.id) && !m.isStreaming,
     )
