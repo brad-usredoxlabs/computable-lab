@@ -220,13 +220,10 @@ describe('POST /acquisition-packages/register (the attach glue, D4)', () => {
     expect(r.status()).toBe(400);
   });
 
-  it('returns 400 BAD_REQUEST for a missing entryRef', async () => {
-    const c = await ctx();
-    const r = mockReply();
-    const body = await c.handlers.register(req({ deviceId: DEVICE_ID, directoryKey: 'x.D' }), r.reply);
-    expect(body).toMatchObject({ error: 'BAD_REQUEST' });
-    expect(r.status()).toBe(400);
-  });
+  // (The pre-u1matbind "returns 400 BAD_REQUEST for a missing entryRef" test
+  // is subsumed by the u1matbind case (b) below: the same body — neither
+  // entryRef nor materialRef — is now refused with the NAMED token
+  // MATERIAL_OR_ENTRY_REQUIRED, per the brief's RED step 1(b).)
 
   // u1matbind (RUN-IS-THE-PROVENANCE-RECORD, BRAD RULING 2026-11-14): an
   // acquisition can bind to the MATERIAL that went in, so the
