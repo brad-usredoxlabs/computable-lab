@@ -58,9 +58,9 @@ ENG-QUANT-1 (quantification.py, GC-8):
 
 ## STEP 2 — records written (3 new files, the only `records/` change)
 
-- records/seed/analysis-engine/ENG-PEAKINTEG-1.yaml (33 lines)
-- records/seed/analysis-engine/ENG-CALIBFIT-1.yaml (31 lines)
-- records/seed/analysis-engine/ENG-QUANT-1.yaml (33 lines)
+- records/seed/analysis-engine/ENG-PEAKINTEG-1.yaml (37 lines)
+- records/seed/analysis-engine/ENG-CALIBFIT-1.yaml (32 lines)
+- records/seed/analysis-engine/ENG-QUANT-1.yaml (32 lines)
 
 Shape = analysisRunner.engine.test.ts:111-119 worked record. Every record:
 `kind: analysis-engine`, `id` matching `^ENG-[A-Za-z0-9_-]+$`, human title (no STUB),
@@ -95,7 +95,7 @@ optimistic (each record's `availability.note` states the probe).
 
 ## STEP 4 — test file (1 new file)
 
-server/src/analysis/analysisEngineDeclarations.test.ts (236 lines, `// @vitest-environment node`)
+server/src/analysis/analysisEngineDeclarations.test.ts (237 lines, `// @vitest-environment node`)
 Pins:
 1. DRIFT (required): parses each record YAML from `records/seed/analysis-engine/`; the app is
    initialized through the same store+schema wiring as analysisRunner.engine.test.ts:85-89
@@ -207,7 +207,7 @@ Restore proven byte-identical by sha256 before and after:
 
 1. aecf238c2 — records/seed/analysis-engine/*.yaml (3 records) + probe facts in this report's lineage
 2. 92252144d — server/src/analysis/analysisEngineDeclarations.test.ts
-3. <final sha below> — this report
+3. d36825fa0cccca62e382939617ca2ececb9c2532 — this report (the commit the DONE marker references)
 
 ## Next actions
 
