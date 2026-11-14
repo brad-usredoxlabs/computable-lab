@@ -288,4 +288,85 @@ describe('AddToDeckDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Labware$/i }))
     expect(screen.queryByRole('button', { name: /definition-driven/i })).toBeNull()
   })
+
+  it('a server-marked non-offerable hit is a labelled non-bindable line, never a button (dialogconsume)', async () => {
+    // The server's offerability decision (unit offerfilter) must be CONSUMED here:
+    // `offerable: false` never becomes a selectable row — it is one clearly-
+    // labelled non-bindable line carrying the server's reason.
+    searchLabwareDefinitions.mockResolvedValue({
+      hits: [
+        { recordId: 'LBW-STORED-96', label: 'Stored 96 Well Plate', kind: 'labware-definition', offerable: true },
+        {
+          recordId: 'LBW-REGISTRY-ONLY',
+          label: 'Registry Only Deep Well Plate',
+          kind: 'labware-definition',
+          offerable: false,
+          offer_reason: 'registry entry with no record in the lab store (not lab stock)',
+        },
+      ],
+      total: 2,
+    })
+
+    const { container } = openDialog({ surfaceKind: 'lawn' })
+    fireEvent.click(screen.getByRole('button', { name: /^Labware$/i }))
+    fireEvent.change(screen.getByPlaceholderText(/Search plates \/ labware/), { target: { value: 'plate' } })
+
+    // Store-backed hit: still a selectable row.
+    const storedRow = await screen.findByRole('button', { name: /Stored 96 Well Plate/i })
+    expect(storedRow.textContent).toContain('LAB')
+
+    // Registry-only hit: NOT a button — a clickable row would present a
+    // catalogue reference as this lab's stock (the prompt-1 entry-state defect).
+    expect(screen.queryByRole('button', { name: /Registry Only/i })).toBeNull()
+
+    // …but the named reference is still VISIBLE (never silently deleted) as a
+    // non-bindable line with the model's prefix and the server's stated reason.
+    const dialogEl = container.querySelector('.ee-dialog') as HTMLElement
+    expect(screen.getByText(/Not in this lab's stock: Registry Only Deep Well Plate/i)).toBeTruthy()
+    expect(screen.getByText(/registry entry with no record in the lab store \(not lab stock\)/i)).toBeTruthy()
+    // That line is a non-interactive span (never a <button> or vendor-row).
+    const line = dialogEl.querySelector('.ee-dialog__nonbindable')
+    expect(line).toBeTruthy()
+    expect(line!.tagName).toBe('SPAN')
+    expect(line!.textContent).toContain("Not in this lab's stock")
+    // The body shows the line, not the empty state.
+    expect(container.querySelector('.ee-dialog__empty')).toBeNull()
+
+    // With the non-offerable hit alone there is nothing bindable: even after
+    // selecting the stored row the dialog must not offer a second selectable;
+    // with NO selection "Add to deck" stays disabled.
+    expect(screen.getByRole('button', { name: /^Add to deck$/i })).toBeTruthy()
+    const addBtn = screen.getByRole('button', { name: /^Add to deck$/i }) as HTMLButtonElement
+    expect(addBtn.disabled).toBe(true)
+    // Selecting the stored row still enables placement (lab tier not emptied).
+    fireEvent.click(storedRow)
+    expect((addBtn as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('offerable-true and marker-absent hits both stay choosable (absent fails OPEN, not false)', async () => {
+    // Pre-marker wire shape: a hit with NO `offerable` field must stay choosable.
+    // `if (!hit.offerable) skip` would silently empty the lab tier.
+    searchLabwareDefinitions.mockResolvedValue({
+      hits: [
+        { recordId: 'LBW-STORED-A', label: 'Stored Plate A', kind: 'labware-definition', offerable: true },
+        { recordId: 'LBW-LEGACY-NO-MARKER', label: 'Legacy Plate B', kind: 'labware-definition' },
+      ],
+      total: 2,
+    })
+
+    const { container } = openDialog({ surfaceKind: 'lawn' })
+    fireEvent.click(screen.getByRole('button', { name: /^Labware$/i }))
+    fireEvent.change(screen.getByPlaceholderText(/Search plates \/ labware/), { target: { value: 'plate' } })
+
+    const rowA = await screen.findByRole('button', { name: /Stored Plate A/i })
+    const rowB = await screen.findByRole('button', { name: /Legacy Plate B/i })
+    expect(rowA.textContent).toContain('LAB')
+    expect(rowB.textContent).toContain('LAB')
+    expect(container.querySelectorAll('.ee-dialog__nonbindable').length).toBe(0)
+    // Absent ≠ false: selecting the marker-absent row enables "Add to deck".
+    const addBtn = screen.getByRole('button', { name: /^Add to deck$/i }) as HTMLButtonElement
+    expect(addBtn.disabled).toBe(true)
+    fireEvent.click(rowB)
+    expect((addBtn as HTMLButtonElement).disabled).toBe(false)
+  })
 })

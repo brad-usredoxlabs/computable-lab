@@ -1367,6 +1367,13 @@ export interface LabwareDefinitionSearchHit {
   render_hints?: LabwareDefinition['render_hints']
   physical_geometry?: LabwareDefinition['physical_geometry']
   legacy_labware_types?: string[]
+  /** The SERVER's offerability decision, present exactly when the server
+   *  computed it (the search path always does). `offerable: false` marks a
+   *  non-stock catalogue reference; ABSENT = pre-marker wire shape (the
+   *  consumer fails open — see splitLabDbDeckRows). */
+  offerable?: boolean
+  /** Present exactly when `offerable` is false — the server's stated reason. */
+  offer_reason?: string
 }
 
 /** Runtime membership test against the legacy enum's config table. */
