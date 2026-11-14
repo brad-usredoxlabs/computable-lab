@@ -57,7 +57,7 @@ const createRecordKinds = new Set(
 );
 
 describe('labware-definition journey capability declarations (u2acap2)', () => {
-  it('(a) admits the real shipped directory: eight descriptors, empty diagnostics', async () => {
+  it('(a) admits the real shipped directory: nine descriptors, empty diagnostics', async () => {
     const result = await loadCapabilityCatalogueDir(CAPABILITIES_DIR, new Set(AGENT_ALLOWED_TOOLS));
     // ok:true carries no diagnostics; name them if the catalogue refused.
     expect(result.ok ? [] : result.diagnostics).toEqual([]);
@@ -69,6 +69,9 @@ describe('labware-definition journey capability declarations (u2acap2)', () => {
       'journey.material-create',
       'journey.material-library-search',
       'journey.ncbi-gene-search',
+      // u1nucsearch moved this pin deliberately (8 -> 9), in the same commit
+      // as PINNED_CATALOGUE_IDS in genomicsMinFalsification.test.ts.
+      'journey.ncbi-nucleotide-search',
       'journey.noun-create-from-document',
       'journey.ontology-lookup',
       'journey.vendor-web-search',
