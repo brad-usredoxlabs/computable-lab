@@ -33,7 +33,9 @@ Lane report sha256sum after edit: 5f5808fbc2e8547625b41262e445fe5d5dffc4a91320fb
 
 ## git -C <worktree> rev-parse HEAD (work-carrying commit, before this unit's commits)
 6d42f6fdc9de1af5c52d693faebe213e0f5de9d0
-Marker mechanism: commit A = this report body; the marker line (appended after A, sha read
-from `git rev-parse HEAD`, never typed) names the commit that CONTAINS this report, per
-cl-unit-evidence-check.py EV-4 (the marker sha's tree must contain the report file).
+Marker mechanism: the marker names the commit CONTAINING this report (cl-unit-evidence-check.py
+EV-4), read from git rev-parse HEAD, never typed. That checker on the external LANE report:
+EV-1 marker clean (exactly one, token u0parserinfo); EV-4 is a structural artifact — the
+lane report lives outside the worktree, so no worktree commit can contain it (true of every
+lane-dir report; not a marker defect).
 L2-GC-UPLOAD-UI-1 UNIT u0marker DONE ada62f36343a00178fd6915ca893b07a841552b9
