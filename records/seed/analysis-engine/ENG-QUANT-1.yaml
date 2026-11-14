@@ -1,0 +1,32 @@
+$schema: https://computable-lab.com/schema/computable-lab/analysis-engine.schema.yaml
+kind: analysis-engine
+id: ENG-QUANT-1
+title: GC-8 quantification engine — cross-run consumer of a promoted calibration model (stdlib)
+description: >-
+  Shipped GC-8 quantification module (computable_lab_analysis.quantification,
+  spec 2026-10-27_GC-8): the cross-run consumer of a PROMOTED calibration
+  model, applying the ISTD rule exactly once (bidirectional
+  ISTD_DOUBLE_APPLICATION guard) under the declared extrapolation policy.
+  capabilities.declared is EMPTY on purpose: no term in the closed capability
+  enum names cross-run model consumption / ISTD application, so it declares
+  none rather than stretch a term (it does NOT borrow curve_fitting from the
+  calibration engine). Stdlib-only.
+implementation:
+  adapter: python-entry-script
+  entry: 'run(ctx)'
+  module: computable_lab_analysis
+version_constraints:
+  python: '>=3.13'
+  packages: []
+capabilities:
+  declared: []
+availability:
+  available: true
+  note: >-
+    Probed 2026-11-14 (lane worktree): last-resort interpreter
+    /usr/bin/python3 (Python 3.14.7) imports computable_lab_analysis from
+    server/python-executor-service/src; stdlib-only module.
+runtime_requirements:
+  interpreter: system
+lifecycleId: registry-ops
+state: draft
