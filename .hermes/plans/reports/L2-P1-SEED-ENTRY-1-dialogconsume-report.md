@@ -200,4 +200,4 @@ No dependencies were installed; nothing under `/mnt/vast` or `/tmp` was modified
   there during the run: red-run.txt, red-summary.txt, probe-run.txt, probe-summary.txt,
   fix-run.txt, final-*.txt, tsc-baseline.txt, tsc-final.txt, dialog-fixed.tsx).
 
-L2-P1-SEED-ENTRY-1 UNIT dialogconsume DONE <filled after report commit>
+L2-P1-SEED-ENTRY-1 UNIT dialogconsume DONE 2401928319185fd968bc1aab1558ff99aa679db1
