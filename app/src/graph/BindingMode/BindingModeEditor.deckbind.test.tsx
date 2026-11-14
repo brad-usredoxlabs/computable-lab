@@ -15,6 +15,7 @@ import type { RecordEnvelope } from '../../types/kernel'
 import type { RecordWithUIResponse } from '../../types/uiSpec'
 import type { PlatformManifest } from '../../types/platformRegistry'
 import type { DeckPlacement } from '../labware/DeckVisualizationPanel'
+import { labwareRecordToEditorLabware, type Labware } from '../../types/labware'
 
 // Capturing mock — the existing suite's no-arg mock is exactly why D-4 shipped:
 // it can never see what the editor hands the deck.
@@ -67,6 +68,22 @@ const mockPlannedRun: RecordEnvelope = {
   },
 }
 
+// Same plan, with the reservoir role bound too — the deck must render it as a
+// 12-channel reservoir, not as another plate.
+const mockPlannedRunWithReservoir: RecordEnvelope = {
+  ...mockPlannedRun,
+  payload: {
+    ...mockPlannedRun.payload,
+    bindings: {
+      labware: [
+        { roleId: 'plate', labwareInstanceRef: { kind: 'record', id: 'LWI-PLATE1', type: 'labware' } },
+        { roleId: 'reservoir', labwareInstanceRef: { kind: 'record', id: 'LWI-RES1', type: 'labware' } },
+      ],
+      materials: [{ roleId: 'topping_medium', materialRef: { kind: 'record', id: 'MAT-TOP1', type: 'material' } }],
+    },
+  },
+}
+
 // SHIPPED shape: local protocol carries only inherits_from; roles come from the
 // universal protocol (labware roles plate/reservoir, material role topping_medium)
 const mockLocalProtocol: RecordEnvelope = {
@@ -92,9 +109,13 @@ const mockUniversalProtocol: RecordEnvelope = {
   },
 }
 
+// SHIPPED record shape: `labwareType` is the schema CATEGORY (plate, reservoir,
+// …) and the topology lives in `format`. Legacy render types ('plate_96',
+// 'reservoir_12') are NOT valid payloads — a fixture carrying them cannot come
+// from the store and hides the category→editor-type mapping defect.
 const mockLabwareUniverse: RecordEnvelope[] = [
-  { recordId: 'LWI-PLATE1', schemaId: 'labware', meta: { kind: 'labware' }, payload: { kind: 'labware', name: 'Source Plate 1', labwareType: 'plate_96' } },
-  { recordId: 'LWI-RES1', schemaId: 'labware', meta: { kind: 'labware' }, payload: { kind: 'labware', name: 'Reservoir 1', labwareType: 'reservoir_12' } },
+  { recordId: 'LWI-PLATE1', schemaId: 'labware', meta: { kind: 'labware' }, payload: { kind: 'labware', name: 'Source Plate 1', labwareType: 'plate', format: { rows: 8, cols: 12 } } },
+  { recordId: 'LWI-RES1', schemaId: 'labware', meta: { kind: 'labware' }, payload: { kind: 'labware', name: 'Reservoir 1', labwareType: 'reservoir', format: { rows: 1, cols: 12 } } },
 ]
 
 const mockMaterialUniverse: RecordEnvelope[] = [
@@ -112,6 +133,15 @@ function Wrapper({ children }: { children: React.ReactNode }) {
   )
 }
 
+function mockGetRecordWithUI(plannedRun: RecordEnvelope = mockPlannedRun) {
+  vi.mocked(apiClient.getRecordWithUI).mockImplementation(async (id: string) => {
+    if (id === 'PLR-000001') return { record: plannedRun, uiSpec: null, schema: null } as RecordWithUIResponse
+    if (id === 'LPR-000001') return { record: mockLocalProtocol, uiSpec: null, schema: null } as RecordWithUIResponse
+    if (id === 'PRT-UNIVERSAL') return { record: mockUniversalProtocol, uiSpec: null, schema: null } as RecordWithUIResponse
+    throw new ApiError({ status: 404, code: 'NOT_FOUND', message: `record not found: ${id}` })
+  })
+}
+
 describe('BindingModeEditor deck bindings (g4bindfix2)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -120,12 +150,7 @@ describe('BindingModeEditor deck bindings (g4bindfix2)', () => {
     vi.mocked(apiClient.listRecordsByKind).mockReset()
     vi.mocked(apiClient.updatePlannedRunBindings).mockReset()
 
-    vi.mocked(apiClient.getRecordWithUI).mockImplementation(async (id: string) => {
-      if (id === 'PLR-000001') return { record: mockPlannedRun, uiSpec: null, schema: null } as RecordWithUIResponse
-      if (id === 'LPR-000001') return { record: mockLocalProtocol, uiSpec: null, schema: null } as RecordWithUIResponse
-      if (id === 'PRT-UNIVERSAL') return { record: mockUniversalProtocol, uiSpec: null, schema: null } as RecordWithUIResponse
-      throw new ApiError({ status: 404, code: 'NOT_FOUND', message: `record not found: ${id}` })
-    })
+    mockGetRecordWithUI()
 
     vi.mocked(apiClient.listRecordsByKind).mockImplementation(async (kind: string) => {
       if (kind === 'labware') return { records: mockLabwareUniverse, total: 2 }
@@ -165,6 +190,48 @@ describe('BindingModeEditor deck bindings (g4bindfix2)', () => {
       .filter((x): x is string => typeof x === 'string')
     expect(labwareIds).not.toContain('MAT-TOP1')
     expect(labwareIds).toContain('LWI-PLATE1')
+
+    // g4binddeckfix: the deck object comes from the canonical record mapper.
+    // A SHIPPED plate record (category 'plate' + format 8x12) must resolve to
+    // the plate_96 editor type carrying the mapper's full grid addressing —
+    // not a bare {type:'grid'} stub.
+    const plate = (capturedDeckProps?.labwares ?? [])
+      .find((lw) => (lw as Labware).labwareId === 'LWI-PLATE1') as Labware | undefined
+    expect(plate).toBeTruthy()
+    const expectedPlate = labwareRecordToEditorLabware({
+      kind: 'labware', recordId: 'LWI-PLATE1', name: 'Source Plate 1',
+      labwareType: 'plate', format: { rows: 8, cols: 12 },
+    })
+    expect(plate?.labwareType).toBe('plate_96')
+    expect(plate?.addressing).toEqual(expectedPlate.addressing)
+    expect(plate?.geometry).toEqual(expectedPlate.geometry)
+  })
+
+  it('C: a bound reservoir record reaches the deck as the canonical mapper reservoir, not a plate', async () => {
+    mockGetRecordWithUI(mockPlannedRunWithReservoir)
+
+    render(
+      <Wrapper>
+        <BindingModeEditor plannedRunId="PLR-000001" />
+      </Wrapper>,
+    )
+
+    await waitFor(() => {
+      const ids = (capturedDeckProps?.labwares ?? []).map((lw) => (lw as Labware).labwareId)
+      expect(ids).toContain('LWI-RES1')
+    }, { timeout: 3000 })
+
+    const reservoir = (capturedDeckProps?.labwares ?? [])
+      .find((lw) => (lw as Labware).labwareId === 'LWI-RES1') as Labware | undefined
+    const expectedReservoir = labwareRecordToEditorLabware({
+      kind: 'labware', recordId: 'LWI-RES1', name: 'Reservoir 1',
+      labwareType: 'reservoir', format: { rows: 1, cols: 12 },
+    })
+    expect(reservoir?.labwareType).toBe(expectedReservoir.labwareType)
+    expect(reservoir?.labwareType).toBe('reservoir_12')
+    expect(reservoir?.addressing).toEqual(expectedReservoir.addressing)
+    expect(reservoir?.addressing.type).toBe('linear')
+    expect(reservoir?.geometry).toEqual(expectedReservoir.geometry)
   })
 
   it('B: three role edits inside one debounce window accumulate into ONE save carrying every role', async () => {
