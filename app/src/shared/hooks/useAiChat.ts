@@ -1336,6 +1336,15 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
       // prompt message persists byte-identically.
       if (m.clarificationAnswers && m.clarificationAnswers.length > 0)
         metadata.clarificationAnswers = m.clarificationAnswers
+      // L2-P1-RELOAD-CLARIFIER-1 / u2surviveriders (persist leg): persist the
+      // TYPED clarification requests the live done arm rode on the message so a
+      // cold reload mid-clarification restores the SAME grouped card (same
+      // request ids, prompts, offered options) — restored from persisted
+      // message metadata, never re-derived or re-asked. Conditional write: the
+      // key is ABSENT (never `undefined`) when the turn carried no requests, so
+      // a plain turn persists byte-identically.
+      if (m.clarificationRequests && m.clarificationRequests.length > 0)
+        metadata.clarificationRequests = m.clarificationRequests
       // L2-CHAT-UI-1 LEG A (A3): persist the shorthand so the intent card
       // survives a reload (the hydration ride below reads it back).
       if (m.shorthand) metadata.shorthand = m.shorthand
