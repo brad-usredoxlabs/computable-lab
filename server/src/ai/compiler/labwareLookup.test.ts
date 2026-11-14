@@ -310,6 +310,93 @@ describe('createLabwareLookup', () => {
     expect(result[2].recordId).toBe('lbw-substring');
   });
 
+  it('binds by recordId identity, case-sensitive, for a labware-definition record', async () => {
+    const fakeStore: RecordStore = {
+      get: vi.fn(),
+      getByPath: vi.fn(),
+      getWithValidation: vi.fn(),
+      list: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      validate: vi.fn(),
+      lint: vi.fn(),
+      exists: vi.fn(),
+    };
+
+    const defRecords: RecordEnvelope[] = [
+      {
+        recordId: 'lbw-def-generic-96-well-deep-plate',
+        schemaId: 'https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml',
+        payload: {
+          kind: 'labware-definition',
+          recordId: 'lbw-def-generic-96-well-deep-plate',
+          display_name: 'Generic 96-Well Deep Well Plate',
+        },
+      },
+    ];
+
+    vi.mocked(fakeStore.list).mockImplementation(async (filter) =>
+      filter?.kind === 'labware-definition' ? defRecords : []);
+
+    const lookup = createLabwareLookup(fakeStore);
+
+    // The real recordId binds exactly.
+    const byId = await lookup('lbw-def-generic-96-well-deep-plate');
+    expect(byId).toEqual([
+      { recordId: 'lbw-def-generic-96-well-deep-plate', title: 'Generic 96-Well Deep Well Plate' },
+    ]);
+
+    // Identity is case-sensitive: a wrong-cased id is NOT the record id.
+    expect(await lookup('LBW-DEF-GENERIC-96-WELL-DEEP-PLATE')).toEqual([]);
+
+    // A wrong-slug catalogue id (the vendored-registry-only copy, which no
+    // record holds) does NOT bind — identity, never name or slug.
+    expect(await lookup('lbw-def-generic-96-well-deepwell-plate')).toEqual([]);
+
+    // The bare display name must ALSO not bind (AC2 / the IDENTITY-BY-NAME
+    // bait). The label (name/alias) tier scores only `kind:'labware'`
+    // INSTANCE records, never labware-definition records, and no instance
+    // carries this name here — so the display name resolves to nothing. Only
+    // the recordId binds.
+    expect(await lookup('Generic 96-Well Deep Well Plate')).toEqual([]);
+  });
+
+  it('binds an instance recordId through the labware tier too', async () => {
+    const fakeStore: RecordStore = {
+      get: vi.fn(),
+      getByPath: vi.fn(),
+      getWithValidation: vi.fn(),
+      list: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      validate: vi.fn(),
+      lint: vi.fn(),
+      exists: vi.fn(),
+    };
+
+    const labwareRecords: RecordEnvelope[] = [
+      {
+        recordId: 'LBW-DEEPWELL-A1',
+        schemaId: 'https://computable-lab.com/schema/computable-lab/labware.schema.yaml',
+        payload: {
+          kind: 'labware',
+          recordId: 'LBW-DEEPWELL-A1',
+          name: 'Deepwell plate A1',
+          labwareType: 'plate',
+        },
+      },
+    ];
+
+    vi.mocked(fakeStore.list).mockImplementation(async (filter) =>
+      filter?.kind === 'labware' ? labwareRecords : []);
+
+    const lookup = createLabwareLookup(fakeStore);
+    const result = await lookup('LBW-DEEPWELL-A1');
+    expect(result).toEqual([{ recordId: 'LBW-DEEPWELL-A1', title: 'Deepwell plate A1' }]);
+  });
+
   it('handles missing aliases gracefully', async () => {
     const fakeStore: RecordStore = {
       get: vi.fn(),
