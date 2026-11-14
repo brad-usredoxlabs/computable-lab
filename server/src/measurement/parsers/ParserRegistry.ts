@@ -1,6 +1,6 @@
 import { MeasurementServiceError } from '../MeasurementService.js';
 import { abi7500CsvParser } from './abi7500CsvParser.js';
-import { agilent6890CsvStubParser } from './agilent6890Parser.js';
+import { agilent6890Parser } from './agilent6890Parser.js';
 import { geminiCsvParser } from './geminiCsvParser.js';
 import { genericCsvParser } from './genericCsvParser.js';
 import { metrohm761CsvStubParser } from './metrohm761Parser.js';
@@ -10,7 +10,7 @@ const PARSERS: MeasurementParser[] = [
   genericCsvParser,
   geminiCsvParser,
   abi7500CsvParser,
-  agilent6890CsvStubParser,
+  agilent6890Parser,
   metrohm761CsvStubParser,
 ];
 
