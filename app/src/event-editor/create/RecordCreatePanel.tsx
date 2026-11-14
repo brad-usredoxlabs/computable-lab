@@ -202,6 +202,14 @@ export interface RecordCreatePanelProps {
   experimentId?: string
   /** Optional title prefill (e.g. carried from the picker's search query). */
   draftTitle?: string
+  /**
+   * u3defprefill: the noun the record-create door was opened with
+   * (?prefillName=, read once in RecordHostPage). Seeded ONLY into the
+   * non-spine kind's SCHEMA-DECLARED label slot (resolved from the served
+   * schema/projection — never a key the schema does not declare). The spine's
+   * title/shortSlug seed is `draftTitle` and stays untouched.
+   */
+  prefillLabel?: string
   onCreated: (recordId: string, title: string) => void
   onCancel?: () => void
 }
@@ -211,6 +219,7 @@ export function RecordCreatePanel({
   studyId,
   experimentId,
   draftTitle,
+  prefillLabel,
   onCreated,
   onCancel,
 }: RecordCreatePanelProps) {
@@ -341,6 +350,40 @@ export function RecordCreatePanel({
   // (nothing declared → the shortSlug-deletion branch is correct there,
   // and their required fields come from the author, not a client stamp).
   const [schemaDocFailed, setSchemaDocFailed] = useState(false)
+  // u3defprefill: the label slot resolved ONCE from the settled schema doc
+  // (non-spine kinds only — the spine's title/shortSlug seed stays in the seed
+  // effect, byte-identical). Resolution order: the served schema's declared
+  // `title`, else `display_name`; if neither is declared, null (seed NOTHING —
+  // never invent a key the schema does not declare; additionalProperties:false
+  // would 422 a fabricated one).
+  const [prefillLabelField, setPrefillLabelField] = useState<string | null>(null)
+  useEffect(() => {
+    setPrefillLabelField(null)
+    if (isSpine || !schemaDoc || schemaDocFor !== schemaId) return
+    const declared =
+      schemaDoc.properties && typeof schemaDoc.properties === 'object'
+        ? schemaDoc.properties
+        : null
+    const field =
+      declared && 'title' in declared
+        ? 'title'
+        : declared && 'display_name' in declared
+          ? 'display_name'
+          : null
+    setPrefillLabelField(field)
+  }, [schemaDoc, schemaDocFor, schemaId, isSpine])
+  // u3defprefill: seed the prefilled noun into the RESOLVED label slot.
+  // Runs AFTER the schema doc settles (the resolution effect above), merging
+  // into the current formData so the spine seed (kind / id / state / status /
+  // parent) and any other slot are preserved — only the one resolved key is
+  // set. Gated on `prefillLabelField` (null until a non-spine doc has settled
+  // and declared a slot) so an empty/missing prefill and the spine seed
+  // NOTHING. A kind that declares neither `title` nor `display_name` resolves
+  // to null → nothing is seeded and no key is invented.
+  useEffect(() => {
+    if (isSpine || !prefillLabel || !prefillLabelField) return
+    setFormData((prev) => ({ ...prev, [prefillLabelField!]: prefillLabel }))
+  }, [isSpine, prefillLabel, prefillLabelField])
   useEffect(() => {
     if (!schemaId) {
       setSchemaDoc(null)

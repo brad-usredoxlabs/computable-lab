@@ -69,6 +69,17 @@ export function RecordHostPage() {
   const navigate = useNavigate()
   const openTabs = useOptionalOpenTabs()
 
+  // u3defprefill: read ?prefillName= ONCE at first render (lazy useState
+  // initialiser — never an effect, which would clobber typed input on
+  // re-render; the u1nounprefill pattern at LabLabwareNewPage.tsx:33-45).
+  // Trim + cap 120 chars. Empty/missing/whitespace-only → '' (no prefill).
+  // The panel seeds it into the kind's SCHEMA-DECLARED label slot only — the
+  // spine's title seed (draftTitle) is a different prop and stays untouched.
+  const [prefillLabel] = useState<string>(() => {
+    const prefill = new URLSearchParams(window.location.search).get('prefillName')
+    return (prefill ?? '').trim().slice(0, 120)
+  })
+
   // Resolve the owning study for the right-pane context (best-effort).
   const [studyId, setStudyId] = useState<string>(SCRATCH_STUDY_ID)
   useEffect(() => {
@@ -182,6 +193,11 @@ export function RecordHostPage() {
       experimentId={nodeType === 'run' && parentId ? parentId : undefined}
       onCreated={() => navigate('/projects')}
       onCancel={handleClose}
+      // u3defprefill: the noun the door was opened with (?prefillName=), seeded
+      // by the panel into the kind's SCHEMA-DECLARED label slot only. Passed
+      // conditionally (never prefillLabel={undefined} — the app's strict still
+      // rejects an explicit undefined for an optional prop).
+      {...(prefillLabel ? { prefillLabel } : {})}
     />
   ) : (
     <RecordEditPanel
