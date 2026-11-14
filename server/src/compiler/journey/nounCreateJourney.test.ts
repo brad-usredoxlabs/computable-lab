@@ -9,6 +9,12 @@
  * no fixtures. A later change to the declaration, the catalogue, or the
  * registry fails loudly here.
  *
+ * L2-JOURNEY-NOUN-CREATE-1 (unit altwire): the three declared alternatives are
+ * WIRED — each names the admitted capability it invokes (capability_ref) and
+ * the work surface the person lands on (surface) — and a one-field mutation of
+ * either field trips the named lint rule, so rule (v) is not vacuous on the
+ * only journey that declares alternatives.
+ *
  * Scenario canon: /mnt/vast/home/brad/git/computable-lab/test-prompts/creation-journey.md
  * (the creation half of scenario 1's entry; it has no corpus-manifest id, so the
  * message_id names creation-journey rather than inventing an id).
@@ -18,7 +24,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { lintJourneyDocument } from './journeyDocumentLint.js';
+import { lintJourneyDocument, RULE_ALTERNATIVE_CAPABILITY_NOT_IN_CATALOGUE, RULE_ALTERNATIVE_SURFACE_UNKNOWN } from './journeyDocumentLint.js';
 import { loadCapabilityCatalogueDir, type CapabilityDescriptor } from './capabilityCatalogue.js';
 import { loadDefaultSurfacesRegistry } from '../../surfaces/surfaces.js';
 import { AGENT_ALLOWED_TOOLS } from '../../ai/ToolBridge.js';
@@ -97,5 +103,35 @@ describe('noun-create journey declaration (data, linted against real registries)
     expect(noun.provenance).toBe('user-supplied');
     expect(noun.status).toBe('unresolved');
     expect(noun.value, 'an unresolved parameter carries no value').toBeUndefined();
+  });
+
+  it('wires every declared alternative to the admitted capability and the registry surface', () => {
+    const doc = loadDeclaration();
+    const options = (doc.alternatives as any).options as any[];
+    expect(options, 'alternatives.options must be declared').toHaveLength(3);
+    // The summary each option already ships names the wire: the vendor path lands
+    // on the ingestion surface, the other two on record-create; every accept
+    // mints the noun through journey.material-create (GOVERNED-WRITE-ADMISSION —
+    // ONE admitted write, never a handler the document invents).
+    const expectedSurfaces = ['ingestion', 'record-create', 'record-create'];
+    options.forEach((option, i) => {
+      expect(option.capability_ref, 'every option must name the capability it invokes').toBe('journey.material-create');
+      expect(option.surface, 'every option must name the surface the person lands on').toBe(expectedSurfaces[i]);
+      expect(surfaces.get(option.surface), 'the surface must resolve through the real registry').not.toBeNull();
+    });
+  });
+
+  it('a one-field mutation of an option surface trips RULE_ALTERNATIVE_SURFACE_UNKNOWN', () => {
+    const mutated = structuredClone(loadDeclaration());
+    (mutated.alternatives as any).options[0]!.surface = 'no-such-surface';
+    const result = lintJourneyDocument(mutated, catalogue, surfaces);
+    expect(result.diagnostics.map((d) => d.rule)).toContain(RULE_ALTERNATIVE_SURFACE_UNKNOWN);
+  });
+
+  it('a one-field mutation of an option capability_ref trips RULE_ALTERNATIVE_CAPABILITY_NOT_IN_CATALOGUE', () => {
+    const mutated = structuredClone(loadDeclaration());
+    (mutated.alternatives as any).options[1]!.capability_ref = 'journey.no-such-capability';
+    const result = lintJourneyDocument(mutated, catalogue, surfaces);
+    expect(result.diagnostics.map((d) => d.rule)).toContain(RULE_ALTERNATIVE_CAPABILITY_NOT_IN_CATALOGUE);
   });
 });
