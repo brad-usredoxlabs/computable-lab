@@ -208,7 +208,7 @@ function threadHeaders(scope?: string, threadId?: string): Record<string, string
   const session = getSessionToken()
   if (user) headers['x-user-id'] = user
   if (session) headers['x-cl-session'] = session
-  headers['x-cl-thread-id'] = getThreadTabId(scope) /* PROBE: explicit threadId override removed */
+  headers['x-cl-thread-id'] = threadId || getThreadTabId(scope)
   if (scope && scope.length > 0) headers['x-cl-thread-scope'] = scope
   return headers
 }
