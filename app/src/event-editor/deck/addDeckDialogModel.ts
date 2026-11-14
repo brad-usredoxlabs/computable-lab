@@ -80,3 +80,74 @@ export const TAB_KINDS: Record<AddDeckTab, 'labware' | 'instrument'> = {
   labware: 'labware',
   equipment: 'instrument',
 }
+
+/**
+ * A raw labware-definition search hit as returned by
+ * POST /labware-definitions/search — the lab-db tier's source rows before the
+ * row model decides what is placeable (see splitLabDbDeckRows). `offerable` is
+ * the SERVER's decision read from the data (store-backed membership + the
+ * entry's declared flag); `offerable: false` = declared non-stock catalogue
+ * reference; ABSENT = pre-marker wire shape (fails OPEN here; the decision
+ * lives at the server).
+ */
+export interface AddDeckLabDbHit {
+  recordId: string
+  label: string
+  kind: 'labware-definition'
+  definitionId?: string
+  offerable?: boolean
+  /** Present exactly when `offerable` is false. */
+  offer_reason?: string
+}
+
+/** One choosable labware row the dialog can place on the deck. */
+export interface AddDeckLabwareRow {
+  key: string
+  source: 'lab-db'
+  kind: 'labware'
+  hit: AddDeckLabDbHit
+}
+
+/** A named, non-bindable line: the catalogue reference is visible but cannot
+ *  be placed. */
+export interface AddDeckUnavailableLine {
+  key: string
+  recordId: string
+  label: string
+  /** Always false — the point of the line is that it binds nothing. */
+  bindable: false
+  /** The server's declared reason, when it carried one. */
+  reason?: string
+}
+
+/**
+ * The dialog's lab-db row model (unit offerfilter, L2-P1-SEED-ENTRY-1):
+ * choosable rows come from OFFERABLE hits only — `offerable === false` never
+ * becomes a selectable row. Non-stock hits contribute at most ONE clearly-
+ * labelled, non-bindable line. Offerable-true and marker-absent hits keep
+ * their rows (non-vacuity).
+ */
+export function splitLabDbDeckRows(hits: AddDeckLabDbHit[]): {
+  rows: AddDeckLabwareRow[]
+  unavailable: AddDeckUnavailableLine[]
+} {
+  const rows: AddDeckLabwareRow[] = []
+  let unavailableLine: AddDeckUnavailableLine | null = null
+  for (const hit of hits) {
+    if (hit.offerable === false) {
+      // At most ONE non-bindable line: naming the first reference is enough.
+      if (unavailableLine === null) {
+        unavailableLine = {
+          key: `lab-db:${hit.recordId}:unavailable`,
+          recordId: hit.recordId,
+          label: `Not in this lab's stock: ${hit.label}`,
+          bindable: false,
+          ...(hit.offer_reason ? { reason: hit.offer_reason } : {}),
+        }
+      }
+      continue
+    }
+    rows.push({ key: `lab-db:${hit.recordId}`, source: 'lab-db', kind: 'labware', hit })
+  }
+  return { rows, unavailable: unavailableLine ? [unavailableLine] : [] }
+}
