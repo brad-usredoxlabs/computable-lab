@@ -140,7 +140,7 @@ describe('analysis-engine seed declarations (u1enginerecords)', () => {
       moduleSources[f] = await readFile(join(SDK_SRC, 'computable_lab_analysis', f), 'utf8');
     }
     // Schema pin wiring — the repo's own idiom (createSchemaRegistry +
-    // loadAllSchemas + createValidator; precedent: FulfillmentAccept.test.ts:75-86,
+    // loadAllSchemas + createValidator; precedent: FulfillmentAccept.test.ts:75-85,
     // DerivationSeedRecords.test.ts:28-52). The seed read path (store.list /
     // parseRecord) NEVER validates, so this leg is the only Ajv gate on seeds.
     const registry = createSchemaRegistry();
