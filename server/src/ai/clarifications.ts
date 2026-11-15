@@ -441,7 +441,12 @@ export async function emptyTurnAbsenceRequests(
       // "not in this lab's records". Absent tier => state 3, verbatim.
       let definitionHeld = false;
       if (searchDefinitionByHint) {
+        const headWord = new RegExp(EMPTY_TURN_LABWARE_HEAD.source, 'i').exec(candidate);
+        const bareHead = headWord ? headWord[0].toLowerCase() : null;
         for (const form of emptyTurnProbeForms(candidate)) {
+          // Ruling 2: a BARE head-word hit ("plate" via name.includes) proves
+          // nothing about THIS noun, so it cannot ground a registry claim.
+          if (bareHead && form.toLowerCase() === bareHead) continue;
           const matches = await searchDefinitionByHint(form);
           if (matches.length > 0) {
             definitionHeld = true;
