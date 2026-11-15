@@ -21,9 +21,10 @@
  * newThread — i.e. an endpoint was set); a chat without one renders NO
  * picker. No rename affordance.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useOptionalAiPanel } from '../shared/context/AiPanelContext'
+import { getThreadTabId } from '../shared/api/threadTabIds'
 import { ChatLog } from './ChatLog'
 import { WorkstateProposalCard } from '../event-editor/right-pane/ai/WorkstateProposalCard'
 import { ChainProposalCard } from '../event-editor/right-pane/ai/ChainProposalCard'
@@ -69,6 +70,15 @@ function ThreadPicker({ chat }: { chat: UseAiChatReturn }) {
   const newThread = chat.newThread
   const [threads, setThreads] = useState<ThreadSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // u3reloadresume (r11 gate defect 2): while `threads` is null the list is
+  // LOADING — the picker must say so, never claim an empty account.
+  const loading = threads === null
+  // Active id at LOAD-RESOLVE time: the hook's lazy mint resolves the tab id
+  // one render AFTER the load closure is created, so capturing `chat.threadId`
+  // into the closure would be stale (absent) when the list lands.
+  const activeIdRef = useRef<string | null>(null)
+  activeIdRef.current = chat.threadId ?? null
+  const resumedRef = useRef(false) // one-shot per mount (post-switch re-fetch must not re-fire)
 
   const load = useCallback(() => {
     if (!listThreads) return
@@ -78,6 +88,19 @@ function ThreadPicker({ chat }: { chat: UseAiChatReturn }) {
         if (cancelled) return
         setThreads(list)
         setError(null)
+        // u3reloadresume: if the tab's persisted id (threadTabIds — same single
+        // mint the hook and the wire header use, so this mints nothing new)
+        // names a fetched row WITH messages and we are not already on it,
+        // activate it via the registered switchThread (hook re-keys/rehydrates).
+        // A messageless row is never auto-selected (honest blank).
+        const persisted = getThreadTabId()
+        const row = list.find((t) => t.threadId === persisted)
+        // switchThread is null-checked in the render body; TS does not narrow a
+        // captured const here, so re-check.
+        if (row && row.messageCount > 0 && switchThread && !resumedRef.current && activeIdRef.current !== persisted) {
+          resumedRef.current = true
+          switchThread(row.threadId)
+        }
       })
       .catch((err: unknown) => {
         if (cancelled) return
@@ -87,7 +110,7 @@ function ThreadPicker({ chat }: { chat: UseAiChatReturn }) {
     return () => {
       cancelled = true
     }
-  }, [listThreads])
+  }, [listThreads, switchThread])
 
   useEffect(() => load(), [load])
 
@@ -118,7 +141,7 @@ function ThreadPicker({ chat }: { chat: UseAiChatReturn }) {
         disabled={!activeId}
       >
         <option value="" disabled>
-          {rows.length === 0 ? 'No threads yet' : 'Threads…'}
+          {loading ? 'Loading threads…' : rows.length === 0 ? 'No threads yet' : 'Threads…'}
         </option>
         {options.map((t) => (
           <option key={t.threadId} value={t.threadId}>
