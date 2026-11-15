@@ -6,7 +6,7 @@
  * with scoring for different match types (exact, alias, substring).
  */
 
-import type { RecordStore } from '../../store/types.js';
+import type { RecordEnvelope, RecordStore } from '../../store/types.js';
 
 /**
  * Deterministic aliases for Foundry test assumption hints.
@@ -110,20 +110,50 @@ export function createLabwareLookup(
       recordId: string;
       title: string;
       score: number;
+      // u1restier: the kind the candidate was scored from. Drives the
+      // comparator's rule-ordered tie-break; internal — never returned.
+      kind: 'definition' | 'labware';
     }
 
     const scored: Scored[] = [];
-    for (const record of labwareRecords) {
-      // Extract name from payload - handle both direct property and payload.name
-      const payload = record.payload as Record<string, unknown>;
-      const name = typeof payload['name'] === 'string' ? payload['name'] : '';
-      
-      // Extract aliases from payload - treat as unknown and narrow
-      const aliasesRaw = payload['aliases'];
-      const aliases = Array.isArray(aliasesRaw)
-        ? (aliasesRaw as unknown[]).filter((a): a is string => typeof a === 'string')
-        : [];
-      
+
+    // u1restier: the scored tier spans BOTH record sets that answer a
+    // labware noun — kind:labware records (name field `name`) and
+    // kind:labware-definition records (name field `display_name`) — through
+    // the SAME scoring ladder, so free-text hints reach definitions too.
+    const candidates: Array<{
+      record: RecordEnvelope;
+      name: string;
+      aliases: string[];
+      kind: 'definition' | 'labware';
+    }> = [
+      ...labwareRecords.map((record) => {
+        const payload = record.payload as Record<string, unknown>;
+        const aliasesRaw = payload['aliases'];
+        return {
+          record,
+          name: typeof payload['name'] === 'string' ? payload['name'] : '',
+          aliases: Array.isArray(aliasesRaw)
+            ? (aliasesRaw as unknown[]).filter((a): a is string => typeof a === 'string')
+            : [],
+          kind: 'labware' as const,
+        };
+      }),
+      ...definitionRecords.map((record) => {
+        const payload = record.payload as Record<string, unknown>;
+        const aliasesRaw = payload['aliases'];
+        return {
+          record,
+          name: typeof payload['display_name'] === 'string' ? payload['display_name'] : '',
+          aliases: Array.isArray(aliasesRaw)
+            ? (aliasesRaw as unknown[]).filter((a): a is string => typeof a === 'string')
+            : [],
+          kind: 'definition' as const,
+        };
+      }),
+    ];
+
+    for (const { record, name, aliases, kind } of candidates) {
       const normalizedName = name.toLowerCase();
       const normalizedAliases = aliases.map((a) => a.toLowerCase());
 
@@ -150,11 +180,19 @@ export function createLabwareLookup(
       }
 
       if (score > 0) {
-        scored.push({ recordId: record.recordId, title: name, score });
+        scored.push({ recordId: record.recordId, title: name, score, kind });
       }
     }
 
-    scored.sort((a, b) => b.score - a.score);
+    // u1restier (L2-P1-LABWARE-RESOLUTION-TIER-1): a DEFINITION beats a
+    // legacy labware record — the ordering comes from the record's kind
+    // data, never a per-id pick; score descends within kind; same-kind
+    // equal scores keep both (named ambiguity, never a silent pick).
+    scored.sort(
+      (a, b) =>
+        (a.kind === 'definition' ? 0 : 1) - (b.kind === 'definition' ? 0 : 1) ||
+        b.score - a.score,
+    );
     return scored.slice(0, 5).map(({ recordId, title }) => ({ recordId, title }));
   };
 }
