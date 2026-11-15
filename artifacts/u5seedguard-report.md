@@ -84,3 +84,4 @@ the seeded record path (lbw-seed-*, sourceRecordId === recordId, no requirementC
 adopts with exactly one labware-instance naming the seeded record id.
 
 Full outputs: /tmp/u5seedguard/{red,green,tsc}-output.txt (outside git by policy).
+L2-P1-LABWARE-INSTANCE-RECORD-1-u5seedguard UNIT unit DONE 1bad729c0f311bcb18d0d15c08941e000902f507
