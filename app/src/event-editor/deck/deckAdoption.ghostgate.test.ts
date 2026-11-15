@@ -202,6 +202,47 @@ describe('u4seedref — a SEEDED vessel (a labware record the lab already owns) 
   })
 })
 
+describe('u5seedguard — a REQUIREMENT vessel (a class CURIE, not a record) is refused', () => {
+  /** The PRODUCTION requirement vessel, EXACTLY the createLabwareFromRequirement
+   *  shape (advc c3 defect 1): `sourceRecordId` is the CLASS CURIE — a drawing
+   *  with no record behind it, never a seeded record. */
+  const requirementVessel = (): Labware =>
+    ({
+      labwareId: 'req:CL:96_well_plate:mwxyz123',
+      labwareType: 'plate',
+      name: '96-well plate',
+      proposedRecord: true,
+      addressing: 'coordinate',
+      geometry: { maxVolume_uL: 200000, minVolume_uL: 0 },
+      sourceRecordId: 'CL:96_well_plate',
+      requirementClassCurie: 'CL:96_well_plate',
+    }) as unknown as Labware
+
+  it('findUnplaceableLabware names the key: a class CURIE is not a definition record id', () => {
+    expect(findUnplaceableLabware({ 'req:CL:96_well_plate:mwxyz123': requirementVessel() }, [])).toEqual([
+      'req:CL:96_well_plate:mwxyz123',
+    ])
+  })
+
+  it('the real accept REFUSES (unplaceable-labware) with ZERO createRecord calls', async () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const result = await adoptStagedPreview(
+      previewOf({ 'req:CL:96_well_plate:mwxyz123': requirementVessel() }, []),
+      STATE,
+      ctx(),
+    )
+    expect(result).toEqual({
+      adopted: false,
+      blocked: 1,
+      reason: 'unplaceable-labware',
+      unplaceable: ['req:CL:96_well_plate:mwxyz123'],
+    })
+    expect(callOrder).toEqual([]) // no definition create, no instance mint
+    expect(persistAcceptedEventGraph).not.toHaveBeenCalled()
+    spy.mockRestore()
+  })
+})
+
 describe('u3ghostfix — the ghost gate refuses, visibly, before any write', () => {
   it('refuses with the ghost-gate discriminant and names the deck key in the log', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})

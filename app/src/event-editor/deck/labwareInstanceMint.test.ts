@@ -15,7 +15,7 @@
  */
 // @vitest-environment node
 import { describe, it, expect, vi } from 'vitest'
-import { mintPlacedLabwareInstances } from './labwareInstanceMint'
+import { mintPlacedLabwareInstances, resolveLabwareDefinitionId } from './labwareInstanceMint'
 import type { Labware } from '../../types/labware'
 
 const INSTANCE_SCHEMA =
@@ -136,6 +136,34 @@ describe('mintPlacedLabwareInstances — one instance per placed labware, defini
     expect(payload.labwareId).toBe('lbw-seed-plate-96-flat')
     expect(res.instanceIds).toHaveLength(1)
     expect(res.skipped).toEqual([])
+  })
+
+  it('u5seedguard h) a REQUIREMENT vessel (class CURIE as sourceRecordId) is unresolvable: the resolver returns undefined and the mint writes NOTHING (advc c3 defect 1)', async () => {
+    // Production requirement vessel, EXACTLY the createLabwareFromRequirement
+    // shape (labwareRequirement.ts): the `sourceRecordId` is a CLASS CURIE,
+    // never a record id — so the seeded-record arm must NOT treat it as one.
+    const reqVessel: Labware = {
+      labwareId: 'req:CL:96_well_plate:mwxyz123',
+      labwareType: 'plate',
+      name: '96-well plate',
+      proposedRecord: true,
+      addressing: 'coordinate',
+      geometry: { maxVolume_uL: 200000, minVolume_uL: 0 },
+      sourceRecordId: 'CL:96_well_plate',
+      requirementClassCurie: 'CL:96_well_plate',
+    } as unknown as Labware
+    // The resolver itself: no definition record id can come from a class CURIE.
+    expect(resolveLabwareDefinitionId('P1', reqVessel, [])).toBeUndefined()
+    const createRecord = vi.fn(async (_schemaId: string, _payload: Record<string, unknown>) => undefined)
+    const res = await mintPlacedLabwareInstances({
+      previewLabwares: { P1: reqVessel },
+      materialized: [],
+      createRecord,
+    })
+    expect(createRecord).toHaveBeenCalledTimes(0)
+    expect(res.instanceIds).toEqual([])
+    expect(res.skipped).toEqual(['P1'])
+    expect(res.warnings).toHaveLength(1)
   })
 
   it('u4seedref g) a manual vessel (random lw-* labwareId, no sourceRecordId) does NOT resolve through labwareId', async () => {
