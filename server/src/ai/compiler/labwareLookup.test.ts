@@ -264,7 +264,7 @@ describe('createLabwareLookup', () => {
     );
 
     const lookup = createLabwareLookup(fakeStore);
-    
+
     // Test substring match on "PLATE" - should match both
     const result = await lookup('PLATE');
     expect(result.length).toBe(2);
