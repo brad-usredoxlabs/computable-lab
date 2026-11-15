@@ -62,7 +62,13 @@ export function isResolvableDeckKey(
  *  u4seedref: NO `labwareId` arm — on a manual (non-record) vessel that field
  *  is a random local id (`generateLabwareId`: `lw-<ts>-<rand>`), never a
  *  definition record id, so reading it would be a guess. A seeded vessel
- *  always carries `sourceRecordId`, which is the record id and only that.
+ *  carries `sourceRecordId` set by its producer (labwareRecordToEditorLabware)
+ *  to the record id and only that. u5seedguard (advc c3 defect 1): a
+ *  REQUIREMENT vessel is excluded from that arm — createLabwareFromRequirement
+ *  stamps `sourceRecordId` with a CLASS CURIE (`CL:96_well_plate`), never a
+ *  record id, and marks the vessel with `requirementClassCurie`; only the
+ *  record-backed producer leaves that field absent. A class CURIE resolves to
+ *  nothing: refused, never a guess.
  *
  *  THE ONE RULE: the mint and the pre-check both call this — they differ only
  *  in what they pass as `materialized` (the mint: what step 2 actually
@@ -75,8 +81,13 @@ export function resolveLabwareDefinitionId(
   const creation = materialized.find((c) => c.key === key && c.kind === 'labware')
   if (creation?.recordId) return creation.recordId
   if (typeof labware.recordId === 'string' && labware.recordId.length > 0) return labware.recordId
-  // A seeded vessel: the record the lab already owns (u4seedref).
+  // A seeded vessel: the record the lab already owns (u4seedref). A
+  // REQUIREMENT vessel is NOT a seeded record: createLabwareFromRequirement
+  // stamps `sourceRecordId` with a class CURIE, and `requirementClassCurie`
+  // marks it — that field is absent on every record-backed producer, so the
+  // arm skips it and it refuses (u5seedguard; advc c3 defect 1).
   if (
+    labware.requirementClassCurie === undefined &&
     typeof labware.sourceRecordId === 'string' &&
     labware.sourceRecordId.length > 0
   ) {
