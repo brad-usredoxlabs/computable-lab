@@ -19,7 +19,12 @@ function asString(v: unknown): string | undefined {
 export function normalizeClarificationKind(raw: unknown): AgentClarificationKind {
   const value = typeof raw === 'string' ? raw.toLowerCase() : '';
   if (value.includes('aliquot')) return 'aliquot';
-  if (value.includes('labware') || value.includes('plate') || value.includes('tube') || value.includes('reservoir')) return 'labware';
+  // L2-P1-EMPTY-TURN-CARD-2 u2mentionfix (FIX-2b): the extractor's labware-head
+  // vocabulary is THIS line's vocabulary — rack/vial/cryobox are labware records
+  // exactly as plate/tube/reservoir are, so they join the one shared mapper
+  // instead of a second local lexicon. `well` stays out: it maps to
+  // well-selection below (a well is an address inside a labware record).
+  if (value.includes('labware') || value.includes('plate') || value.includes('tube') || value.includes('reservoir') || value.includes('rack') || value.includes('vial') || value.includes('cryobox')) return 'labware';
   if (value.includes('vendor')) return 'vendor-product';
   if (value.includes('equipment') || value.includes('instrument')) return 'equipment';
   if (value.includes('material') || value.includes('reagent') || value.includes('cell')) return 'material';
@@ -322,10 +327,25 @@ export function extractEmptyTurnLabwarePhrases(sentence: string): string[] {
   const fragments = withoutVerb
     .split(/,|and(?=\s)/)
     .map((fragment) => fragment.trim().replace(/[.;!?]+$/, '').trim())
+    // L2-P1-EMPTY-TURN-CARD-2 u2mentionfix (FIX-4): an UNKNOWN leading verb is a
+    // residue word, not part of the noun ("Take the plate from the rack" — the
+    // known-verb strip above only sees the sentence's first verb). Drop exactly
+    // ONE leading word when a determiner follows; the determiner-strip arm
+    // below then removes the determiner itself. Placed BEFORE that arm so the
+    // mention starts at the noun ("plate ..."), never at the verb or "the".
+    .map((fragment) => fragment.replace(/^[A-Za-z]+\s+(?=(?:a|an|the)\s)/i, '').trim())
     // Leading determiners aren't part of the noun ("a Thermo ..." → "Thermo ...").
     .map((fragment) => fragment.replace(/^(?:a|an|the)\s+/i, '').trim())
-    // Trailing location phrases (on the deck, into well A1) aren't part of the noun.
-    .map((fragment) => fragment.replace(/\s+(?:on|onto|into|in|at|to)\b[\s\S]*$/, '').trim())
+    // Trailing location phrases (on the deck, into well A1) aren't part of the noun
+    // — but ONLY when the remainder still names a labware noun. In "Add 10 uL to
+    // the reservoir." / "Place it in the plate." the strip would delete the ONLY
+    // noun, so the fragment is kept whole (the noun is what the card names).
+    .map((fragment) => {
+      const locationless = fragment.replace(/\s+(?:on|onto|into|in|at|to)\b[\s\S]*$/, '').trim();
+      return locationless.length > 0 && EMPTY_TURN_LABWARE_HEAD.test(locationless)
+        ? locationless
+        : fragment;
+    })
     .filter(
       (fragment) =>
         fragment.length > 0 &&
@@ -361,7 +381,13 @@ export async function emptyTurnAbsenceRequests(
     if (matches.length === 0) {
       const mention = candidate.trim();
       if (!mention) return [];
-      const kind = normalizeClarificationKind(mention);
+      // L2-P1-EMPTY-TURN-CARD-2 u2mentionfix (FIX-2a): the candidate PASSED the
+      // labware-head test upstream, so the request IS a labware ask — derive the
+      // kind from that test, never by re-reading the bare noun through
+      // normalizeClarificationKind (a bare noun carries no kind word).
+      const kind: AgentClarificationKind = EMPTY_TURN_LABWARE_HEAD.test(mention)
+        ? 'labware'
+        : normalizeClarificationKind(mention);
       const request: AgentClarificationRequest = {
         id: 'empty-turn-absence-1',
         kind,

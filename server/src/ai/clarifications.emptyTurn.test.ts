@@ -6,7 +6,11 @@
  * REDs first: `emptyTurnAbsenceRequests` does not exist yet.
  */
 import { describe, expect, it } from 'vitest';
-import { emptyTurnAbsenceRequests } from './clarifications.js';
+import {
+  emptyTurnAbsenceRequests,
+  extractEmptyTurnLabwarePhrases,
+  normalizeClarificationKind,
+} from './clarifications.js';
 
 // The prompt-1 manifest utterance, verbatim (the corpus scenario this unit
 // closes). The named plate is not in any store or deck.
@@ -75,10 +79,74 @@ describe('L2-P1-EMPTY-TURN-CARD-2 u1emptycard - empty-turn named absence', () =>
     expect(calls).toEqual([]);
   });
 
+  it('FIX-4 (advc c1 defect 4): an UNKNOWN leading verb is never part of the mention', () => {
+    // The known-verb strip only sees the sentence's first verb; "Take" leaked
+    // into the mention at base ("Take the plate from the rack").
+    const candidates = extractEmptyTurnLabwarePhrases(
+      'Take the plate from the rack and put it on the deck.',
+    );
+    expect(candidates.length).toBeGreaterThanOrEqual(1);
+    expect(candidates[0]).toMatch(/^plate\b/);
+    expect(candidates.some((candidate) => /^Take\b/.test(candidate))).toBe(false);
+    // Regression pin: the manifest sentence's candidate is byte-unchanged.
+    expect(extractEmptyTurnLabwarePhrases(MANIFEST)).toEqual([
+      'Thermo Optical-Quality Imaging Plate',
+    ]);
+  });
+
   it('the [Answered clarifications] trailer never leaks into a mention', async () => {
     const withAnswers = MANIFEST + '\n\n[Answered clarifications]\n- answer 1 for x: Thermo Optical-Quality Imaging Plate';
     const reqs = await emptyTurnAbsenceRequests(withAnswers, stubLookup());
     expect(reqs).toHaveLength(1);
     expect(reqs[0]!.absence?.mention).toBe('Thermo Optical-Quality Imaging Plate');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// L2-P1-EMPTY-TURN-CARD-2 u2mentionfix — adversarial c1 defects 1-4 (FIX-1,
+// FIX-2, FIX-4; FIX-3 lives beside the arm it pins, in
+// AgentOrchestrator.finalAnswerEmpty.test.ts). Each leg was RED at base
+// 3d2fe2bb9 (measured: candidates=[] / kind='general' / mention 'Take …').
+// ---------------------------------------------------------------------------
+
+describe('L2-P1-EMPTY-TURN-CARD-2 u2mentionfix — the phrase extractor keeps the noun', () => {
+  // [sentence, the labware noun the sentence names]
+  const LOCATION_PHRASES: Array<[string, string]> = [
+    ['Add 10 uL to the reservoir.', 'reservoir'],
+    ['Put the sample into the 96-well plate.', 'plate'],
+    ['Place it in the plate.', 'plate'],
+  ];
+
+  for (const [sentence, noun] of LOCATION_PHRASES) {
+    it(`FIX-1: a trailing location phrase never deletes the noun — ${sentence}`, async () => {
+      // RED at base: the location strip deleted the ONLY noun → candidates=[].
+      const candidates = extractEmptyTurnLabwarePhrases(sentence);
+      expect(candidates.length).toBeGreaterThanOrEqual(1);
+      expect(candidates[0]).toContain(noun);
+      // …and the card built from it names that noun as a LABWARE ask.
+      const reqs = await emptyTurnAbsenceRequests(sentence, async () => []);
+      expect(reqs).toHaveLength(1);
+      expect(reqs[0]!.kind).toBe('labware');
+      expect(reqs[0]!.menuProvider).toBe('/l');
+      expect(reqs[0]!.absence?.mention).toContain(noun);
+    });
+  }
+
+  it('FIX-2: rack/vial name LABWARE records — the request is not the free-text arm', async () => {
+    for (const sentence of ['Place a rack on the deck.', 'Place a vial on the deck.']) {
+      // RED at base: kind='general' / menuProvider='choice' (the free-text arm,
+      // which cannot bind a labware ref).
+      const reqs = await emptyTurnAbsenceRequests(sentence, async () => []);
+      expect(reqs).toHaveLength(1);
+      expect(reqs[0]!.kind).toBe('labware');
+      expect(reqs[0]!.menuProvider).toBe('/l');
+      expect(reqs[0]!.entityType).toBe('labware');
+    }
+    // FIX-2b: the ONE shared kind mapper carries them (no parallel local list).
+    expect(normalizeClarificationKind('rack')).toBe('labware');
+    expect(normalizeClarificationKind('vial')).toBe('labware');
+    expect(normalizeClarificationKind('cryobox')).toBe('labware');
+    // 'well' is UNCHANGED: an address inside a labware record, not a record.
+    expect(normalizeClarificationKind('well')).toBe('well-selection');
   });
 });
