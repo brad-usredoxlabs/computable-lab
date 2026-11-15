@@ -1,11 +1,10 @@
 /**
- * L2-P1-DECK-ACTION-ROUTE-1 u1deckmount (DECK-ACTIONS-ARE-THE-OPERATION
- * clause 1 + clause 3): a done carrying ONLY labwareAdditions (no events)
- * must MOUNT through the existing deck action (onAddLabwareFromRecord —
- * the same action the manual right-click uses), not hit the "cannot mount
- * without events" wall. Clause 3: a payload-resolution THROW keeps the
- * named wall for that addition. No handler wired: byte-identical to base.
- * RED on base: the spy is never called; the wall swallows the plate.
+ * L2-P1-DECK-ACTION-ROUTE-1 u1deckmount (DECK-ACTIONS-ARE-THE-OPERATION clause 1+3):
+ * a done carrying ONLY labwareAdditions (no events) MOUNTS through the existing deck
+ * action (onAddLabwareFromRecord — the same action the manual right-click uses), not
+ * the "cannot mount without events" wall. A payload-resolution THROW keeps the named
+ * wall (truth, never a lie). No handler wired: byte-identical to base. RED on base:
+ * the spy is never called and the wall swallows the plate.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
@@ -16,10 +15,7 @@ import type { AiContext } from '../../types/aiContext'
 import type { AiLabwareAddition } from '../../types/ai'
 
 vi.mock('../api/aiClient', () => ({ streamAssist: vi.fn(), getAiHealth: vi.fn().mockResolvedValue({ available: true }) }))
-vi.mock('../api/aiThreadClient', () => ({
-  getThread: vi.fn().mockRejectedValue(new Error('no thread')),
-  appendThreadMessage: vi.fn().mockResolvedValue(undefined),
-}))
+vi.mock('../api/aiThreadClient', () => ({ getThread: vi.fn().mockRejectedValue(new Error('no thread')), appendThreadMessage: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('../api/client', () => ({ apiClient: { getRecord: vi.fn(), getPromptTemplate: vi.fn().mockResolvedValue({ error: 'not found' }) } }))
 
 const aiContext: AiContext = {
@@ -33,8 +29,7 @@ type AddLabware = (record: Record<string, unknown>, addition?: AiLabwareAddition
 
 /** Drive a labware-ONLY done (no events) through the hook. */
 async function drive(onAddLabwareFromRecord?: AddLabware) {
-  // The record fetch rejects — the resolver falls back to the seed/local
-  // payload (the same path the legacy per-event apply rides).
+  // The record fetch rejects — the resolver falls back to the seed/local payload (the legacy apply's path).
   vi.mocked(apiClient.getRecord).mockRejectedValue(new Error('not backed by /api/records'))
   vi.mocked(streamAssist).mockImplementation(async function* () {
     yield { type: 'status', message: 'working' } as never
@@ -47,8 +42,7 @@ async function drive(onAddLabwareFromRecord?: AddLabware) {
   await waitFor(() => expect(result.current.isStreaming).toBe(false))
   return result
 }
-const transcript = (r: Awaited<ReturnType<typeof drive>>) =>
-  [...r.current.messages.filter((m) => m.role === 'system').map((m) => m.content), r.current.honestWall ?? ''].join('\n')
+const transcript = (r: Awaited<ReturnType<typeof drive>>) => [...r.current.messages.filter((m) => m.role === 'system').map((m) => m.content), r.current.honestWall ?? ''].join('\n')
 beforeEach(() => { vi.clearAllMocks() })
 
 describe('useAiChat — u1deckmount: a labware-only done MOUNTS on the deck, not the wall', () => {

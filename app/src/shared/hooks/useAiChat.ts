@@ -2138,9 +2138,37 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
                 // "nothing" was proposed when it proposed unmountable things.
                 const notesDelivered = (result.notes?.length ?? 0) > 0
                 const labwareOnly = (result.labwareAdditions?.length ?? 0) > 0
+                // L2-P1-DECK-ACTION-ROUTE-1 u1deckmount (DECK-ACTIONS-ARE-THE-OPERATION clause 1):
+                // a labware-only done MOUNTS through the existing deck action — same invocation shape as
+                // the legacy per-event apply (:2504-2505); !hasEvents wall context only, so the event-bearing
+                // adoption path is untouched. Clause 3: a payload-resolution THROW keeps the named wall.
+                // No handler wired: behavior unchanged.
+                let labwareMountedCount = 0
+                let labwareUnresolvedCount = 0
+                if (labwareOnly && addLabwareFromRecordRef.current !== undefined) {
+                  for (const addition of result.labwareAdditions ?? []) {
+                    try {
+                      const payload = await resolveLabwareAdditionPayload(addition)
+                      addLabwareFromRecordRef.current?.(payload as unknown as Record<string, unknown>, addition)
+                      labwareMountedCount++
+                    } catch {
+                      labwareUnresolvedCount++
+                    }
+                  }
+                  if (labwareMountedCount > 0) {
+                    setMessages((prev) => [
+                      ...prev,
+                      { id: generateMessageId(), role: 'system', content: `Placed ${labwareMountedCount} new labware${labwareMountedCount === 1 ? '' : 's'} on the deck.`, timestamp: Date.now() },
+                    ])
+                  }
+                }
+                // The wall names only what was NOT mounted (no handler: base wording).
+                const labwareWallCount = addLabwareFromRecordRef.current === undefined
+                  ? (result.labwareAdditions?.length ?? 0)
+                  : labwareUnresolvedCount
                 const unmountable = [
-                  labwareOnly
-                    ? `proposed ${result.labwareAdditions?.length} new labware, which this surface cannot mount without events`
+                  labwareWallCount > 0
+                    ? `proposed ${labwareWallCount} new labware, which this surface cannot mount without events`
                     : null,
                   (result.equipmentRequirements?.length ?? 0) > 0 ? 'bench-equipment requirements' : null,
                   (result.recordCreations?.length ?? 0) > 0 ? 'records to create' : null,
@@ -2179,7 +2207,9 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
                   // "nothing was proposed."
                   : recordCreationsDelivered
                     ? ' Nothing was applied.'
-                    : ' Nothing was proposed and nothing was applied.'
+                    : labwareMountedCount > 0
+                      ? ` Placed ${labwareMountedCount} new labware${labwareMountedCount === 1 ? '' : 's'} on the deck.`
+                      : ' Nothing was proposed and nothing was applied.'
                 setHonestWall(
                   `Draft produced no events${
                     unmountable.length > 0
