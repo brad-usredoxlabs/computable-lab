@@ -1,0 +1,14 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+kind: material
+id: mat-seed-fame-methyl-hexanoate-n6
+recordId: mat-seed-fame-methyl-hexanoate-n6
+name: Methyl hexanoate (FAME, 6:0-OMe) reference standard (seed)
+domain: chemical
+definition: >
+  Methyl hexanoate (FAME, 6:0-OMe), the methyl-ester reference standard for the
+  GC-FID FAME method. Seed material record; the species is distinct from the
+  free hexanoic acid (fame-local.yaml, one term per entity).
+tags:
+  - reference-standard
+  - FAME
+  - seed
