@@ -68,7 +68,7 @@ const COMPILED_OK = {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.resetAllMocks()
   sessionStorage.clear()
   vi.mocked(apiClient.compileWorkstateDraft).mockResolvedValue(COMPILED_OK)
   vi.mocked(apiClient.acceptWorkstateDraft).mockResolvedValue(COMPILED_OK.result)
@@ -134,35 +134,35 @@ describe('u1persist — the pending compiled proposal is durable across a reload
   })
 
   it('accept-success CLEARS the entry', async () => {
-    const result = await compileToReview()
+    const hook = await compileToReview()
     expect(sessionStorage.getItem(KEY)).not.toBeNull() // the write happened (acceptance 1)
     await act(async () => {
-      await result.current.acceptWorkstate()
+      await hook.result.current.acceptWorkstate()
     })
-    expect(result.current.card?.phase).toBe('applied')
+    expect(hook.result.current.card?.phase).toBe('applied')
     expect(sessionStorage.getItem(KEY)).toBeNull()
   })
 
   it('reject CLEARS the entry', async () => {
-    const result = await compileToReview()
+    const hook = await compileToReview()
     expect(sessionStorage.getItem(KEY)).not.toBeNull()
     act(() => {
-      result.current.rejectWorkstate()
+      hook.result.current.rejectWorkstate()
     })
-    expect(result.current.card).toBeNull()
+    expect(hook.result.current.card).toBeNull()
     expect(sessionStorage.getItem(KEY)).toBeNull()
   })
 
   it('corrupt JSON in the key ⇒ card null, key removed, no throw', () => {
     sessionStorage.setItem(KEY, '{not-json')
-    const result = setup()
-    expect(result.current.card).toBeNull()
+    const hook = setup()
+    expect(hook.result.current.card).toBeNull()
     expect(sessionStorage.getItem(KEY)).toBeNull()
     expect(apiClient.compileWorkstateDraft).not.toHaveBeenCalled()
   })
 
   it('a canAccept:false compile CLEARS any older entry — no rehydrated accept control for a server-denied draft', async () => {
-    const result = await compileToReview()
+    const hook = await compileToReview()
     expect(sessionStorage.getItem(KEY)).not.toBeNull()
     vi.mocked(apiClient.compileWorkstateDraft).mockResolvedValueOnce({
       draftId: 'DRAFT-P2',
@@ -172,9 +172,9 @@ describe('u1persist — the pending compiled proposal is durable across a reload
       diagnostics: [{ code: 'UNRESOLVED_TERM', message: 'term not in registry' }],
     })
     act(() => {
-      void result.current.proposeWorkstate('workstate', INTENT)
+      void hook.result.current.proposeWorkstate('workstate', INTENT)
     })
-    await waitFor(() => expect(result.current.card?.phase).toBe('blocked'))
+    await waitFor(() => expect(hook.result.current.card?.phase).toBe('blocked'))
     expect(sessionStorage.getItem(KEY)).toBeNull()
   })
 

@@ -61,6 +61,7 @@ const COMPILED_OK = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  sessionStorage.clear() // u1persist isolation: a fresh mount must see no prior pending entry
   vi.mocked(apiClient.compileWorkstateDraft).mockResolvedValue(COMPILED_OK)
   vi.mocked(apiClient.acceptWorkstateDraft).mockResolvedValue(COMPILED_OK.result)
   executorCalls.executeTier1.mockReturnValue({ ok: true, kind: 'replaced', diagnostics: [] })
