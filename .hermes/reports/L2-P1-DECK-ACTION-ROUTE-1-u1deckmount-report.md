@@ -100,3 +100,5 @@ $ cd app && npm run typecheck → 17 "error TS"; diff vs baseline (sorted, line/
 - f4e47e7445c9fa097caf5e4a3729f9cd53ef4046 RED (test file only)
 - 02da0cc5d6e4843ef275e6772edcead91c459c77 GREEN (useAiChat.ts wall leg + final test form)
 - (this report + -DONE marker: final commit)
+
+L2-P1-DECK-ACTION-ROUTE-1-u1deckmount UNIT unit DONE 68536db54596be575bdbaf40be12b322cd9f1610
