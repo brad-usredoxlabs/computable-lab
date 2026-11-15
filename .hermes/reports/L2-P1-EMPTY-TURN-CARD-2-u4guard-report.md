@@ -85,4 +85,4 @@ None. Browser/acceptance review is the reviewer's; the client renders
 result.clarificationRequests as cards (gate defect 2 was "not a client render
 omission" — the channel object now exists server-side).
 
-L2-P1-EMPTY-TURN-CARD-2-u4guard UNIT unit DONE e40e4d7d30ba802ba7236c20cc1eeb46e9b42acf
+L2-P1-EMPTY-TURN-CARD-2-u4guard UNIT L2-P1-EMPTY-TURN-CARD-2-u4guard DONE e40e4d7d30ba802ba7236c20cc1eeb46e9b42acf
