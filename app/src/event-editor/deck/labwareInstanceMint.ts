@@ -15,6 +15,7 @@
 import { apiClient } from '../../shared/api/client'
 import type { AiRecordCreation } from '../../types/ai'
 import type { Labware } from '../../types/labware'
+import { localRecordIdFor, sameEntity } from './acceptedRecordCreations'
 
 export const LABWARE_INSTANCE_SCHEMA =
   'https://computable-lab.com/schema/computable-lab/labware-instance.schema.yaml'
@@ -52,51 +53,63 @@ export function isResolvableDeckKey(
 /** The resolved DEFINITION record id for one placed labware, by record id
  *  only (an instance that cannot name its definition by record id is not a
  *  valid instance): (1) the records-first creation for this placement
- *  (created or reused definition); (2) the definition id the vessel carries;
- *  (3) a deck key that is itself a labware record id. Undefined = unresolvable. */
-function resolveLabwareDefinitionId(
+ *  (created or reused definition); (2) the definition id the vessel carries
+ *  (step 2 stamps it there by NAME); (3) a deck key that is itself a labware
+ *  record id. Undefined = unresolvable.
+ *
+ *  THE ONE RULE: the mint and the pre-check both call this — they differ only
+ *  in what they pass as `materialized` (the mint: what step 2 actually
+ *  produced; the pre-check: the projection of what it WILL produce). */
+export function resolveLabwareDefinitionId(
   key: string,
   labware: Labware,
   materialized: Array<MaterializedDefinitionCreation>,
 ): string | undefined {
   const creation = materialized.find((c) => c.key === key && c.kind === 'labware')
-  return (
-    creation?.recordId ??
-    (typeof labware.recordId === 'string' && labware.recordId.length > 0
-      ? labware.recordId
-      : isResolvableDeckKey(key, materialized)
-        ? key
-        : undefined)
-  )
+  if (creation?.recordId) return creation.recordId
+  if (typeof labware.recordId === 'string' && labware.recordId.length > 0) return labware.recordId
+  return isResolvableDeckKey(key, materialized) ? key : undefined
 }
 
 /**
  * PURE pre-check (L2-P1-LABWARE-INSTANCE-RECORD-1 u2ghostgate; gate r10
  * defect 4): the deck keys of the placed labwares for which NO definition
- * record id CAN EVER resolve. A labware resolves only one of three ways — a
- * records-first creation for it, the definition id its vessel carries, or a
- * deck key that is itself a record id — so the check keys off the PROPOSED
- * recordCreations (the only source of the materialized list) and refuses
- * BEFORE step 2 runs: persisting the preview's labware without an instance
- * behind it is a ghost labware (a visible gap, never a guess). A non-empty
- * list means the accept is refused before ANY write.
+ * record id CAN EVER resolve. A non-empty list means the accept is refused
+ * before ANY write: persisting the preview's labware without an instance
+ * behind it is a ghost labware (a visible gap, never a guess).
+ *
+ * u3ghostfix D1: it is the MINT's own rule (resolveLabwareDefinitionId), fed
+ * with a PROJECTION of step 2. The records-first materializer creates one
+ * definition per labware creation and stamps that record id onto the ghost
+ * whose NAME matches (`sameEntity`) — the creation's own key is
+ * `handle ?? name` and the producer mints deck keys as `lbw-proposed-*`
+ * (draftPreview.ts:219), so creation-key/deck-key equality NEVER matches and
+ * must not be used as the test.
  */
 export function findUnplaceableLabware(
   previewLabwares: Record<string, Labware>,
   recordCreations?: AiRecordCreation[],
 ): string[] {
-  // The deck keys a records-first pass would materialize a labware definition
-  // for (creation.handle ?? creation.name — the real module's key rule).
-  const creatable = new Set(
-    (recordCreations ?? [])
-      .filter((c) => c.kind === 'labware')
-      .map((c) => c.handle ?? c.name),
+  const creations = (recordCreations ?? []).filter(
+    (c) => c.kind === 'labware' && !!c.name?.trim(),
   )
+  // The DEFINITION creations step 2 will materialize for THIS vessel: the ones
+  // whose name the materializer will recognize as the same entity.
+  const project = (key: string, vessel: Labware): MaterializedDefinitionCreation[] =>
+    creations
+      .filter((c) => !!vessel.name?.trim() && sameEntity(vessel.name, c.name))
+      .map((c) => ({
+        key,
+        kind: 'labware',
+        recordId: localRecordIdFor('labware', c.name.trim(), c.curie),
+      }))
   return Object.keys(previewLabwares).filter(
     (key) =>
-      !creatable.has(key) &&
-      !(typeof previewLabwares[key]?.recordId === 'string' && previewLabwares[key]?.recordId.length > 0) &&
-      !isResolvableDeckKey(key, []),
+      resolveLabwareDefinitionId(
+        key,
+        previewLabwares[key],
+        project(key, previewLabwares[key]),
+      ) === undefined,
   )
 }
 

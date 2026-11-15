@@ -121,7 +121,7 @@ describe('deckAdoption.adoptStagedPreview — shared adoption order + gate', () 
         },
       },
     )
-    expect(result).toEqual({ adopted: false, blocked: 1 })
+    expect(result).toEqual({ adopted: false, blocked: 1, reason: 'ontology-signoff' })
     // NOTHING materialized — no creations, no mint, no persist, no commit.
     expect(callOrder).toEqual([])
     expect(commitCalls).toBe(0)

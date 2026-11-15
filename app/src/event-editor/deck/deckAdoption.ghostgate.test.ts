@@ -1,19 +1,25 @@
 /**
- * L2-P1-LABWARE-INSTANCE-RECORD-1 u2ghostgate — the GHOST-LABWARE gate
- * (RED-first: at RED time the refusal is not wired; adoptStagedPreview
- * persisted the ghost labware anyway).
+ * L2-P1-LABWARE-INSTANCE-RECORD-1 u2ghostgate / u3ghostfix — the GHOST-LABWARE
+ * gate.
  *
  * Gate r10 defect 4 (PROMPT1-GATE-20261115T044528Z): a placed labware with no
  * resolvable DEFINITION record id mints no instance (the named gap) but
  * deckAdoption persisted the WHOLE previewLabwares map — the accepted graph
- * carried a labware node with no labware-instance behind it (a "ghost labware";
- * the domain bait: paint-without-event / draft-as-committed).
- * Ruling LABWARE-INSTANCE-DEFINITION-IDENTITY-l2-20261113, labwareInstanceMint.ts:12:
+ * carried a labware node with no labware-instance behind it (a "ghost labware").
+ * Ruling LABWARE-INSTANCE-DEFINITION-IDENTITY-l2-20261113, labwareInstanceMint.ts:
  * "a visible gap, never a guess" — the gap must STOP the commit: the accept is
  * refused in the SAME shape as the unsigned-terms refusal ({ adopted: false,
- * blocked: n }), the ghost stays mounted, and ZERO records are written — the
- * pure pre-check runs BEFORE the records-first creations, before the ontology
- * mint, before the durable persist.
+ * blocked: n, reason: 'unplaceable-labware' }), the ghost stays mounted, and
+ * ZERO records/graph writes occur.
+ *
+ * u3ghostfix D5: the fixtures use the PRODUCTION shape, not a fiction. The
+ * producer keys a proposed labware by a random `lbw-proposed-*` id
+ * (draftPreview.ts:219/437) and stores it with `proposedRecord: true`; the
+ * creation carries only its NAME (no handle). Step 2 creates the definition and
+ * stamps its record id onto the ghost by NAME (`sameEntity`), which is what the
+ * pre-check must project — creation-key/deck-key equality never matches in
+ * production. Both paths run the REAL materializer and the REAL mint, so a
+ * regression to either rule fails here.
  *
  * Pure module: no DOM needed.
  */
@@ -24,16 +30,26 @@ import type { PlateEvent } from '../../types/events'
 import type { Labware } from '../../types/labware'
 import type { EventEditorPlacement } from '../types'
 import type { AiRecordCreation } from '../../types/ai'
+import { persistAcceptedEventGraph } from '../eventGraphPersistence'
 
-const { callOrder } = vi.hoisted(() => ({ callOrder: [] as string[] }))
+const { callOrder, failingNames } = vi.hoisted(() => ({
+  callOrder: [] as string[],
+  failingNames: [] as string[],
+}))
 
-// The real mint (not mocked here) falls back to apiClient.createRecord for a
-// resolvable labware — stub it so a resolvable accept never touches the network.
+// The real materializer + real mint are exercised here (see the module mock
+// below); only the network is stubbed. `failingNames` reproduces PROBE 2: the
+// definition CREATE rejects, so the vessel never gets a recordId.
 vi.mock('../../shared/api/client', () => ({
   apiClient: {
-    createRecord: vi.fn(async (_schemaId: string, _payload: Record<string, unknown>) => ({
-      recordId: 'RECORDED',
-    })),
+    searchRecords: vi.fn(async () => ({ results: [] })),
+    createRecord: vi.fn(async (schemaId: string, payload: Record<string, unknown>) => {
+      const isInstance = schemaId.includes('labware-instance')
+      callOrder.push(isInstance ? 'instance' : 'definition')
+      const name = typeof payload.name === 'string' ? payload.name : ''
+      if (failingNames.includes(name)) throw new Error('network down')
+      return { recordId: String(payload.recordId ?? payload.id ?? 'RECORDED') }
+    }),
   },
 }))
 
@@ -56,17 +72,18 @@ vi.mock('./acceptedOntologyBindings', () => ({
     return events
   }),
 }))
-vi.mock('./acceptedRecordCreations', () => ({
-  materializeAcceptedRecordCreations: vi.fn(async (creations: unknown) => {
-    callOrder.push('creations')
-    // The records-first pass: each labware creation becomes a materialized
-    // definition with a recordId (the real module's reuse/create shapes).
-    const materialized = (creations as Array<{ kind: string; handle?: string; name: string }> ?? []).map(
-      (c) => ({ key: c.handle ?? c.name, kind: c.kind, recordId: `LBW-${c.name.toUpperCase().replace(/\s+/g, '')}` }),
-    )
-    return { materialized, warnings: [] }
-  }),
-}))
+// The REAL records-first materializer (its name-based ghost stamp is half of
+// the seam under test) plus an ordering marker — never a re-implementation.
+vi.mock('./acceptedRecordCreations', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./acceptedRecordCreations')>()
+  return {
+    ...actual,
+    materializeAcceptedRecordCreations: vi.fn(async (...args: Parameters<typeof actual.materializeAcceptedRecordCreations>) => {
+      callOrder.push('creations')
+      return actual.materializeAcceptedRecordCreations(...args)
+    }),
+  }
+})
 
 const STATE = {
   eventGraphId: 'EG-1',
@@ -77,11 +94,16 @@ const STATE = {
   placements: [] as EventEditorPlacement[],
 }
 
-const ghostLabware = (labwareId: string, recordId?: string): Labware => {
+/** A deck key as the PRODUCER mints it (draftPreview.ts:219). */
+const proposedKey = (name: string): string => `lbw-proposed-mwhmtzke-${name.replace(/\s+/g, '')}`
+
+/** The PRODUCTION ghost: keyed by the random deck id, named, `proposedRecord`. */
+const proposedGhost = (name: string, recordId?: string): Labware => {
   const base: Record<string, unknown> = {
-    labwareId,
+    labwareId: proposedKey(name),
     labwareType: 'plate',
-    name: labwareId,
+    name,
+    proposedRecord: true,
     addressing: 'coordinate',
     geometry: { maxVolume_uL: 200000, minVolume_uL: 0 },
   }
@@ -89,17 +111,7 @@ const ghostLabware = (labwareId: string, recordId?: string): Labware => {
   return base as unknown as Labware
 }
 
-/** A proposal with ONE placed labware whose definition resolves to NOTHING:
- *  no recordId on the vessel, a deck key that is not a record-id shape, and a
- *  record creation whose handle does NOT match the deck key. */
-const GHOST_PREVIEW = {
-  previewEvents: [{ eventId: 'EVT-NEW' }] as PlateEvent[],
-  previewLabwares: { 'lbw-proposed-xyz': ghostLabware('lbw-proposed-xyz') },
-  previewPlacements: [{ placementId: 'PL-1' }] as EventEditorPlacement[],
-  recordCreations: [{ kind: 'labware', name: 'A plate', handle: 'some-other-handle' }] as AiRecordCreation[],
-}
-
-const resolvablePreview = (
+const previewOf = (
   previewLabwares: Record<string, Labware>,
   recordCreations?: AiRecordCreation[],
 ) => ({
@@ -109,120 +121,155 @@ const resolvablePreview = (
   ...(recordCreations ? { recordCreations } : {}),
 })
 
-beforeEach(() => {
-  callOrder.length = 0
+/** PRODUCTION proposer shape: a labware creation with a NAME and NO handle. */
+const PLATE_CREATION: AiRecordCreation = { kind: 'labware', name: '96-well plate' }
+
+const ctx = () => ({
+  termDecisions: {},
+  commit: () => {
+    callOrder.push('commit')
+  },
 })
 
-describe('u2ghostgate — a placed labware with no resolvable definition record id REFUSES the accept', () => {
-  it('findUnplaceableLabware (exported by the shared adoption core) names the unresolvable deck key', () => {
+beforeEach(() => {
+  callOrder.length = 0
+  failingNames.length = 0
+  vi.mocked(persistAcceptedEventGraph).mockClear()
+})
+
+describe('u3ghostfix D1 — ONE resolution rule: the pre-check projects what step 2 stamps', () => {
+  it('a proposed-creation vessel is placeable (deck key lbw-proposed-*, creation matched by NAME, no handle)', () => {
+    const labwares = { [proposedKey('96-well plate')]: proposedGhost('96-well plate') }
+    expect(findUnplaceableLabware(labwares, [PLATE_CREATION])).toEqual([])
+  })
+
+  it('names the key when nothing backs it: no creation, no vessel recordId, no record-shaped key', () => {
+    const key = proposedKey('96-well plate')
+    expect(findUnplaceableLabware({ [key]: proposedGhost('96-well plate') }, [])).toEqual([key])
+  })
+
+  it('a creation for a DIFFERENT name does not back the vessel', () => {
+    const key = proposedKey('96-well plate')
+    expect(
+      findUnplaceableLabware({ [key]: proposedGhost('96-well plate') }, [
+        { kind: 'labware', name: 'deepwell block' },
+      ]),
+    ).toEqual([key])
+  })
+
+  it('resolves on the other two arms too: the vessel recordId, and a record-id deck key', () => {
     const labwares = {
-      'lbw-proposed-xyz': ghostLabware('lbw-proposed-xyz'),
-      'LBW-ONVESSEL': ghostLabware('LBW-ONVESSEL', 'LBW-ONVESSEL'),
+      [proposedKey('96-well plate')]: proposedGhost('96-well plate', 'LBW-SET'),
+      'LW-1A2B3C4D': proposedGhost('LW-1A2B3C4D'),
     }
-    expect(findUnplaceableLabware(labwares, [])).toEqual(['lbw-proposed-xyz'])
+    expect(findUnplaceableLabware(labwares, [])).toEqual([])
   })
+})
 
-  it('findUnplaceableLabware resolves exactly like the mint: creation, vessel recordId, or record-id deck key', () => {
-    const labwares = {
-      P1: ghostLabware('P1'), // a records-first creation resolves it
-      'LW-1A2B3C4D': ghostLabware('LW-1A2B3C4D'), // the deck key IS a record id
-      P3: ghostLabware('P3', 'LBW-SET'), // the vessel carries the definition id
-    }
-    expect(findUnplaceableLabware(labwares, [{ kind: 'labware', name: 'P1', handle: 'P1' }])).toEqual([])
-  })
-
-  it('refuses the WHOLE accept when one placed labware cannot resolve a definition id — same shape as the unsigned-terms refusal', async () => {
-    const result = await adoptStagedPreview(GHOST_PREVIEW, STATE, {
-      termDecisions: {},
-      commit: () => {
-        callOrder.push('commit')
-      },
-    })
-    expect(result).toEqual({ adopted: false, blocked: 1 })
-  })
-
-  it('a refused accept writes ZERO records and NOTHING else: no creations, no ontology mint, no persist, no commit', async () => {
-    await adoptStagedPreview(GHOST_PREVIEW, STATE, {
-      termDecisions: {},
-      commit: () => {
-        callOrder.push('commit')
-      },
-    })
-    // The pre-check ran BEFORE the records-first pass: even the RESOLVABLE
-    // labware's definition creation was never created.
-    expect(callOrder).toEqual([])
-  })
-
-  it('the refusal precedes ANY durable write: with an unresolvable labware, persist and commit never run', async () => {
-    await adoptStagedPreview({ ...GHOST_PREVIEW, recordCreations: undefined }, STATE, {
-      termDecisions: {},
-      commit: () => {
-        callOrder.push('commit')
-      },
-    })
-    expect(callOrder).toEqual([])
-    const { persistAcceptedEventGraph } = await import('../eventGraphPersistence')
-    expect(persistAcceptedEventGraph).not.toHaveBeenCalled()
-  })
-
-  it('the ghost stays mounted: a refused accept does NOT mutate the live state labwares', async () => {
-    const before = Object.keys(STATE.labwares).length
-    await adoptStagedPreview(GHOST_PREVIEW, STATE, {
-      termDecisions: {},
-      commit: () => {
-        callOrder.push('commit')
-      },
-    })
-    expect(Object.keys(STATE.labwares).length).toBe(before)
-  })
-
-  it('resolvable proposals accept EXACTLY as before (u1inst lock): the instance mints, the counts and the order are unchanged', async () => {
+describe('u3ghostfix — the ghost gate refuses, visibly, before any write', () => {
+  it('refuses with the ghost-gate discriminant and names the deck key in the log', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const key = proposedKey('96-well plate')
     const result = await adoptStagedPreview(
-      resolvablePreview({ P1: ghostLabware('P1') }, [{ kind: 'labware', name: 'a plate', handle: 'P1' }]),
+      previewOf({ [key]: proposedGhost('96-well plate') }),
       STATE,
-      {
-        termDecisions: {},
-        commit: () => {
-          callOrder.push('commit')
-        },
-      },
+      ctx(),
+    )
+    expect(result).toEqual({
+      adopted: false,
+      blocked: 1,
+      reason: 'unplaceable-labware',
+      unplaceable: [key],
+    })
+    const named = warn.mock.calls.map((c) => String(c[0])).join('\n')
+    expect(named).toContain(key)
+    expect(named).toContain('without a resolvable labware definition record id')
+    warn.mockRestore()
+  })
+
+  it('writes ZERO records and touches NOTHING (no creations, no mint, no persist, no commit)', async () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await adoptStagedPreview(
+      previewOf({ [proposedKey('96-well plate')]: proposedGhost('96-well plate') }),
+      STATE,
+      ctx(),
+    )
+    expect(callOrder).toEqual([])
+    expect(persistAcceptedEventGraph).not.toHaveBeenCalled()
+    spy.mockRestore()
+  })
+
+  it('the ghost stays mounted: a refused accept does NOT mutate the live state', async () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const before = Object.keys(STATE.labwares).length
+    await adoptStagedPreview(
+      previewOf({ [proposedKey('96-well plate')]: proposedGhost('96-well plate') }),
+      STATE,
+      ctx(),
+    )
+    expect(Object.keys(STATE.labwares).length).toBe(before)
+    spy.mockRestore()
+  })
+})
+
+describe('u3ghostfix D1 pin (a) — a proposed-creation accept still mints, as on trunk', () => {
+  it('adopts, mints exactly ONE labware-instance, and persists the created recordId onto the vessel', async () => {
+    const key = proposedKey('96-well plate')
+    const result = await adoptStagedPreview(
+      previewOf({ [key]: proposedGhost('96-well plate') }, [PLATE_CREATION]),
+      STATE,
+      ctx(),
     )
     expect(result.adopted).toBe(true)
     const ok = result as { adopted: true; labwareCount: number; instanceIds?: string[] }
     expect(ok.labwareCount).toBe(1)
-    // One labware-instance minted for the placed labware (u1inst).
     expect(ok.instanceIds).toHaveLength(1)
     expect(ok.instanceIds![0]).toMatch(/^LAB-INST-[0-9A-Fa-f]{8}$/)
-    expect(callOrder).toEqual(['creations', 'ontology-mint', 'rewrite', 'persist', 'commit'])
+
+    // The definition was created first, then exactly one instance, then the
+    // durable write — the u1inst ordering is unchanged.
+    expect(callOrder).toEqual(['creations', 'definition', 'instance', 'ontology-mint', 'rewrite', 'persist', 'commit'])
+
+    // Identity is the record id: the persisted vessel names the definition.
+    const persistedArgs = vi.mocked(persistAcceptedEventGraph).mock.calls[0][0] as {
+      labwares: Record<string, { recordId?: string; proposedRecord?: boolean }>
+    }
+    expect(persistedArgs.labwares[key].recordId).toBe('LBW-96-WELL-PLATE')
+    expect(persistedArgs.labwares[key].proposedRecord).toBeUndefined()
   })
 
-  it('a vessel recordId alone is enough to accept (no ghost: the instance names it)', async () => {
+  it('a vessel recordId alone is enough to accept (the instance names it)', async () => {
     const result = await adoptStagedPreview(
-      resolvablePreview({ P1: ghostLabware('P1', 'LBW-SET') }),
+      previewOf({ [proposedKey('96-well plate')]: proposedGhost('96-well plate', 'LBW-SET') }),
       STATE,
-      {
-        termDecisions: {},
-        commit: () => {
-          callOrder.push('commit')
-        },
-      },
+      ctx(),
     )
     expect(result.adopted).toBe(true)
-    const ok = result as { adopted: true; instanceIds?: string[] }
-    expect(ok.instanceIds).toHaveLength(1)
+    expect((result as { instanceIds?: string[] }).instanceIds).toHaveLength(1)
   })
+})
 
-  it('the visible refusal: the gate names the gap in its warning (visible gap, never a guess)', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    await adoptStagedPreview(GHOST_PREVIEW, STATE, {
-      termDecisions: {},
-      commit: () => {
-        callOrder.push('commit')
-      },
+describe('u3ghostfix D2 pin (b) — a FAILED definition create refuses at step 2c, before persist', () => {
+  it('minted.skipped gates step 5: no graph write, no ghost labware in the accepted graph', async () => {
+    const spy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    failingNames.push('96-well plate')
+    const key = proposedKey('96-well plate')
+    const result = await adoptStagedPreview(
+      previewOf({ [key]: proposedGhost('96-well plate') }, [PLATE_CREATION]),
+      STATE,
+      ctx(),
+    )
+    expect(result).toEqual({
+      adopted: false,
+      blocked: 1,
+      reason: 'unplaceable-labware',
+      unplaceable: [key],
     })
-    const named = warn.mock.calls.map((c) => String(c[0])).join('\n')
-    expect(named).toContain('lbw-proposed-xyz')
-    expect(named).toContain('without a resolvable labware definition record id')
-    warn.mockRestore()
+    // The create was attempted and failed; the mint skipped the key; NOTHING
+    // was persisted or committed, so no labware node with proposedRecord:true
+    // can exist in the accepted graph.
+    expect(callOrder).toEqual(['creations', 'definition'])
+    expect(persistAcceptedEventGraph).not.toHaveBeenCalled()
+    spy.mockRestore()
   })
 })
