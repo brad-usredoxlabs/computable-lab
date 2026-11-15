@@ -146,3 +146,5 @@ Acceptance map:
   declared identity-collapse key) — which is OUT of this unit's scope (no name-table invented).
 - DEFECT 2 (answered-slot bind-by-id) is the separate dispatch; `shorthandChat.ts` untouched.
 - YAML change: the lane stack must be reloaded by the orchestrator before live verification.
+
+L2-P1-AMBIGUITY-TIER-RULE-1-u1tier2-l2t2646.txt UNIT unit DONE 2fb48d7959d6dd2c11e38b368a9480fecb160a2c
