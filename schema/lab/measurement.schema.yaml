@@ -89,7 +89,7 @@ properties:
 
   assayType:
     type: string
-    enum: [ qpcr, plate_reader, microscopy, gc_ms, flow, other ]
+    enum: [ qpcr, plate_reader, microscopy, gc_fid, gc_ms, flow, other ]
 
   channels:
     type: array

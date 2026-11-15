@@ -180,3 +180,25 @@ describe('L2-RUN-ATTACH-CAPABILITY-1 u1schemafield: materialRef declared on both
     expect(ok.errors ?? []).toEqual([]);
   });
 });
+
+/**
+ * L2-GC-AIA-PARSER-SHAPE-1 / u3enum — `gc_fid` is a MEASUREMENT assayType.
+ * GC-2 plan §C ("gc_fid readout vocabulary"): the AIA/CDF ingest mints a
+ * readout whose assayType is the GC-FID instrument type, so the measurement
+ * enum must carry it. The negative control pins that the slot is still an
+ * ENUM (a near-miss string is rejected), not widened to free text (§2.14).
+ */
+describe('L2-GC-AIA-PARSER-SHAPE-1 u3enum: measurement assayType carries gc_fid', () => {
+  it('(d) assayType gc_fid validates against the REAL measurement schema; a near-miss is rejected by the same enum', () => {
+    const payload = { ...measurementPayload('MSR-GCFID-A'), assayType: 'gc_fid' };
+    const ok = ctx.validator.validate(payload, MEASUREMENT_SCHEMA_ID);
+    expect(ok.valid, `assayType gc_fid must validate: ${JSON.stringify(ok.errors ?? [])}`).toBe(true);
+    expect(ok.errors ?? []).toEqual([]);
+    const nearMiss = ctx.validator.validate(
+      { ...measurementPayload('MSR-GCFID-B'), assayType: 'gc_fid_typo' },
+      MEASUREMENT_SCHEMA_ID,
+    );
+    expect(nearMiss.valid, 'a near-miss assayType must still be rejected — the slot is an enum').toBe(false);
+    expect((nearMiss.errors ?? []).some((e) => e.keyword === 'enum' && e.path === '/assayType')).toBe(true);
+  });
+});
