@@ -20,12 +20,37 @@
  * arms all require it true) and no attachments (so isDocDiscussionTurn is
  * false → the parseAgentFinalResponse arm, not the doc-discussion prose arm).
  */
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { createAgentOrchestrator } from './AgentOrchestrator.js';
 import { emptyDraftMessage } from './draftArgDiagnostics.js';
 import { createResolveSpineFromContext } from '../resolve/index.js';
 import { createLabwareLookup } from './compiler/labwareLookup.js';
+import { AGENT_INTENT_TOOL_NAME } from './submitSuggestionTool.js';
 import type { AgentRequest, CompletionResponse } from './types.js';
+
+// L2-P1-EMPTY-TURN-CARD-2 u2mentionfix (FIX-3): the SHORTHAND (arm-2) backstop
+// at AgentOrchestrator.ts:3574-3589 had no pin (advc c1 mutation M2). The
+// deterministic compile is stubbed to the ONE shape the guard exists for; the
+// mapper, guard and absence probe are the shipped code path.
+vi.mock('./shorthandChat.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./shorthandChat.js')>();
+  return {
+    ...actual,
+    compileShorthandDeterministically: vi.fn(async () => ({
+      outcome: 'complete',
+      diagnostics: [],
+      clarifications: [],
+      terminalArtifacts: { events: [], gaps: [], directives: [], labwareAdditions: [] },
+    })),
+  };
+});
+
+const ADD_DMEM_YAML = readFileSync(
+  resolve(process.cwd(), 'src', 'ai', 'fixtures', 'shorthand-add-dmem.yaml'),
+  'utf-8',
+);
 
 // ---------------------------------------------------------------------------
 // Shared harness (the freeformLegs.test.ts idiom, content-only variant)
@@ -218,5 +243,86 @@ describe('L2-P1-EMPTY-TURN-CARD-2 u1emptycard — the final-answer arm attaches 
     // clarificationRequests: undefined / []).
     expect('clarificationRequests' in result).toBe(false);
     expect(result.clarificationRequests).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// L2-P1-EMPTY-TURN-CARD-2 u2mentionfix (FIX-3) — the SHORTHAND arm-2 pin.
+// Mutation M2 (advc c1): deleting AgentOrchestrator.ts:3574-3589 left every
+// committed suite green. This leg goes RED when that block is deleted.
+// ---------------------------------------------------------------------------
+
+const ARM2_MANIFEST =
+  'Place a Thermo Optical-Quality Imaging Plate, 384-well, black-walled, ' +
+  'clear bottom (catalog number A58941) on the deck.';
+
+/** One assistant turn submitting a shorthand document through the intent tool. */
+function shorthandModel(shorthand: string) {
+  const completeStream = vi.fn(async function* () {
+    yield {
+      id: 'resp-sh',
+      choices: [{
+        index: 0,
+        delta: {
+          role: 'assistant',
+          tool_calls: [{
+            index: 0,
+            id: 'call-sh-1',
+            type: 'function',
+            function: {
+              name: AGENT_INTENT_TOOL_NAME,
+              arguments: JSON.stringify({ intent: 'event_shorthand', shorthand }),
+            },
+          }],
+        },
+        finish_reason: 'tool_calls',
+      }],
+    } as unknown as CompletionResponse;
+  });
+  return { complete: vi.fn(), completeStream } as never;
+}
+
+async function runShorthandTurn(prompt: string) {
+  const orchestrator = createAgentOrchestrator(
+    shorthandModel(ADD_DMEM_YAML),
+    { getToolDefinitions: () => [], executeTool: vi.fn() },
+    { baseUrl: 'http://test.invalid', model: 'test-model', temperature: 0.1, maxTokens: 512 },
+    { maxTurns: 2 },
+    orchestratorDeps(),
+  );
+  return orchestrator.run({
+    prompt,
+    surface: 'workspace.deck',
+    forceDraftTool: true,
+    context: {
+      labwares: [],
+      eventSummary: 'No events yet.',
+      vocabPackId: 'liquid-handling/v1',
+      availableVerbs: ['add_material'],
+      runId: 'RUN-arm2-empty',
+    },
+  } as unknown as AgentRequest);
+}
+
+describe('L2-P1-EMPTY-TURN-CARD-2 u2mentionfix — the SHORTHAND arm-2 backstop carries the card', () => {
+  it('arm-2: an empty shorthand turn names the absent labware ONCE (the block is load-bearing)', async () => {
+    const result = await runShorthandTurn(ARM2_MANIFEST);
+    // the shorthand arm hands the turn back with the card as its deliverable
+    // (success:true + events:[] + the arm's own honest error sentence).
+    expect(result.success).toBe(true);
+    expect(result.error).toBe(emptyDraftMessage({ truncated: false, hadArguments: true }));
+    expect(result.events ?? []).toEqual([]);
+    // …AND the named-absence card beside it — exactly one request.
+    // (RED with the arm-2 block deleted: success:true / no error / no card.)
+    expect(result.clarificationRequests).toHaveLength(1);
+    const [request] = result.clarificationRequests!;
+    expect(request!.kind).toBe('labware');
+    expect(request!.menuProvider).toBe('/l');
+    expect(request!.absence?.mention).toBe('Thermo Optical-Quality Imaging Plate');
+    expect(request!.absence?.reason).toBe(
+      "Not in this lab's records: Thermo Optical-Quality Imaging Plate",
+    );
+    expect(request!.options).toEqual([]);
+    expect(request!.query).toBe('Thermo Optical-Quality Imaging Plate');
   });
 });

@@ -19,7 +19,10 @@ function asString(v: unknown): string | undefined {
 export function normalizeClarificationKind(raw: unknown): AgentClarificationKind {
   const value = typeof raw === 'string' ? raw.toLowerCase() : '';
   if (value.includes('aliquot')) return 'aliquot';
-  if (value.includes('labware') || value.includes('plate') || value.includes('tube') || value.includes('reservoir')) return 'labware';
+  // FIX-2b (L2-P1-EMPTY-TURN-CARD-2 u2mentionfix): rack/vial/cryobox are labware
+  // records as plate/tube/reservoir are — one shared vocabulary, no local list.
+  // `well` stays out: it is an ADDRESS inside a record (well-selection below).
+  if (value.includes('labware') || value.includes('plate') || value.includes('tube') || value.includes('reservoir') || value.includes('rack') || value.includes('vial') || value.includes('cryobox')) return 'labware';
   if (value.includes('vendor')) return 'vendor-product';
   if (value.includes('equipment') || value.includes('instrument')) return 'equipment';
   if (value.includes('material') || value.includes('reagent') || value.includes('cell')) return 'material';
@@ -322,10 +325,25 @@ export function extractEmptyTurnLabwarePhrases(sentence: string): string[] {
   const fragments = withoutVerb
     .split(/,|and(?=\s)/)
     .map((fragment) => fragment.trim().replace(/[.;!?]+$/, '').trim())
+    // L2-P1-EMPTY-TURN-CARD-2 u2mentionfix (FIX-4): an UNKNOWN leading verb is a
+    // residue word, not part of the noun ("Take the plate from the rack" — the
+    // known-verb strip above only sees the sentence's first verb). Drop exactly
+    // ONE leading word when a determiner follows; the determiner-strip arm
+    // below then removes the determiner itself. Placed BEFORE that arm so the
+    // mention starts at the noun ("plate ..."), never at the verb or "the".
+    .map((fragment) => fragment.replace(/^[A-Za-z]+\s+(?=(?:a|an|the)\s)/i, '').trim())
     // Leading determiners aren't part of the noun ("a Thermo ..." → "Thermo ...").
     .map((fragment) => fragment.replace(/^(?:a|an|the)\s+/i, '').trim())
-    // Trailing location phrases (on the deck, into well A1) aren't part of the noun.
-    .map((fragment) => fragment.replace(/\s+(?:on|onto|into|in|at|to)\b[\s\S]*$/, '').trim())
+    // Trailing location phrases (on the deck, into well A1) aren't part of the noun
+    // — but ONLY when the remainder still names a labware noun. In "Add 10 uL to
+    // the reservoir." / "Place it in the plate." the strip would delete the ONLY
+    // noun, so the fragment is kept whole (the noun is what the card names).
+    .map((fragment) => {
+      const locationless = fragment.replace(/\s+(?:on|onto|into|in|at|to)\b[\s\S]*$/, '').trim();
+      return locationless.length > 0 && EMPTY_TURN_LABWARE_HEAD.test(locationless)
+        ? locationless
+        : fragment;
+    })
     .filter(
       (fragment) =>
         fragment.length > 0 &&
@@ -333,6 +351,42 @@ export function extractEmptyTurnLabwarePhrases(sentence: string): string[] {
         !EMPTY_TURN_NOISE.test(fragment),
     );
   return fragments;
+}
+
+/** Prepositions that open a trailing location phrase inside a kept-whole clause. */
+const EMPTY_TURN_LOCATION_PREPOSITION = /\b(?:on|onto|into|in|at|to|from)\b/gi;
+
+/**
+ * Probe forms for ONE candidate: the candidate, its prepositional TAIL (text
+ * after the last on|onto|into|in|at|to|from, determiner stripped) and its bare
+ * head-noun WORD. The lookup's name tier is `name.includes(hint)`
+ * (labwareLookup.ts:135), so a kept-whole CLAUSE ("sample into the 96-well
+ * plate") is longer than any record name and can never match even when the lab
+ * HOLDS the plate. The tail and head word are what a name can contain, and the
+ * head word absorbs hyphen/space drift ("96-well plate" vs "Generic 96 Well
+ * Plate"). Head-word probing deliberately UNDER-requests beside an existing
+ * labware (friction-first: a missed absence card costs a re-ask; a false one
+ * invents a gap the lab does not have).
+ */
+function emptyTurnProbeForms(candidate: string): string[] {
+  const forms = [candidate];
+  const found = [...candidate.matchAll(EMPTY_TURN_LOCATION_PREPOSITION)];
+  const last = found[found.length - 1];
+  const tail = last
+    ? candidate
+        .slice((last.index ?? 0) + last[0].length)
+        .trim()
+        .replace(/^(?:a|an|the)\s+/i, '')
+        .trim()
+    : '';
+  if (tail.length > 0 && EMPTY_TURN_LABWARE_HEAD.test(tail) && !EMPTY_TURN_NOISE.test(tail)) {
+    forms.push(tail);
+  }
+  const headWord = new RegExp(EMPTY_TURN_LABWARE_HEAD.source, 'i').exec(candidate);
+  if (headWord) forms.push(headWord[0]);
+  const unique = new Map<string, string>();
+  for (const form of forms) if (form.trim()) unique.set(form.trim().toLowerCase(), form);
+  return [...unique.values()];
 }
 
 /**
@@ -350,18 +404,30 @@ export async function emptyTurnAbsenceRequests(
 ): Promise<AgentClarificationRequest[]> {
   const candidates = extractEmptyTurnLabwarePhrases(turnText);
   if (candidates.length === 0) return [];
-  // Longest first; probe the FULL extracted phrase (never a sub-window — the
-  // lookup's name tier is substring-based, a sub-phrase probe could miss a
-  // longer-held name and declare a false absence).
+  // Longest first. Each candidate is probed by ITSELF, by its prepositional
+  // tail and by its bare head-noun word (see emptyTurnProbeForms), so a record
+  // the lab HOLDS is never falsely declared absent.
   const ordered = [...candidates].sort(
     (a, b) => b.length - a.length || candidates.indexOf(a) - candidates.indexOf(b),
   );
   for (const candidate of ordered) {
-    const matches = await searchLabwareByHint(candidate);
-    if (matches.length === 0) {
+    // Absent ONLY if EVERY probe form misses; a hit on any form means held.
+    let held = false;
+    for (const form of emptyTurnProbeForms(candidate)) {
+      const matches = await searchLabwareByHint(form);
+      if (matches.length > 0) {
+        held = true;
+        break;
+      }
+    }
+    if (!held) {
       const mention = candidate.trim();
       if (!mention) return [];
-      const kind = normalizeClarificationKind(mention);
+      // FIX-2a: the candidate PASSED the labware-head test upstream, so the ask
+      // IS a labware ask — never re-derive it from a bare noun.
+      const kind: AgentClarificationKind = EMPTY_TURN_LABWARE_HEAD.test(mention)
+        ? 'labware'
+        : normalizeClarificationKind(mention);
       const request: AgentClarificationRequest = {
         id: 'empty-turn-absence-1',
         kind,
