@@ -66,7 +66,14 @@ import type { AccessAction } from '../../security/AccessControlService.js';
  *  `roles` is typed as the service's own `PackageFileRole` map (imported,
  *  never re-declared) and `sourceRunRef` is accepted too, so the body
  *  contract and the RegisterAcquisitionPackageInput contract cannot drift
- *  apart again. */
+ *  apart again.
+ *
+ *  u1acqgraph (RUN-IS-THE-PROVENANCE-RECORD, BRAD RULING 2026-11-14): the
+ *  run-scoped additions — `eventGraphRef` (the run's event-graph record),
+ *  `equipmentRef` (the instrument), `assayType` (the measurement schema's
+ *  REQUIRED slot — declared by the caller, NEVER defaulted) and `title`
+ *  (label; identifier-derived default when absent). eventGraphRef present
+ *  + entryRef absent → the handler MINTS the run's ONE measurement record. */
 interface RegisterBody {
   deviceId?: string;
   directoryKey?: string;
@@ -75,7 +82,17 @@ interface RegisterBody {
   materialRef?: { kind: 'record'; id: string; type: string; label?: string };
   sourceRunRef?: { kind: 'record'; id: string; type: string; label?: string };
   entryRef?: { kind: 'record'; id: string; type: string };
+  eventGraphRef?: { kind: 'record'; id: string; type: string };
+  equipmentRef?: { kind: 'record'; id: string; type: string };
+  assayType?: 'qpcr' | 'plate_reader' | 'microscopy' | 'gc_ms' | 'flow' | 'other';
+  title?: string;
 }
+
+/** The measurement schema URL (schema/lab/measurement.schema.yaml `$id`) —
+ *  the envelope identity for the u1acqgraph mint. The same URL the other
+ *  measurement stores use; one truth, never a second spelling. */
+const MEASUREMENT_SCHEMA_ID =
+  'https://computable-lab.com/schema/computable-lab/measurement.schema.yaml';
 
 export interface RunSheetHandlers {
   register(request: FastifyRequest<{ Body: RegisterBody }>, reply: FastifyReply): Promise<unknown>;
@@ -122,7 +139,7 @@ export function createRunSheetHandlers(ctx: AppContext): RunSheetHandlers {
       // owns the sheet" model is dead). NEITHER binding is a NAMED refusal
       // with a reason (§2.15: never a guessed scope), and it is NOT a
       // config/mount error — isConfigError stays PACKAGE_DEVICE_MISSING.
-      if (!entryId && !body.materialRef?.id) {
+      if (!entryId && !body.materialRef?.id && !body.eventGraphRef?.id) {
         reply.status(400);
         return { error: 'MATERIAL_OR_ENTRY_REQUIRED', message: 'materialRef or entryRef is required — name the material that went in (a plate+wells or an aliquot/derived material) or the instrument-sequence-entry the acquisition package attaches to.' };
       }
@@ -146,6 +163,34 @@ export function createRunSheetHandlers(ctx: AppContext): RunSheetHandlers {
       if (entryId && !existing) {
         reply.status(404);
         return { error: 'NOT_FOUND', message: `instrument-sequence-entry not found: ${entryId}` };
+      }
+
+      // u1acqgraph (RUN-IS-THE-PROVENANCE-RECORD): the run-scoped call names
+      // the run's event-graph record — §2.7 (identity is a record id, never a
+      // name): the id is resolved via ctx.store.get, a miss is a NAMED
+      // refusal, never a conjured record (§2.15 "Never invent a value").
+      // Mirrors the entry pre-resolve SHAPE: resolve BEFORE any mint.
+      const eventGraphId = body.eventGraphRef?.id;
+      const graph = eventGraphId && !entryId ? await ctx.store.get(eventGraphId) : null;
+      if (eventGraphId && !entryId && !graph) {
+        reply.status(404);
+        return { error: 'NOT_FOUND', message: `event-graph record not found: ${eventGraphId}` };
+      }
+      // equipmentRef (the physical instrument the measurement came from) —
+      // same treatment: a named 404 miss before any mint.
+      const equipmentId = body.equipmentRef?.id;
+      const equipment = equipmentId && !entryId ? await ctx.store.get(equipmentId) : null;
+      if (equipmentId && !entryId && !equipment) {
+        reply.status(404);
+        return { error: 'EQUIPMENT_NOT_FOUND', message: `equipment record not found: ${equipmentId}` };
+      }
+      // assayType is REQUIRED by the measurement schema (kind, recordId,
+      // title, assayType) — the caller declares it. The mint is the run's
+      // readout record, so a run-scoped call without an assayType is a
+      // NAMED refusal: never a default (§2.15).
+      if (eventGraphId && !entryId && body.assayType === undefined) {
+        reply.status(400);
+        return { error: 'ASSAY_TYPE_REQUIRED', message: 'assayType is required for an event-graph-scoped acquisition — declare the assay (qpcr, plate_reader, microscopy, gc_ms, flow or other); the handler never defaults it.' };
       }
 
       // AUTH (fix-cycle-1 D1): the SAME gate RecordHandlers.updateRecord
@@ -232,6 +277,46 @@ export function createRunSheetHandlers(ctx: AppContext): RunSheetHandlers {
       // Material-scoped (u1matbind): the package binds to the material that
       // went in — the response names the material via packagePayload and
       // carries NO entryRecordId (the entry was never part of this call).
+      //
+      // u1acqgraph (RUN-IS-THE-PROVENANCE-RECORD): an event-graph-scoped
+      // call (eventGraphRef present, entryRef absent) MINTS the run's ONE
+      // measurement record bound to that graph (material/equipment refs
+      // when supplied) — minted ONLY after registerAcquisitionPackage
+      // succeeded, NEVER on the entry-scoped branch (byte-identical above).
+      // assayType was proven present (ASSAY_TYPE_REQUIRED, never a
+      // default). One record per call: a fresh, unique-per-call recordId.
+      if (eventGraphId && !entryId) {
+        const mTail = result.packageRecordId.slice('ACQP-'.length);
+        const measurementRecordId = `MSR-${mTail || String(Date.now())}`;
+        const mPayload: Record<string, unknown> = {
+          kind: 'measurement',
+          recordId: measurementRecordId,
+          title: body.title ?? `Acquisition package ${result.packageRecordId} (${directoryKey})`,
+          assayType: body.assayType,
+          eventGraphRef: body.eventGraphRef,
+          ...(body.materialRef ? { materialRef: body.materialRef } : {}),
+          ...(body.equipmentRef ? { equipmentRef: body.equipmentRef } : {}),
+        };
+        const mCreate = await ctx.store.create({
+          envelope: {
+            recordId: measurementRecordId,
+            schemaId: MEASUREMENT_SCHEMA_ID,
+            payload: mPayload,
+          },
+          message: `Mint measurement ${measurementRecordId} for acquisition package ${result.packageRecordId} (event graph ${eventGraphId})`,
+        });
+        if (!mCreate.success) {
+          reply.status(400);
+          const detail =
+            mCreate.validation?.errors?.[0]?.message ?? mCreate.lint?.violations?.[0]?.message ?? mCreate.error;
+          return { error: 'MEASUREMENT_MINT_FAILED', message: detail ?? `Failed to mint the measurement record for ${result.packageRecordId}` };
+        }
+        return {
+          packageRecordId: result.packageRecordId,
+          packagePayload: result.packagePayload,
+          measurementRecordId,
+        };
+      }
       return {
         packageRecordId: result.packageRecordId,
         packagePayload: result.packagePayload,

@@ -269,6 +269,117 @@ describe('POST /acquisition-packages/register (the attach glue, D4)', () => {
     expect(message).toContain('entryRef');
   });
 
+  // u1acqgraph (RUN-IS-THE-PROVENANCE-RECORD, BRAD RULING 2026-11-14): a
+  // run-scoped register names the run's event-graph record (eventGraphRef)
+  // and the handler MINTS the run's one measurement record bound to that
+  // graph. Identity is a record id, never a name (§2.7) — the graph id is
+  // resolved with ctx.store.get and a miss is a NAMED refusal, never a
+  // conjured record (§2.15 "Never invent a value").
+  const EVENT_GRAPH_SCHEMA_ID =
+    'https://computable-lab.com/schema/computable-lab/event-graph.schema.yaml';
+  const MEASUREMENT_SCHEMA_ID =
+    'https://computable-lab.com/schema/computable-lab/measurement.schema.yaml';
+
+  /** Seed a minimal shape-valid event-graph record resolvable by store.get. */
+  async function makeEventGraph(c: Ctx, recordId: string): Promise<void> {
+    const res = await c.app.store.create({
+      envelope: {
+        recordId,
+        schemaId: EVENT_GRAPH_SCHEMA_ID,
+        payload: {
+          kind: 'event-graph',
+          recordId,
+          id: recordId,
+          name: 'u1acqgraph fixture graph',
+          status: 'draft',
+          events: [],
+          labwares: [],
+        },
+      },
+      message: `u1acqgraph fixture event graph ${recordId}`,
+    });
+    if (!res.success) throw new Error(`event-graph create failed: ${res.error ?? ''}`);
+  }
+
+  it('u1acqgraph: eventGraphRef + materialRef, NO entryRef, assayType gc_ms mints ONE measurement bound to the graph (AC1)', async () => {
+    const c = await ctx();
+    const key = await writeFullDotD(c.mountRoot, 'GRAPH.D');
+    const graphId = `EVG-RSH-U1-${Math.random().toString(36).slice(2, 10)}`;
+    await makeEventGraph(c, graphId);
+    const mBefore = (await c.app.store.list({ kind: 'measurement', limit: 100000 })).length;
+    const entriesBefore = (await c.app.store.list({ kind: 'instrument-sequence-entry', limit: 100000 })).length;
+    const r = mockReply();
+    const body = await c.handlers.register(
+      req({
+        deviceId: DEVICE_ID,
+        directoryKey: key,
+        eventGraphRef: { kind: 'record', id: graphId, type: 'event-graph' },
+        materialRef: { kind: 'record', id: 'MAT-RSH-GRAPH', type: 'material' },
+        assayType: 'gc_ms',
+      }),
+      r.reply,
+    );
+    expect(r.status()).toBe(200);
+    expect(body).toMatchObject({ packageRecordId: expect.stringMatching(/^ACQP-/), measurementRecordId: expect.stringMatching(/^MSR-/) });
+    expect('entryRecordId' in body).toBe(false);
+    // AC1: the minted measurement binds to the named graph and material —
+    // asserted by c.app.store.get read-back of BOTH refs.
+    const mrec = await c.app.store.get((body as { measurementRecordId: string }).measurementRecordId);
+    expect(mrec?.schemaId).toBe(MEASUREMENT_SCHEMA_ID);
+    const payload = mrec?.payload as Record<string, unknown>;
+    expect((payload.eventGraphRef as { id: string }).id).toBe(graphId);
+    expect((payload.materialRef as { id: string }).id).toBe('MAT-RSH-GRAPH');
+    expect(payload.assayType).toBe('gc_ms');
+    // EXACTLY one new measurement record — and NO entry conjured.
+    const mAfter = (await c.app.store.list({ kind: 'measurement', limit: 100000 })).length;
+    expect(mAfter).toBe(mBefore + 1);
+    const entriesAfter = (await c.app.store.list({ kind: 'instrument-sequence-entry', limit: 100000 })).length;
+    expect(entriesAfter).toBe(entriesBefore);
+  });
+
+  it('u1acqgraph: a nonexistent eventGraphRef is a 404 naming the id — no package minted before resolution (AC2)', async () => {
+    const c = await ctx();
+    await writeFullDotD(c.mountRoot, 'GRAPHMISS.D');
+    const acqpBefore = (await c.app.store.list({ kind: 'acquisition-package', limit: 100000 })).length;
+    const r = mockReply();
+    const body = await c.handlers.register(
+      req({
+        deviceId: DEVICE_ID,
+        directoryKey: 'GRAPHMISS.D',
+        eventGraphRef: { kind: 'record', id: 'EVG-DOES-NOT-EXIST', type: 'event-graph' },
+        assayType: 'gc_ms',
+      }),
+      r.reply,
+    );
+    expect(r.status()).toBe(404);
+    expect((body as { error: string }).error).toBe('NOT_FOUND');
+    expect((body as { message: string }).message).toContain('event-graph record not found: EVG-DOES-NOT-EXIST');
+    // Nothing minted before the resolve: the ACQP count is UNCHANGED.
+    const acqpAfter = (await c.app.store.list({ kind: 'acquisition-package', limit: 100000 })).length;
+    expect(acqpAfter).toBe(acqpBefore);
+  });
+
+  it('u1acqgraph: eventGraphRef present but NO assayType is a 400 ASSAY_TYPE_REQUIRED — never a default (AC3)', async () => {
+    const c = await ctx();
+    const graphId = `EVG-RSH-U1-${Math.random().toString(36).slice(2, 10)}`;
+    await makeEventGraph(c, graphId);
+    const acqpBefore = (await c.app.store.list({ kind: 'acquisition-package', limit: 100000 })).length;
+    const r = mockReply();
+    const body = await c.handlers.register(
+      req({
+        deviceId: DEVICE_ID,
+        directoryKey: 'x.D',
+        eventGraphRef: { kind: 'record', id: graphId, type: 'event-graph' },
+      }),
+      r.reply,
+    );
+    expect(r.status()).toBe(400);
+    expect((body as { error: string }).error).toBe('ASSAY_TYPE_REQUIRED');
+    // No mint before the refusal (nothing to name a defaulted assayType on).
+    const acqpAfter = (await c.app.store.list({ kind: 'acquisition-package', limit: 100000 })).length;
+    expect(acqpAfter).toBe(acqpBefore);
+  });
+
   it('returns 404 NOT_FOUND when the target entry does not resolve (the register succeeded; the attach cannot)', async () => {
     const c = await ctx();
     await writeFullDotD(c.mountRoot, 'ORPHAN.D');
