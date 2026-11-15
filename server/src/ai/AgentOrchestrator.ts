@@ -3127,11 +3127,18 @@ export function createAgentOrchestrator(
           // guard counts the 7 canonical channels only, so the notes channel
           // is checked here, beside it. Non-doc-discussion arm ONLY: the
           // doc-discussion prose answer (proseDeliverable) is unchanged.
+          // L2-P1-EMPTY-TURN-CARD-2 (u4guard): the guard REACHES a notes-bearing
+          // empty turn too — but ONLY to attach the named-absence card (the
+          // card beside the notes; success stays true, NO error). The no-notes
+          // arm below stays byte-identical in behavior (same probe, same
+          // error, same conditional spread). Before this, ANY notes-bearing
+          // turn bypassed the guard entirely, so a notes prose naming a
+          // labware the lab does not hold persisted with NO metadata at all
+          // (gate r9 defect 2, legC2 e018cfe4 "Nunc CryoBox 12x12").
           if (
             !isDocDiscussionTurn &&
             result.success &&
-            draftProducedNothingOnServer(result) &&
-            !(result.notes?.length ?? 0)
+            draftProducedNothingOnServer(result)
           ) {
             // L2-P1-EMPTY-TURN-CARD-2 (u1emptycard): the empty-turn guard's NAMED
             // ABSENCE card — the user's sentence (effectivePrompt, the last user
@@ -3143,16 +3150,29 @@ export function createAgentOrchestrator(
               effectivePrompt,
               shorthandSearchLabwareByHint ?? (async () => []),
             );
-            result = {
-              ...result,
-              success: false,
-              error: emptyDraftMessage({
-                truncated: choice.finish_reason === 'length',
-                hadArguments: false,
-                noToolCall: true,
-              }),
-              ...(emptyTurnAbsence.length > 0 ? { clarificationRequests: emptyTurnAbsence } : {}),
-            };
+            if (!(result.notes?.length ?? 0)) {
+              result = {
+                ...result,
+                success: false,
+                error: emptyDraftMessage({
+                  truncated: choice.finish_reason === 'length',
+                  hadArguments: false,
+                  noToolCall: true,
+                }),
+                ...(emptyTurnAbsence.length > 0 ? { clarificationRequests: emptyTurnAbsence } : {}),
+              };
+            } else if (emptyTurnAbsence.length > 0) {
+              // u4guard: notes-bearing arm — the named-absence card RIDES the
+              // notes deliverable on the typed channel (client renders the card
+              // beside the notes; the channel object was the seam — a turn
+              // whose result never carries clarificationRequests renders none).
+              // The notes prose itself is the deliverable: success stays true,
+              // no error, no message vocabulary added.
+              result = {
+                ...result,
+                clarificationRequests: emptyTurnAbsence,
+              };
+            }
           }
           const elapsed = Date.now() - t0;
           

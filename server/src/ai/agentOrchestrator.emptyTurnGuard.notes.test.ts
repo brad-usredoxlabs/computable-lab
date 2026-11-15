@@ -12,11 +12,9 @@
  * must still ride clarificationRequests BESIDE the notes (success stays true,
  * no error), and the truly-empty no-notes named-cause error path stays
  * behaviorally unchanged (pinned in AgentOrchestrator.finalAnswerEmpty.test.ts
- * and clarifications.emptyTurn.test.ts).
- *
- * Driver idiom: AgentOrchestrator.finalAnswerEmpty.test.ts (content-only
+ * and clarifications.emptyTurn.test.ts). Driver idiom: the same content-only
  * assistant message, no tool_calls, finish_reason 'stop', forceDraftTool:false,
- * no attachments → the parseAgentFinalResponse final-answer arm).
+ * no attachments → the parseAgentFinalResponse final-answer arm.
  */
 import { describe, expect, it, vi } from 'vitest';
 import { createAgentOrchestrator } from './AgentOrchestrator.js';
