@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   labwareDefinitionRecordToEditorLabware,
-  labwareRecordFallbackPayload,
   labwareRecordToEditorLabware,
   type LabwareDefinitionRecordPayload,
   type LabwareRecordPayload,
@@ -77,11 +76,8 @@ describe('definition-intact binding for an AI labware addition', () => {
 
     // Legacy chain still produces exactly what it produced before.
     const legacy = labwareRecordToEditorLabware(tiprack)
-    const viaFallback = labwareRecordToEditorLabware(
-      labwareRecordFallbackPayload(tiprack.recordId),
-    )
     expect(legacy.labwareType).toBe('tiprack_flex_200')
     expect(legacy.geometry.maxVolume_uL).toBe(200)
-    expect(legacy.definitionId).toBe(viaFallback.definitionId)
+    expect(legacy.sourceRecordId).toBe('lbw-tiprack-flex-200')
   })
 })

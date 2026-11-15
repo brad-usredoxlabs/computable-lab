@@ -42,11 +42,17 @@ import type { PlateEvent, TransferDetails } from '../types/events'
 import { getEventSummary, normalizeTransferDetails, withCanonicalTransferDetails } from '../types/events'
 import type { WellId } from '../types/plate'
 import type { MacroProgram } from '../types/macroProgram'
-import type { Labware, LabwareType, LabwareRecordPayload } from '../types/labware'
+import type {
+  Labware,
+  LabwareDefinitionRecordPayload,
+  LabwareType,
+  LabwareRecordPayload,
+} from '../types/labware'
 import {
   getLabwareDefaultOrientation,
   getLabwareWellIds,
   isTipRackType,
+  labwareDefinitionRecordToEditorLabware,
   labwareDefinitionRecordToPayload,
   labwareRecordToEditorLabware,
   normalizeLabwareWithDefinition,
@@ -1024,7 +1030,21 @@ function LabwareEventEditorContent({
     aiContext: labwareAiContext,
     onAcceptEvent: addEvent,
     onAddLabwareFromRecord: (record, addition) => {
-      const labware = addLabwareFromRecord(record as unknown as LabwareRecordPayload)
+      // Spec decision 1 (topology-intact definition placement): when the person
+      // confirmed a labware DEFINITION in chat, the resolved record carries its
+      // own topology/capacity — place it through the definition-intact factory so
+      // the definitionId survives, instead of collapsing plate_96 through the
+      // legacy first-wins type map (gate defect 1+3: "Generic 96-Well Plate"
+      // came back as opentrons/nest_96_wellplate_200ul_flat@v1, 200 uL).
+      const definitionLabware = labwareDefinitionRecordToEditorLabware(
+        record as unknown as LabwareDefinitionRecordPayload,
+        addition?.recordId,
+      )
+      const labware = definitionLabware
+        ?? addLabwareFromRecord(record as unknown as LabwareRecordPayload)
+      if (definitionLabware) {
+        dispatch({ type: 'ADD_LABWARE', labware: definitionLabware })
+      }
       if (addition?.deckSlot === 'source') {
         setSourceLabware(labware.labwareId)
       } else if (addition?.deckSlot === 'target') {
