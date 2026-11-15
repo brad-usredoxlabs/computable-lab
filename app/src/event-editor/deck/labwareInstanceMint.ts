@@ -54,8 +54,15 @@ export function isResolvableDeckKey(
  *  only (an instance that cannot name its definition by record id is not a
  *  valid instance): (1) the records-first creation for this placement
  *  (created or reused definition); (2) the definition id the vessel carries
- *  (step 2 stamps it there by NAME); (3) a deck key that is itself a labware
- *  record id. Undefined = unresolvable.
+ *  (step 2 stamps it there by NAME); (2b) `sourceRecordId` — a SEEDED vessel
+ *  is a record the lab already owns (labwareRecordToEditorLabware sets it and
+ *  leaves `recordId` unset; key `lbw-seed-*` fails isResolvableDeckKey);
+ *  (3) a deck key that is itself a labware record id. Undefined = unresolvable.
+ *
+ *  u4seedref: NO `labwareId` arm — on a manual (non-record) vessel that field
+ *  is a random local id (`generateLabwareId`: `lw-<ts>-<rand>`), never a
+ *  definition record id, so reading it would be a guess. A seeded vessel
+ *  always carries `sourceRecordId`, which is the record id and only that.
  *
  *  THE ONE RULE: the mint and the pre-check both call this — they differ only
  *  in what they pass as `materialized` (the mint: what step 2 actually
@@ -68,6 +75,13 @@ export function resolveLabwareDefinitionId(
   const creation = materialized.find((c) => c.key === key && c.kind === 'labware')
   if (creation?.recordId) return creation.recordId
   if (typeof labware.recordId === 'string' && labware.recordId.length > 0) return labware.recordId
+  // A seeded vessel: the record the lab already owns (u4seedref).
+  if (
+    typeof labware.sourceRecordId === 'string' &&
+    labware.sourceRecordId.length > 0
+  ) {
+    return labware.sourceRecordId
+  }
   return isResolvableDeckKey(key, materialized) ? key : undefined
 }
 
