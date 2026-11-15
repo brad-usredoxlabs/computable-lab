@@ -94,8 +94,9 @@ Typecheck:
 
 ## Commits (shas read back with `git rev-parse HEAD`)
 
-- RED   38ea1fd527a5321c65c10d17098061ab00244e24  "test: L2-P1-AMBIGUOUS-OPTIONS-1 RED — ..."
-- GREEN dcdb9177a7a3dffd2853714ddae818f4c638f1eb  "fix: L2-P1-AMBIGUOUS-OPTIONS-1 (u1opts) — ..."
-- REPORT (this file, the commit CONTAINING this report — sha below in the marker line).
+- RED    38ea1fd527a5321c65c10d17098061ab00244e24  "test: L2-P1-AMBIGUOUS-OPTIONS-1 RED — ..."
+- GREEN  dcdb9177a7a3dffd2853714ddae818f4c638f1eb  "fix: L2-P1-AMBIGUOUS-OPTIONS-1 (u1opts) — ..."
+- REPORT 124ac7ad0836bc7c6227d2438496ca3238b9519e  "docs: L2-P1-AMBIGUOUS-OPTIONS-1 u1opts report + DONE marker"
+  (the report commit; this report's final revision references it — the marker line below names it).
 
-L2-P1-AMBIGUOUS-OPTIONS-1 UNIT u1opts DONE dcdb9177a7a3dffd2853714ddae818f4c638f1eb
+L2-P1-AMBIGUOUS-OPTIONS-1 UNIT L2-P1-AMBIGUOUS-OPTIONS-1 DONE 124ac7ad0836bc7c6227d2438496ca3238b9519e
