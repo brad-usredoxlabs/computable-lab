@@ -1474,6 +1474,29 @@ export function foldAnswersIntoShorthand(
       if (legacy) {
         fact = held.clarifications[Number(legacy[1]) - 1];
       }
+      // u5optbind (r13 defect 1): the card's emitted id is the ASK-TURN
+      // fact's content id. When the recompile re-derives that fact under a
+      // DIFFERENT label (the chosen label spliced in — the noun still bars
+      // because the identity never reached the compiler as a record), the
+      // RE-HELD fact mints a NEW content id and the exact-key join above
+      // misses. The answer's label IS the scientist's pick — the re-held
+      // fact's own label. Accept the content match only when the answer's
+      // label canonically names EXACTLY ONE held fact's label: the content
+      // is verified (the pick names that fact) and uniqueness keeps it a
+      // never-guess (two facts carrying the same canonical label ⇒ null,
+      // never picked — never a positional answer). Content ids ONLY: the
+      // legacy digits arm above and any non-content id keep their current
+      // behaviour byte-identically.
+      if (!fact && requestId.startsWith('unresolved-c-')) {
+        const answerLabel = typeof answer.label === 'string' ? answer.label.trim() : '';
+        if (answerLabel.length > 0) {
+          const key = canonicalLabelKey(answerLabel);
+          const contentMatches = held.clarifications.filter(
+            (candidate) => canonicalLabelKey(candidate.label) === key,
+          );
+          if (contentMatches.length === 1) fact = contentMatches[0];
+        }
+      }
     }
     if (!fact) return null;
     const label = typeof answer.label === 'string' && answer.label.trim().length > 0
@@ -1681,6 +1704,20 @@ export function foldNullArm(
     if (!fact) {
       const legacy = /^unresolved-(\d+)$/.exec(requestId);
       if (legacy) fact = held.clarifications[Number(legacy[1]) - 1];
+      // u5optbind (r13 defect 1): the byte-mirror of the fold's content-join
+      // arm (the SAME expressions — one edit here must be one edit there,
+      // the Leg-1 mirror discipline). Content ids only; uniqueness required
+      // (never a positional / never-guess arm).
+      if (!fact && requestId.startsWith('unresolved-c-')) {
+        const answerLabel = typeof answer.label === 'string' ? answer.label.trim() : '';
+        if (answerLabel.length > 0) {
+          const key = canonicalLabelKey(answerLabel);
+          const contentMatches = held.clarifications.filter(
+            (candidate) => canonicalLabelKey(candidate.label) === key,
+          );
+          if (contentMatches.length === 1) fact = contentMatches[0];
+        }
+      }
     }
     if (!fact) return { arm: 'join-miss', requestId };
     const label = typeof answer.label === 'string' && answer.label.trim().length > 0
