@@ -98,6 +98,9 @@ export function createRecordProvider(store: RecordStore, kinds: string[] = DEFAU
           level: KIND_LEVEL[kind] ?? 'unknown',
           ...(definition ? { definition } : {}),
           ...(iri ? { uri: iri } : {}),
+          // L2-P1-AMBIGUITY-TIER-RULE-1 u1: the record kind rides the existing
+          // termKind field for the declared candidatePrecedence rule (absent, never undefined).
+          ...(kind ? { termKind: kind } : {}),
           ...(declaresFormulation(payload) ? { formulationDeclared: true } : {}),
         });
         if (hits.length >= limit) return hits;

@@ -1024,6 +1024,12 @@ policies:
       min: 0.7
       max: 1
     strategyRef: declaration_precedence  # Ruling 11a181c0 Q1
+    # L2-P1-AMBIGUITY-TIER-RULE-1 u1 (ruling DEFINITION-IDENTITY-UNIQUENESS):
+    # legacy labware INELIGIBLE where the labware-definition candidate matches the
+    # SAME normalized label at the same demanded referent role — DATA; declaration_precedence applies it.
+    candidatePrecedence:
+      - whenKinds: [labware, labware-definition]
+        supersededByKind: labware-definition
     # Identity policy l2t2030: same (normalized_label, candidate_level) is ONE identity — the
     # store may not carry two local terms for one entity. survivor is an ORDERED list of policy
     # ids; each pass is fail-safe (never empties the set). ABSENT => no collapse, pre-fix bytes.

@@ -451,6 +451,21 @@ properties:
             description: >-
               Same-label collapse policy; ordered survivor ids, each pass fail-safe; ABSENT means
               no collapse. The closed enums are the never-guess wall (no fuzzy predicate can declare).
+          candidatePrecedence:
+            type: array
+            description: >-
+              Declared candidate-tier precedence (L2-P1-AMBIGUITY-TIER-RULE-1 u1): the
+              supersededByKind candidate is INELIGIBLE when the OTHER whenKinds-named kind
+              matches the same normalized label at the same demanded referent role.
+              declaration_precedence is the generic interpreter; ABSENT = pre-fix bytes.
+            items:
+              type: object
+              additionalProperties: false
+              unevaluatedProperties: false
+              required: [whenKinds, supersededByKind]
+              properties:
+                whenKinds: { type: array, minItems: 2, uniqueItems: true, items: { type: string, minLength: 1 } }
+                supersededByKind: { type: string, minLength: 1 }
       hintAuthority:
         type: object
         additionalProperties: false
