@@ -1,0 +1,9 @@
+item: L2-GC-AIA-PARSER-SHAPE-1
+unit: u1shape
+unit-id: L2-GC-AIA-PARSER-SHAPE-1-u1shape
+branch: cl/lane2-parsershape-u1-l2t2638
+base: 72c48ff82e67ffc057b2944ed626e116e0d3f673
+commits: 0573d482e (RED 3 failed | 3 passed (6)), b82ec765a (GREEN 6 passed (6)), ecd2f5615277da3146b19635f162d1063158870f (report)
+report: .hermes/reports/L2-GC-AIA-PARSER-SHAPE-1-u1shape-report.md
+typecheck: 6 errors at HEAD, all pre-existing in untouched files (AIHandlers.ts x3, AiIngestionHandlers.ts, ExtractProtocolHandler.ts, sequenceRoutes.ts); error-set diff vs base 72c48ff82 identical (0 delta, 0 in changed files)
+status: DONE

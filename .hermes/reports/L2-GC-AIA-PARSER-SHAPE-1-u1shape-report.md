@@ -135,3 +135,9 @@ measured delta introduced by this unit is 0.
 - 6 pre-existing typecheck errors (shared cl-integration-2 node_modules multipart typing) — environmental,
   delta 0 by proof above; owner: lane infra/orchestrator if a clean baseline is required.
 - Row count invariant holds: 1008 rows = 56 peaks x 18 fields (asserted, unchanged).
+
+Re-verified on final tree (report commit ecd2f5615277da3146b19635f162d1063158870f):
+`timeout 300 npx vitest run src/measurement/parsers/aiaCdfParser.test.ts` -> Tests 6 passed (6)
+(09:17:21, Duration 3.69s).
+
+L2-GC-AIA-PARSER-SHAPE-1-u1shape UNIT unit DONE ecd2f5615277da3146b19635f162d1063158870f
