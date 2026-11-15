@@ -90,8 +90,11 @@ describe('L2-P1-ABSENCE-PROBE-TIERS-1 u1probe — the absence probe has a defini
 
   it('(c) neither tier: the verbatim state-3 reason is kept', async () => {
     const store = seedStore();
+    // A head-word-bearing UNKNOWN noun: "plate" alone hits 5 seed definitions
+    // via name.includes, but "coral reef plate" hits none. A bare head-word
+    // hit must NOT fabricate a registry-presence claim (ruling 2).
     const reqs = await emptyTurnAbsenceRequests(
-      'Put the sample into the cryobox.',
+      'Put the sample into the coral reef plate.',
       createLabwareLookup(store),
       createLabwareDefinitionLookup(store),
     );
