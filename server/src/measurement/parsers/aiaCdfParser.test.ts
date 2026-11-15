@@ -18,10 +18,11 @@ const RUN_LENGTH = 3640.05;
 const SUM_AREA = 4419619.74;
 const SUM_AREA_PERCENT = 100.0;
 // data[] carries the 56-peak table as one row per peak field (18 x 56 = 1008
-// rows); the trace is summarized in metadata.
+// rows) keyed by peak index on channel 'chromatogram'; the full ordinate
+// series is carried on result.trace (summarized in metadata as well).
 const PEAK_FIELDS = 18;
 
-type Row = { metric: string; value: number; well: string; timeMin?: number; unit?: string };
+type Row = { metric: string; value: number; well: string; channelId?: string; timeMin?: number; unit?: string };
 const rowsByMetric = (data: Row[], metric: string): Row[] => data.filter((row) => row.metric === metric);
 
 function expectRefusal(fn: () => unknown, token: string): void {
@@ -48,7 +49,7 @@ describe('aiaAndiCdf parser (unit u1parser)', () => {
   it('echoes the file-declared units (seconds/pA) and the run metadata verbatim', () => {
     const result = aiaCdfParser.parseBytes(bytes);
     expect(result.parserId).toBe('aia_andi_cdf');
-    expect(result.assayType).toBe('gc_ms');
+    expect(result.assayType).toBe('gc_fid');
     expect(result.mimeType).toBe('application/x-netcdf');
     expect(result.units).toEqual({ time: 'seconds', intensity: 'pA' });
     const m = result.metadata;
@@ -71,11 +72,51 @@ describe('aiaAndiCdf parser (unit u1parser)', () => {
     expect(Math.abs(Number(m?.['run_time_length_seconds']) - RUN_LENGTH)).toBeLessThan(0.01);
   });
 
-  it('emits the 56-peak table as rows keyed by retention time (one metric per peak field)', () => {
+  it('derives assayType gc_fid from the file detector and carries the full ordinate trace (D2, D3)', () => {
+    const result = aiaCdfParser.parseBytes(bytes);
+    // D2: the file declares detector_name "FID1 A," / detector_unit pA, so the
+    // result says gc_fid — and where the type came from is noted in metadata.
+    expect(result.assayType).toBe('gc_fid');
+    expect(result.metadata?.['assay_type_source']).toBe('detector_name');
+    // D3: the ordinate series itself is carried, in file order, on the same
+    // sampling interval metadata already reports (0.05 s per point).
+    const trace = result.trace;
+    expect(trace).toBeDefined();
+    expect(trace?.channelId).toBe('chromatogram');
+    expect(trace?.values.length).toBe(POINTS);
+    expect(trace?.samplingIntervalSeconds).toBeCloseTo(SAMPLING_INTERVAL, 4);
+    expect(trace?.timeUnit).toBe('seconds');
+    expect(trace?.intensityUnit).toBe('pA');
+    // First and last samples sit near baseline (~9.8 pA on this file).
+    expect(Math.abs(trace?.values[0] - 9.8)).toBeLessThan(1);
+    expect(Math.abs(trace?.values[trace?.values.length - 1] - 9.8)).toBeLessThan(20);
+    // The 6.56 min peak: index 6.56 / 0.05 = 7872.
+    expect(trace?.values[7872]).toBeGreaterThan(200000);
+  });
+
+  it('emits the 56-peak table keyed by peak index on the chromatogram channel (one metric per peak field)', () => {
     const result = aiaCdfParser.parseBytes(bytes);
     expect(result.data.length).toBe(PEAKS * PEAK_FIELDS);
     const rt = rowsByMetric(result.data, 'peak_retention_time');
     expect(rt.length).toBe(PEAKS);
+    // D1: a chromatogram has no wells — `well` is the 1-based peak index and
+    // every row names its channel. The retention time lives in the
+    // peak_retention_time value and timeMin, nowhere else.
+    const seenWells = new Set<string>();
+    for (const row of result.data) {
+      expect(row.channelId).toBe('chromatogram');
+      seenWells.add(row.well);
+    }
+    expect(seenWells.size).toBe(PEAKS);
+    for (let i = 1; i <= PEAKS; i += 1) {
+      expect(seenWells.has(String(i))).toBe(true);
+    }
+    for (const row of rt) {
+      expect(row.well).toBe(String(Number(row.well)));
+      const v = row.value!;
+      expect(v).toBeGreaterThan(0);
+      expect(Number.isFinite(v / 60)).toBe(true);
+    }
     // Retention times are strictly increasing (file order is preserved);
     // timeMin is the declared seconds / 60, with the conversion noted in metadata.
     for (let i = 1; i < rt.length; i += 1) {
