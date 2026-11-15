@@ -40,6 +40,7 @@ import {
   type TermDecision,
 } from './acceptedOntologyBindings'
 import { materializeAcceptedRecordCreations } from './acceptedRecordCreations'
+import { mintPlacedLabwareInstances } from './labwareInstanceMint'
 
 /** A proposed ontology term that requires the scientist's sign-off (gate on
  *  Accept). Ported verbatim from PreviewActionBar — the gate lives HERE, in
@@ -92,6 +93,11 @@ export type DeckAdoptionResult =
       eventCount: number
       placementCount: number
       labwareCount: number
+      /** L2-P1-LABWARE-INSTANCE-RECORD-1 u1inst: the labware-instance ids
+       *  minted for the placed labwares. Optional on the type (the shared
+       *  DeckAdoptionOutcome contract is consumed by pre-existing useAiChat
+       *  mocks); adoptStagedPreview always populates it. */
+      instanceIds?: string[]
       persisted: PersistAcceptedEventGraphResult
     }
 
@@ -119,6 +125,16 @@ export async function adoptStagedPreview(
     labwares: preview.previewLabwares,
   })
   for (const warning of creations.warnings) console.warn(`[record creation] ${warning}`)
+
+  // 2b. One labware-instance per placed labware (L2-P1-LABWARE-INSTANCE-RECORD-1
+  //     u1inst): after the records-first DEFINITION creations (the definition
+  //     exists first) and before the durable persist below. An unresolvable
+  //     definition record id mints nothing and is named in the warnings.
+  const minted = await mintPlacedLabwareInstances({
+    previewLabwares: preview.previewLabwares,
+    materialized: creations.materialized ?? [],
+  })
+  for (const warning of minted.warnings) console.warn(`[labware instance] ${warning}`)
 
   // 3. Ontology mint under the signed-off decisions.
   const materialized = await materializeAcceptedOntologyBindings(
@@ -154,6 +170,7 @@ export async function adoptStagedPreview(
     eventCount: acceptedEvents.length,
     placementCount: preview.previewPlacements.length,
     labwareCount: Object.keys(preview.previewLabwares).length,
+    instanceIds: minted.instanceIds,
     persisted,
   }
 }

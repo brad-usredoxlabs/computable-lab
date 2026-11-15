@@ -118,21 +118,21 @@ describe('mintPlacedLabwareInstances — one instance per placed labware, defini
   it('a deck key that is itself a labware record id resolves even without a materialized creation', async () => {
     const createRecord = vi.fn(async (_schemaId: string, _payload: Record<string, unknown>) => undefined)
     const res = await mintPlacedLabwareInstances({
-      previewLabwares: { 'LBW-DECKKEY': mkLabware('LBW-DECKKEY') },
+      previewLabwares: { 'LW-1A2B3C4D': mkLabware('LW-1A2B3C4D') },
       materialized: [],
       createRecord,
     })
     expect(createRecord).toHaveBeenCalledTimes(1)
     const payload = createRecord.mock.calls[0][1] as { labwareId: string }
-    expect(payload.labwareId).toBe('LBW-DECKKEY')
+    expect(payload.labwareId).toBe('LW-1A2B3C4D')
     expect(res.instanceIds).toHaveLength(1)
   })
 
-  it('tolerates a missing materialized list (call site passes creations.materialized ?? [])', async () => {
+  it('tolerates an empty materialized list (a placement with no creation resolves via the vessel id or is a named gap)', async () => {
     const createRecord = vi.fn(async (_schemaId: string, _payload: Record<string, unknown>) => undefined)
     const res = await mintPlacedLabwareInstances({
       previewLabwares: { P1: mkLabware('P1', { recordId: 'LBW-SET' }) },
-      materialized: undefined,
+      materialized: [],
       createRecord,
     })
     expect(createRecord).toHaveBeenCalledTimes(1)
