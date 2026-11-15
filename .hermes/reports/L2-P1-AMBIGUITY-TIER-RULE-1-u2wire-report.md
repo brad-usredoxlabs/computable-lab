@@ -42,3 +42,4 @@ no mapping list, no YAML, no app/, ResolveSpine.ts/strategies.ts/resolutionEngin
 ## Next actions
 None for this unit. Lane/orchestrator: live stack reload not required (TS code, no YAML).
 Acceptance review: re-run the two vitest commands + typecheck above on e123d922.
+L2-P1-AMBIGUITY-TIER-RULE-1-u2wire UNIT u2wire DONE f839f3f1f0368de628bfa1ddf49c0a2d99478cf4
