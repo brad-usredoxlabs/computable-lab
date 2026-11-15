@@ -98,6 +98,32 @@ describe('aiaAndiCdf parser (unit u1parser)', () => {
     expect(trace?.values[7872]).toBeGreaterThan(250000);
   });
 
+  it('names a fallback assay_type_source when detector_name is unrecognized or empty (D2)', () => {
+    // Same-length rewrite of the declared detector_name inside the real fixture:
+    // the CDF offsets and every other value stay byte-identical.
+    const withDetector = (to: string): Buffer => {
+      const buf = Buffer.from(bytes);
+      const at = buf.indexOf('FID1 A, \0', 0, 'latin1');
+      expect(at).toBeGreaterThan(0);
+      Buffer.from(to, 'latin1').copy(buf, at);
+      return buf;
+    };
+    // TCD is a real GC detector this parser does not map yet: keep today's
+    // gc_ms fallback but SAY it was a fallback and which name it could not map.
+    const tcd = aiaCdfParser.parseBytes(withDetector('TCD1 A, \0'));
+    expect(tcd.assayType).toBe('gc_ms');
+    const tcdSource = tcd.metadata?.['assay_type_source'] ?? '';
+    expect(tcdSource).toContain('fallback');
+    expect(tcdSource).not.toBe('detector_name');
+    expect(tcdSource).toContain('TCD1 A,');
+    // A declared-but-blank detector_name is equally a fallback, not a derivation.
+    const blank = aiaCdfParser.parseBytes(withDetector('\0\0\0\0\0\0\0\0\0'));
+    const blankSource = blank.metadata?.['assay_type_source'] ?? '';
+    expect(blankSource).toContain('fallback');
+    expect(blankSource).not.toBe('detector_name');
+    expect(blankSource).toContain('empty');
+  });
+
   it('emits the 56-peak table keyed by peak index on the chromatogram channel (one metric per peak field)', () => {
     const result = aiaCdfParser.parseBytes(bytes);
     expect(result.data.length).toBe(PEAKS * PEAK_FIELDS);

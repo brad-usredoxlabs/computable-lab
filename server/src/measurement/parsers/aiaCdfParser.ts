@@ -206,19 +206,32 @@ function parseAiaCdf(bytes: Buffer): MeasurementParseResult {
   metadata['trace_max_value'] = String(traceMax);
   metadata['trace_unit'] = intensityUnit;
   metadata['time_axis'] = `retention in ${retentionUnit}; timeMin = ${retentionUnit} / 60`;
-  // D2: derive the assay type from the file's own detector declaration.
+  // D2: derive the assay type from the file's own detector declaration. Only a
+  // DETECTED declaration may be reported as 'detector_name'; every other path is
+  // a fallback and must say so — a present-but-unmapped name (TCD/ECD/blank) is
+  // not a derivation, it is today's gc_ms default.
   const detectorName = gattrs['detector_name'];
-  const detectorNameUpper = (detectorName ?? '').toUpperCase();
+  const detectorLabel = (detectorName ?? '').trim();
+  const detectorNameUpper = detectorLabel.toUpperCase();
   let assayType: MeasurementParseResult['assayType'];
+  let assayTypeSource: string;
   if (detectorNameUpper.startsWith('FID')) {
     assayType = 'gc_fid';
+    assayTypeSource = 'detector_name';
   } else if (detectorNameUpper.includes('MSD') || detectorNameUpper.includes('MS ')) {
     assayType = 'gc_ms';
+    assayTypeSource = 'detector_name';
   } else {
     // Today's fallback, kept and made explicit.
     assayType = 'gc_ms';
+    assayTypeSource =
+      detectorName === undefined
+        ? 'fallback (no detector_name declared)'
+        : detectorLabel === ''
+          ? 'fallback (detector_name declared empty)'
+          : `fallback (unrecognized detector_name "${detectorLabel}")`;
   }
-  metadata['assay_type_source'] = detectorName !== undefined ? 'detector_name' : `fallback (no ${'detector_name'} declared)`;
+  metadata['assay_type_source'] = assayTypeSource;
 
   const peaks = retention.elems;
   const peakFieldVars = PEAK_FIELDS.map((field) => ({ field, v: findVar(field.name) })).filter(
