@@ -1726,9 +1726,37 @@ export function createAgentOrchestrator(
             // L2-NOUN-RESOLUTION-POLICY-1 A1: derive AnsweredNounAnswer[] from
             // the fold's accepted bindings BEFORE building the deps object
             // (the mapper is async — store.get reads must complete).
+            // L2-P1-AMBIGUOUS-OPTIONS-1 / u4foldbind (r12 D1): when the fold
+            // recorded NO bindings the tier-1 direct bind must STILL ride the
+            // recompile. A plain option pick splices through the DECLARED-kind
+            // arm (shorthandChat.ts:1510-1535 — the wells/quantity arm writes
+            // the slot and `continue`s before the binding block), so the
+            // answer's record identity — which rides the answer's OWN `ref`
+            // (the id in `ref.id`, the card's shape — never a mint) — is the
+            // only source of the id. Synthesize the binding straight from the
+            // ref (label = the HELD fact's label — the bar's noun; id = the
+            // ref's record id) and run it through the SAME mapper: the
+            // store.get skip keeps the never-guess contract, and a ref-less
+            // answer yields no binding (today's behaviour, byte-identical).
+            const foldAnswerBindings: AcceptedShorthandBinding[] = [];
+            if (folded.bindings.length === 0) {
+              for (const answer of foldAnswers) {
+                const id = (answer.ref as { id?: unknown } | undefined)?.id;
+                const recordId = typeof id === 'string' && id.trim().length > 0 ? id.trim() : null;
+                if (!recordId) continue;
+                const fact = held.clarifications.find((f) => factRequestId(f) === answer.requestId);
+                if (!fact) continue;
+                foldAnswerBindings.push({
+                  label: fact.label,
+                  ref: recordId.startsWith('local:') ? recordId : `local:${recordId}`,
+                });
+              }
+            }
+            const effectiveFoldBindings =
+              folded.bindings.length > 0 ? folded.bindings : foldAnswerBindings;
             const answeredFromFold =
-              deps.store && folded.bindings.length > 0
-                ? await bindingsToAnsweredSlots(folded.bindings, deps.store)
+              deps.store && effectiveFoldBindings.length > 0
+                ? await bindingsToAnsweredSlots(effectiveFoldBindings, deps.store)
                 : [];
             // GHOSTPAINT-1 Leg 2B: before compile, inject the sole deck
             // placement's labwareId into well-bearing actions that carry no
