@@ -13,7 +13,7 @@
 | 1d1e9bf386afaea90aebffd2be17907963d041fb | FIX-1 / FIX-2a / FIX-2b / FIX-4 in `clarifications.ts` + the 5 new pins in `clarifications.emptyTurn.test.ts` |
 | 1d14b9e36558284be0e1fb08b4a6e42cc12e11cf | FIX-3 leg in `AgentOrchestrator.finalAnswerEmpty.test.ts` (test-only) |
 | 6a8a2f071674956d4720b8ba6b056d5fb1fb2dbf | comment trim, no behavior change |
-| (report) | this file |
+| 9841578d9e1e3519268dbbf2ce4c5076312cf9a2 | this report |
 
 Changed: `server/src/ai/clarifications.ts`, `server/src/ai/clarifications.emptyTurn.test.ts`,
 `server/src/ai/AgentOrchestrator.finalAnswerEmpty.test.ts`. 201 added / 5 removed lines —
@@ -166,3 +166,5 @@ to base; my diff is confined to two pure-function edits in clarifications.ts plu
   `EMPTY_TURN_NOISE` rule decided, see the FIX-1 observation. Not taken in this unit.
 - reviewer: the FIX-4 arm placement deviation above is the one intentional departure from the
   brief's literal wording; it exists to satisfy the brief's own pin.
+
+L2-P1-EMPTY-TURN-CARD-2 UNIT L2-P1-EMPTY-TURN-CARD-2 DONE 9841578d9e1e3519268dbbf2ce4c5076312cf9a2
