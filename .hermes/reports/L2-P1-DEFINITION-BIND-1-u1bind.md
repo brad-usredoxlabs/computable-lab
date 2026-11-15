@@ -120,3 +120,5 @@ the new test file; no fourth file, nothing outside SCOPE touched.
 - Not changed, flagged for the orchestrator: A1's draft ghost for a store-backed
   definition still previews as the legacy vendor plate until the preview path can
   receive the resolved record (needs a data decision, not a mapping fix).
+
+L2-P1-DEFINITION-BIND-1 UNIT unit DONE 8cbfd73b777df82fa032c0fbe7eda4339cd74326
