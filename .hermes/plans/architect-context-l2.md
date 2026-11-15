@@ -188,6 +188,11 @@ tripwire below compares one hash against one file).
   changed corpus needs every utterance re-verified and the hash re-pinned, never a blanket accept.
 - `~/.hermes/cl/lanes/2/corpus-state.md` — which scenario is active, and the old→new id mapping for
   old receipts.
+- `~/.hermes/cl/lanes/2/ladders/<scenario>-ladder.md` — DERIVED instrument, not canon (Brad 2026-11-15:
+  "leave my canonical version alone and you could make a sub-version which breaks the prompts down more
+  granularly so we can test one feature at a time"). A ladder drives ONE feature per rung so a failure
+  names the layer; it NEVER certifies a scenario. Canon's `completed_when`/`not_done_if` remain the only
+  acceptance, and a green ladder is never a WORKS row.
 
 ## 5. Active rulings (committed, binding, do not re-litigate in code)
 
