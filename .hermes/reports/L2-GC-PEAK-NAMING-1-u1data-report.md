@@ -55,3 +55,5 @@ material.seed.test.ts note: the suite is skipped by design — line 16 calls `de
 
 ## Verdict
 Implementation complete: all four acceptance criteria met with real run output above. Acceptance (browser/adversarial review) is a separate state.
+
+L2-GC-PEAK-NAMING-1-u1data UNIT unit DONE b8e29be2840326141f59b1883832113c6e844004
