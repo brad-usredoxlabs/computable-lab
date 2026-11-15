@@ -126,6 +126,22 @@ export async function adoptStagedPreview(
   )
   if (unsigned.length > 0) return { adopted: false, blocked: unsigned.length }
 
+  // 1b. Ghost-gate (L2-P1-LABWARE-INSTANCE-RECORD-1 u2ghostgate; r10 defect 4):
+  //     a placed labware whose DEFINITION record id cannot resolve (no
+  //     records-first creation for it, none on the vessel, no record-id deck
+  //     key) mints no instance (labwareInstanceMint) — yet the persist below
+  //     writes the WHOLE previewLabwares map. Refuse in the SAME shape as the
+  //     sign-off gate, BEFORE any write: a visible gap, never a guess.
+  const unplaceable = findUnplaceableLabware(preview.previewLabwares, preview.recordCreations)
+  if (unplaceable.length > 0) {
+    for (const key of unplaceable) {
+      console.warn(
+        `[labware instance] ${key} was placed without a resolvable labware definition record id — the accept is refused until it resolves (no ghost labware is persisted).`,
+      )
+    }
+    return { adopted: false, blocked: unplaceable.length }
+  }
+
   // 2. The ADDs first: records the lab does not have become real records
   //    here (records-first: an existing match is reused with a warning).
   const creations = await materializeAcceptedRecordCreations(preview.recordCreations, {
