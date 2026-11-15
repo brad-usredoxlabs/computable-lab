@@ -1,0 +1,14 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+kind: material
+id: mat-seed-fame-methyl-decanoate-n10
+recordId: mat-seed-fame-methyl-decanoate-n10
+name: Methyl decanoate (FAME, 10:0-OMe) reference standard (seed)
+domain: chemical
+definition: >
+  Methyl decanoate (FAME, 10:0-OMe), the methyl-ester reference standard for the
+  GC-FID FAME method. Seed material record; the species is distinct from the
+  free decanoic acid (fame-local.yaml, one term per entity).
+tags:
+  - reference-standard
+  - FAME
+  - seed

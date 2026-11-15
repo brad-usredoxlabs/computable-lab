@@ -1,12 +1,14 @@
-# GC-2 F: the medium-chain FAME standards the GC-FID FAME method runs.
-# candidates = the 6:0/8:0/10:0 METHYL ESTERS (the actual standards); the
+# GC-2 F: the FAME standards the GC-FID FAME method runs.
+# candidates = the 6:0 through 20:0 METHYL ESTERS (the actual standards); the
 # free fatty acid species are NOT candidates of this class.
 id: fame-medium-chain
 name: "FAME medium chain (6:0-10:0 methyl esters)"
 description: >
   Medium-chain methyl fatty acid esters (FAMEs) used as GC-FID standards:
-  methyl hexanoate, methyl octanoate, methyl decanoate. Distinct species from
-  the corresponding free fatty acids (fame-local.yaml, one term per entity).
+  methyl hexanoate, methyl octanoate, methyl decanoate, methyl myristate,
+  methyl pentadecanoate, methyl palmitate, methyl heptadecanoate and methyl
+  arachidate (the full 6:0-20:0 standard set). Distinct species from the
+  corresponding free fatty acids (fame-local.yaml, one term per entity).
 chebi_ids:
   - CHEBI:77322
   - CHEBI:87432
@@ -18,3 +20,13 @@ candidates:
     name: Methyl octanoate (FAME, 8:0-OMe)
   - compoundId: FAME-LOCAL:methyl-decanoate-n10
     name: Methyl decanoate (FAME, 10:0-OMe)
+  - compoundId: FAME-LOCAL:methyl-myristate-n14
+    name: Methyl myristate (FAME, 14:0-OMe)
+  - compoundId: FAME-LOCAL:methyl-pentadecanoate-n15
+    name: Methyl pentadecanoate (FAME, 15:0-OMe)
+  - compoundId: FAME-LOCAL:methyl-palmitate-n16
+    name: Methyl palmitate (FAME, 16:0-OMe)
+  - compoundId: FAME-LOCAL:methyl-heptadecanoate-n17
+    name: Methyl heptadecanoate (FAME, 17:0-OMe)
+  - compoundId: FAME-LOCAL:methyl-arachidate-n20
+    name: Methyl arachidate (FAME, 20:0-OMe)
