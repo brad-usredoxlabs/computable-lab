@@ -84,3 +84,5 @@ ENV: server/node_modules re-linked once to cl-integration-2 (it is untracked; no
 ## Commits
 
 1ce509494 (D2/D5 test) · 8738fc6af (D3 parser + test) · ab90f4e75 (D4 text)
+
+UNIT L2-GC-AIA-PARSER-SHAPE-1-u2fix DONE 6aec6da70b08c14eaeb9475475915ab18534b2c4
