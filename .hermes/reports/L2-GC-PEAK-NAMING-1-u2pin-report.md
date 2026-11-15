@@ -72,3 +72,5 @@ workspace run before app/ tsc executes (same as the brief's pre-existing note).
 
 - server/src/registry/CompoundClassRegistry.test.ts (only code file, +5/-1 lines)
 - .hermes/reports/L2-GC-PEAK-NAMING-1-u2pin-report.md (this report)
+
+L2-GC-PEAK-NAMING-1-u2pin UNIT L2-GC-PEAK-NAMING-1-u2pin DONE 6d80dbbe190fa6754884a482b5fa881dbce29762
