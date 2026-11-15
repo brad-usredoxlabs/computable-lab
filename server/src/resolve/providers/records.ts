@@ -20,6 +20,7 @@ const DEFAULT_KINDS = [
   'aliquot',
   'vendor-product',
   'labware',
+  'labware-definition',
 ];
 
 const KIND_LEVEL: Record<string, MaterialLevel> = {
