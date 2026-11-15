@@ -150,3 +150,49 @@ describe('L2-P1-EMPTY-TURN-CARD-2 u2mentionfix — the phrase extractor keeps th
     expect(normalizeClarificationKind('well')).toBe('well-selection');
   });
 });
+
+// ---------------------------------------------------------------------------
+// L2-P1-EMPTY-TURN-CARD-2 u3falseabsence — cycle-2 adversarial DEFECT 1 (MAJOR):
+// the kept-whole CLAUSE candidate was probed against the SHIPPED name tier
+// (compiler/labwareLookup.ts:135 `normalizedName.includes(normalized)`), where
+// the record NAME must contain the HINT. A clause hint is longer than any
+// record name, so it could never match even when the lab HELD the labware —
+// a FALSE absence card. The stub below is the shipped direction (name includes
+// hint, lowercased); the earlier /plate/i stub accepted clauses and hid this.
+// ---------------------------------------------------------------------------
+
+const HELD_RECORDS = ['Generic 96 Well Plate', 'Generic 12-Channel Reservoir', 'Cool Rack'];
+
+/** Shipped name-tier direction: a record matches when its NAME contains the hint. */
+function shippedLookup(records: string[] = HELD_RECORDS) {
+  return async (hint: string): Promise<Array<{ recordId: string; title: string }>> => {
+    const normalized = hint.trim().toLowerCase();
+    return records
+      .filter((name) => name.toLowerCase().includes(normalized))
+      .map((name, index) => ({ recordId: `LAB-${index}`, title: name }));
+  };
+}
+
+describe('L2-P1-EMPTY-TURN-CARD-2 u3falseabsence — cycle-2 DEFECT 1: a held record is never falsely declared absent', () => {
+  const HELD_TURNS = [
+    'Put the sample into the 96-well plate.',
+    'Add 10 uL to the reservoir.',
+    'Place it in the plate.',
+    'Take the plate from the rack and put it on the deck.',
+  ];
+
+  for (const sentence of HELD_TURNS) {
+    it(`a turn naming HELD labware gets no card — ${sentence}`, async () => {
+      // RED at 98dbc2f18: the clause hint never matches a record name → false card.
+      expect(await emptyTurnAbsenceRequests(sentence, shippedLookup())).toEqual([]);
+    });
+  }
+
+  it('a genuinely ABSENT labware still gets exactly one absence request', async () => {
+    const reqs = await emptyTurnAbsenceRequests('Put it in the cryobox.', shippedLookup());
+    expect(reqs).toHaveLength(1);
+    expect(reqs[0]!.kind).toBe('labware');
+    // The mention contract is UNCHANGED: the full candidate, original casing.
+    expect(reqs[0]!.absence?.mention).toBe('it in the cryobox');
+  });
+});
