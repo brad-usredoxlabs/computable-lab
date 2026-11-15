@@ -169,4 +169,10 @@ manufacture an accept control the server denied).
   failure dump contains zero references to the workstate proposal flow or the
   sessionStorage key. Pre-existing flaky on trunk.
 
-L2-P1-THREAD-RESTORE-1 UNIT unit DONE <sha-fills-here>
+Marker convention (EMPTY-TURN-CARD-2 precedent): the report is committed
+first (0e5689cde380a6092488d76f3ef60349d3d401a7 — the commit that CONTAINS
+this report), then the marker line is appended in a follow-up commit, so the
+cited SHA is real and exists in the branch history. `git rev-parse HEAD` at
+marker time = the report commit above (post-GREEN, as the brief requires).
+
+L2-P1-THREAD-RESTORE-1 UNIT L2-P1-THREAD-RESTORE-1 DONE 0e5689cde380a6092488d76f3ef60349d3d401a7
