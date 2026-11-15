@@ -1452,6 +1452,58 @@ export function createLabwareFromDefinitionPayload(
   }
 }
 
+/**
+ * A labware-definition RECORD payload as returned by GET /api/records
+ * (records/seed/labware-definition/*.yaml). Unlike LabwareRecordPayload it
+ * carries the definition's own topology/capacity — exactly what the legacy
+ * record mapper (labwareRecordToEditorLabware) collapses away through the
+ * first-wins legacy-type map.
+ */
+export interface LabwareDefinitionRecordPayload {
+  recordId?: string
+  id?: string
+  definitionId?: string
+  display_name?: string
+  name?: string
+  topology?: LabwareDefinition['topology']
+  capacity?: LabwareDefinition['capacity']
+  render_hints?: LabwareDefinition['render_hints']
+  physical_geometry?: LabwareDefinition['physical_geometry']
+  legacy_labware_types?: string[]
+}
+
+/**
+ * Spec decision 1 (topology-intact definition placement) for a resolved
+ * definition RECORD: place through createLabwareFromDefinitionPayload so the
+ * confirmed definition's own topology, capacity and definitionId survive —
+ * instead of resolving plate_96 through the legacy first-wins type map (which
+ * yields the first vendor plate, e.g. nest 200 uL, for every 96-well record).
+ *
+ * Returns null when the record is not topology-carrying; callers keep the
+ * existing legacy chain for those, unchanged.
+ */
+export function labwareDefinitionRecordToEditorLabware(
+  record: LabwareDefinitionRecordPayload | null | undefined,
+  fallbackRecordId?: string,
+): Labware | null {
+  if (!record?.topology || !record.capacity) return null
+  const definitionId = record.definitionId ?? record.id
+  const recordId = record.recordId ?? fallbackRecordId ?? definitionId
+  const label = record.display_name ?? record.name ?? definitionId ?? recordId
+  if (!recordId || !label) return null
+  return createLabwareFromDefinitionPayload({
+    recordId,
+    label,
+    kind: 'labware-definition',
+    ...(definitionId ? { definitionId } : {}),
+    topology: record.topology,
+    capacity: record.capacity,
+    ...(record.render_hints ? { render_hints: record.render_hints } : {}),
+    ...(record.physical_geometry ? { physical_geometry: record.physical_geometry } : {}),
+    ...(record.legacy_labware_types ? { legacy_labware_types: record.legacy_labware_types } : {}),
+  })
+}
+
 export function normalizeLabwareWithDefinition(labware: Labware): Labware {
   const byId = getLabwareDefinitionById(labware.definitionId)
   const byType = getLabwareDefinitionByLegacyType(labware.labwareType)
