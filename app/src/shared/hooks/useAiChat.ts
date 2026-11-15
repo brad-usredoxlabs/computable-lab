@@ -378,6 +378,17 @@ export interface UseAiChatReturn {
    * identity). Absent without an `endpoint`.
    */
   listThreads?: () => Promise<ThreadSummary[]>
+  /**
+   * L2-P1-THREAD-RESTORE-1 u4scope: the resolved sessionStorage tab id for
+   * THIS chat's (tab, scope) — the exact key the hook mints/persists under
+   * (`getThreadTabId(activeThread.scope)`, same single mint the wire header
+   * uses; mints nothing new). Present only on thread-scoped chats. The
+   * ThreadPicker resume check MUST read the id THROUGH here, never call
+   * getThreadTabId() bare: the bare read hits the no-scope bucket and never
+   * matches a scoped host's persisted row (r12 legB: run-door reload never
+   * resumes).
+   */
+  tabThreadId?: () => string | undefined
 }
 
 /**
@@ -1126,6 +1137,19 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
     if (!held) userSwitchRef.current = false
     setActiveThread(next)
   }, [endpoint, scope, scopeStatus])
+
+  // L2-P1-THREAD-RESTORE-1 u4scope: the resolved (tab, scope) tab id the
+  // ThreadPicker resume check reads. THE pane's load closure is stale by
+  // construction (it captures the first-render chat — see the pane's
+  // activeIdRef comment), so the accessor reads the STABLE ref at CALL time
+  // (one render after the lazy-mint resolves the pair, the ref is current)
+  // and keeps a stable identity (useCallback on the ref) so the pane's
+  // load-dep array never re-fires on accessor churn. Absent until the
+  // lazy-mint has run (activeThread null → undefined).
+  const tabThreadId = useCallback(
+    () => (activeThreadRef.current ? resolveTabThreadId(activeThreadRef.current.scope) : undefined),
+    [activeThreadRef],
+  )
 
   useEffect(() => {
     if (!endpoint) {
@@ -2913,6 +2937,10 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
           switchThread: switchThread,
           newThread: newThread,
           listThreads: listThreadsForChat,
+          // L2-P1-THREAD-RESTORE-1 u4scope: the resolved (tab, scope) tab id
+          // for the ThreadPicker's resume check (reads the stable ref at
+          // call time — the pane's load closure is stale by construction).
+          tabThreadId: tabThreadId,
         }
       : {}),
   }
