@@ -71,3 +71,5 @@ A turn whose ONLY extracted candidate is exactly the bare head word (e.g. "Place
 on the deck.") now reads state 3 even if a definition contains "plate". This is the intended
 precision trade per brief: a bare head word cannot ground a registry-presence claim about a
 specific noun. Pin (d) is unaffected because its forms are full display names (score >= 90).
+
+L2-P1-ABSENCE-PROBE-TIERS-1 UNIT u2precision DONE 7c21af669a1799cd2eb8166176ba8e3d2a86f7c8
