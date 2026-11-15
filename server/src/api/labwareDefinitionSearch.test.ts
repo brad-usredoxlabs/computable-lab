@@ -41,8 +41,19 @@ function buildValidator() {
 }
 
 function storeWith(payloads: Array<Record<string, unknown>>) {
+  // FAITHFUL TO PRODUCTION (fixed 2026-11-14): a real labware-definition record
+  // keeps its identity on the ENVELOPE (types/RecordEnvelope.ts:41-46) and the
+  // payload carries only `id` ("generic/reservoir_12@v1"), never `recordId`.
+  // This stub used to pass `{ payload }` with the recordId still inside the
+  // payload — a shape production never produces — which is why the picker could
+  // offer zero definitions while these tests stayed green. Strip the id into the
+  // envelope, exactly as the store does.
   return {
-    list: async () => payloads.map((payload) => ({ payload })),
+    list: async () =>
+      payloads.map((raw) => {
+        const { recordId, ...payload } = raw as { recordId?: unknown };
+        return { recordId: typeof recordId === 'string' ? recordId : '', payload };
+      }),
   } as unknown as LabwareDefinitionSearchOptions['store'];
 }
 
@@ -362,5 +373,36 @@ describe('offerability: store-backed membership is the single authority', () => 
       process.cwd = realCwd;
     }
     await app.close();
+  });
+});
+
+// REGRESSION (measured 2026-11-14, served stack): the deck picker offered ZERO
+// definitions and told the person the lab held none of its 41 labware-definition
+// records. Cause: the store tier mapped `env.payload` only, while a real payload
+// carries `id` and NO recordId (the envelope owns it), so the membership set was
+// always empty. This test uses the exact production wire shape — identity on the
+// envelope, payload without it — and fails if that regresses.
+describe('identity lives on the ENVELOPE, not the payload (production wire shape)', () => {
+  it('a store record whose payload has no recordId is still offerable', async () => {
+    const store = {
+      list: async () => [
+        {
+          recordId: 'lbw-def-generic-96-well-plate',
+          payload: {
+            kind: 'labware-definition',
+            type: 'labware_definition',
+            id: 'generic/96_well_plate@v1',
+            display_name: 'Generic 96-Well Plate',
+            source: 'generic',
+            specificity: 'generic',
+          },
+        },
+      ],
+    } as unknown as LabwareDefinitionSearchOptions['store'];
+    const { hits } = await searchLabwareDefinitions({ store, q: '96-well' });
+    const hit = hits.find((h) => h.recordId === 'lbw-def-generic-96-well-plate');
+    expect(hit, 'the store-backed generic 96-well plate must be found').toBeDefined();
+    expect(hit!.offerable, 'a store record is lab stock even when the payload omits recordId').toBe(true);
+    expect(hit!.offer_reason, 'no reason key on an offerable hit').toBeUndefined();
   });
 });

@@ -171,9 +171,24 @@ export async function searchLabwareDefinitions(
   } else {
     try {
       const envelopes = await options.store.list({ kind: 'labware-definition' });
+      // THE ENVELOPE OWNS THE IDENTITY (fixed 2026-11-14, measured: the deck
+      // picker offered ZERO definitions and told the person the lab holds none
+      // of its 41 labware-definition records). `RecordEnvelope.recordId` is the
+      // ONLY authoritative identity (types/RecordEnvelope.ts:41-46); a
+      // labware-definition PAYLOAD carries `id` ("generic/96_well_plate@v1") and
+      // no recordId at all. Mapping payloads only therefore built an EMPTY
+      // membership set below, so every hit was flagged "no record in the lab
+      // store" — a false claim about the lab, and the reason nothing could be
+      // placed from the picker. Carry the envelope's recordId onto the candidate.
       recordCandidates = envelopes
-        .map((env) => (env.payload ?? {}) as DefinitionLike)
-        .filter((p) => p && typeof p === 'object');
+        .map((env) => {
+          const payload = (env.payload ?? {}) as Record<string, unknown>;
+          const envelopeId = typeof env.recordId === 'string' ? env.recordId : '';
+          // The envelope wins: a payload-borne recordId that disagrees is a data
+          // defect, and silently preferring either would hide it.
+          return { ...payload, recordId: envelopeId } as DefinitionLike;
+        })
+        .filter((p) => typeof p.recordId === 'string' && p.recordId.length > 0);
       storeTier = { status: 'searched' };
     } catch (error) {
       // A broken record store must not blank the vendored tier — but it must
