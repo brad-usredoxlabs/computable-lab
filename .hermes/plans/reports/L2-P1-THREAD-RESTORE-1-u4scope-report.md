@@ -119,4 +119,10 @@ Commands and REAL output:
    code-track evidence plus that verdict). PENDING (browser recert).
 
 ## Marker
-L2-P1-THREAD-RESTORE-1 u4scope DONE: PENDING_MARKER
+The exit-contract marker line (citing the report commit
+b3fc0caf64c5f9c7c5c12156dbd45a65b6ef8206 — `git rev-parse HEAD` after the
+report commit, per the u1persist convention: the marker is appended in a
+follow-up commit so the cited sha is real and exists in the branch history)
+is the LAST line of this file.
+
+L2-P1-THREAD-RESTORE-1-u4scope UNIT unit DONE b3fc0caf64c5f9c7c5c12156dbd45a65b6ef8206
