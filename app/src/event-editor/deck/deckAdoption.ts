@@ -40,7 +40,15 @@ import {
   type TermDecision,
 } from './acceptedOntologyBindings'
 import { materializeAcceptedRecordCreations } from './acceptedRecordCreations'
-import { mintPlacedLabwareInstances } from './labwareInstanceMint'
+import {
+  findUnplaceableLabware,
+  mintPlacedLabwareInstances,
+} from './labwareInstanceMint'
+
+/** u2ghostgate re-export: the pure pre-check the shared adoption core runs
+ *  before ANY write (the deck keys of placed labwares with no resolvable
+ *  definition record id — a non-empty list refuses the accept). */
+export { findUnplaceableLabware }
 
 /** A proposed ontology term that requires the scientist's sign-off (gate on
  *  Accept). Ported verbatim from PreviewActionBar — the gate lives HERE, in
@@ -128,8 +136,9 @@ export async function adoptStagedPreview(
 
   // 2b. One labware-instance per placed labware (L2-P1-LABWARE-INSTANCE-RECORD-1
   //     u1inst): after the records-first DEFINITION creations (the definition
-  //     exists first) and before the durable persist below. An unresolvable
-  //     definition record id mints nothing and is named in the warnings.
+  //     exists first) and before the durable persist below. A skipped key is
+  //     impossible here (the 1b ghost-gate refused it before any write) —
+  //     `skipped` is the machine-readable gap the gate consumes.
   const minted = await mintPlacedLabwareInstances({
     previewLabwares: preview.previewLabwares,
     materialized: creations.materialized ?? [],
