@@ -166,6 +166,42 @@ describe('u3ghostfix D1 — ONE resolution rule: the pre-check projects what ste
   })
 })
 
+describe('u4seedref — a SEEDED vessel (a labware record the lab already owns) is placeable', () => {
+  /** The PRODUCTION seeded vessel: labwareId === sourceRecordId, no recordId. */
+  const seededGhost = (recordId: string, name: string): Labware =>
+    ({
+      labwareId: recordId,
+      labwareType: 'plate',
+      name,
+      addressing: 'coordinate',
+      geometry: { maxVolume_uL: 200000, minVolume_uL: 0 },
+      sourceRecordId: recordId,
+    }) as unknown as Labware
+
+  it('findUnplaceableLabware is EMPTY for a seeded vessel with no creations', () => {
+    expect(
+      findUnplaceableLabware(
+        { 'lbw-seed-plate-96-flat': seededGhost('lbw-seed-plate-96-flat', '96-Well Plate') },
+        [],
+      ),
+    ).toEqual([])
+  })
+
+  it('the accept ADOPTS (no unplaceable-labware refusal) and mints one instance naming sourceRecordId', async () => {
+    const key = 'lbw-seed-plate-96-flat'
+    const result = await adoptStagedPreview(
+      previewOf({ [key]: seededGhost(key, '96-Well Plate') }, []),
+      STATE,
+      ctx(),
+    )
+    expect(result.adopted).toBe(true)
+    expect((result as { instanceIds?: string[] }).instanceIds).toHaveLength(1)
+    // Frozen order: no definition create (nothing to materialize), one
+    // instance minted for the seeded vessel, then the durable write.
+    expect(callOrder).toEqual(['creations', 'instance', 'ontology-mint', 'rewrite', 'persist', 'commit'])
+  })
+})
+
 describe('u3ghostfix — the ghost gate refuses, visibly, before any write', () => {
   it('refuses with the ghost-gate discriminant and names the deck key in the log', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})

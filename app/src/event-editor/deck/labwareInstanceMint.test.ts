@@ -115,6 +115,40 @@ describe('mintPlacedLabwareInstances — one instance per placed labware, defini
     expect(res.instanceIds).toHaveLength(1)
   })
 
+  it('u4seedref f) a SEEDED vessel (producer sets sourceRecordId, no recordId) resolves the definition id to sourceRecordId', async () => {
+    // The producer (labwareRecordToEditorLabware) sets `labwareId` AND
+    // `sourceRecordId` to the record id and NO `recordId`; the deck key is
+    // `lbw-seed-*`, which isResolvableDeckKey rejects.
+    const createRecord = vi.fn(async (_schemaId: string, _payload: Record<string, unknown>) => undefined)
+    const res = await mintPlacedLabwareInstances({
+      previewLabwares: {
+        'lbw-seed-plate-96-flat': mkLabware('lbw-seed-plate-96-flat', {
+          name: '96-Well Plate',
+          sourceRecordId: 'lbw-seed-plate-96-flat',
+        }),
+      },
+      materialized: [],
+      createRecord,
+    })
+    expect(createRecord).toHaveBeenCalledTimes(1)
+    const payload = createRecord.mock.calls[0][1] as { labwareId: string }
+    // The instance points at the DEFINITION the lab already owns, by record id.
+    expect(payload.labwareId).toBe('lbw-seed-plate-96-flat')
+    expect(res.instanceIds).toHaveLength(1)
+    expect(res.skipped).toEqual([])
+  })
+
+  it('u4seedref g) a manual vessel (random lw-* labwareId, no sourceRecordId) does NOT resolve through labwareId', async () => {
+    const createRecord = vi.fn(async (_schemaId: string, _payload: Record<string, unknown>) => undefined)
+    const res = await mintPlacedLabwareInstances({
+      previewLabwares: { 'lbw-proposed-mwhmtzke-96wellplate': mkLabware('lbw-proposed-mwhmtzke-96wellplate') },
+      materialized: [],
+      createRecord,
+    })
+    expect(createRecord).toHaveBeenCalledTimes(0)
+    expect(res.skipped).toEqual(['lbw-proposed-mwhmtzke-96wellplate'])
+  })
+
   it('a deck key that is itself a labware record id resolves even without a materialized creation', async () => {
     const createRecord = vi.fn(async (_schemaId: string, _payload: Record<string, unknown>) => undefined)
     const res = await mintPlacedLabwareInstances({
