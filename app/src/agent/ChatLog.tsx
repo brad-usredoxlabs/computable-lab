@@ -426,6 +426,30 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
           onAnswer={(answer) => onClarificationPick(clarificationAnswerPrompt(answer, request), answer, request)}
           selectedWells={selectedWells}
         />
+      ) : request.absence != null && options.length === 0 ? (
+        // L2-P1-ABSENCE-SINGLE-ARM-1 (u1singlearm) — RULING 1 (the decision
+        // ABSENCE-RENDERING-AND-PROBE-TIERS-l2-20261114): the absence branch
+        // mounts when ANY request carries an absence payload, independent of
+        // request count — the single-request path gains the absence statement
+        // plus the create affordance (the grouped card at :604 is the only
+        // other absence renderer and mounts only for length > 1). Tested
+        // BEFORE the options/picker arms so a `/l` menuProvider can never
+        // shadow it (the measured defect: the picker swallowed the payload).
+        // The markup MIRRORS the card's arm (ChatClarificationCard.tsx:214-224
+        // — same classes, same testid, same href shape); it needs no
+        // onClarificationPick gate: the create affordance is a LINK, not a
+        // pick, and the card mounts it the same way. options.length === 0
+        // mirrors the card (an absence WITH options offers the options).
+        <div className="chat-clarification-card__absent">
+          <p className="chat-clarification-card__absent-reason">{request.absence.reason}</p>
+          <a
+            className="chat-clarification-card__absent-create"
+            data-testid="chat-clarification-absent-create"
+            href={`/lab/labware/new?prefillName=${encodeURIComponent(request.absence.mention)}`}
+          >
+            Create this record
+          </a>
+        </div>
       ) : options.length > 0 && onClarificationPick ? (
         <ol className="chat-log-clarification-options">
           {options.map((option, optionIndex) => {
