@@ -3,7 +3,7 @@ unit: u2fix
 unit-id: L2-GC-AIA-PARSER-SHAPE-1-u2fix
 branch: cl/lane2-parsershape-u1-l2t2638
 base: 22f6a988b461906cf4e76d7be187450de730702e
-commits: 1ce509494 (D2/D5 test), 8738fc6af (D3 parser + detector test), ab90f4e75 (D4 refusal text), 6aec6da70b08c14eaeb9475475915ab18534b2c4 (report)
+commits: 1ce509494 (D2/D5 test), 8738fc6af (D3 parser + detector test), ab90f4e75 (D4 refusal text), 6aec6da70b08c14eaeb9475475915ab18534b2c4 (report) · f161050ad (report: both checker runs verbatim)
 report: .hermes/reports/L2-GC-AIA-PARSER-SHAPE-1-u2fix-report.md
 tests: aiaCdfParser.test.ts 7 passed (7) | parsers/ 29 passed (29) | RunSheetHandlers.test.ts 21 passed (21)
 typecheck: 6 errors at HEAD identical to base 22f6a988b (delta 0, none in changed files)
