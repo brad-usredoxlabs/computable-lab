@@ -83,3 +83,5 @@ None for this unit. Later unit owns the chat-channel wording (clarifications.ts)
 Reviewer: rerun the two commands above; the GREEN bar is 21/21 (a single
 cold-import timeout of the route test under heavy host load is a flake, not a
 defect — rerun it).
+
+L2-P1-SEARCH-STORE-CLAIM-1 UNIT u1tierword DONE 56f452a89c9e9396f10378e7961178af87fe5ca4
