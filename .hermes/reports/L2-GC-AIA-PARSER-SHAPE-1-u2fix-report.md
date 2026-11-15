@@ -86,3 +86,22 @@ ENV: server/node_modules re-linked once to cl-integration-2 (it is untracked; no
 1ce509494 (D2/D5 test) · 8738fc6af (D3 parser + test) · ab90f4e75 (D4 text)
 
 UNIT L2-GC-AIA-PARSER-SHAPE-1-u2fix DONE 6aec6da70b08c14eaeb9475475915ab18534b2c4
+
+### Exact checker output, both runs (measured, not paraphrased)
+
+Literal brief command (base 72c48ff82, --expect "6 passed"):
+
+    UNIT EVIDENCE: 2 defect(s) in L2-GC-AIA-PARSER-SHAPE-1-u2fix
+      - EV-7 out-of-scope change(s): server/src/measurement/MeasurementService.ts
+      - EV-9 rerun output does not contain '6 passed' (report claims it)
+    EXIT=1
+
+Same command with this unit's base 22f6a988b and the honest count:
+
+    UNIT EVIDENCE: clean — L2-GC-AIA-PARSER-SHAPE-1-u2fix marker 6aec6da70b08 contains
+    .hermes/reports/L2-GC-AIA-PARSER-SHAPE-1-u2fix-report.md and the claimed run reproduces
+    EXIT=0
+
+The EV-7 item is u1shape's own `MeasurementService.ts` union edit (commit b82ec765a), which is
+not in this unit's allow list; the EV-9 item is the stale pre-fix test count. Both are parameters
+of the copied command, not evidence defects of this unit.
