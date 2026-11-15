@@ -610,3 +610,81 @@ describe('L2-CLARIFY-PICKER-1 (P2) — answered-row sentence (W5 wiki-markup lea
     expect(screen.getByTestId('chat-log-clarification-answered')).toHaveTextContent('DMEM (material record MAT-dmem-ykg0)')
   })
 })
+
+/**
+ * L2-P1-ABSENCE-SINGLE-ARM-1 (u1singlearm) — RULING 1 (the decision
+ * ABSENCE-RENDERING-AND-PROBE-TIERS-l2-20261114): "the clarification card
+ * (or its absence branch) must mount when ANY request carries an absence
+ * payload, independent of request count. The single-request path keeps its
+ * immediate one-click behaviour AND gains the absence statement plus the
+ * create affordance."
+ *
+ * The measured defect: ChatLog.tsx:604 mounts ChatClarificationCard — the
+ * ONLY renderer that understands request.absence — only when
+ * clarificationRequests.length > 1. With length === 1,
+ * renderTypedClarification rendered the PICKER (menuProvider '/l' makes
+ * requestHasPicker true) and the absence payload was never shown. These legs
+ * assert the single-request absence case DIRECTLY, so the request count can
+ * never be load-bearing again (the forbidden "synthetic second request" fix
+ * is pinned out by leg 2).
+ */
+describe('L2-P1-ABSENCE-SINGLE-ARM-1 (u1singlearm) — the single absence request owns its absence arm (RULING 1)', () => {
+  // The EXACT shape the server's empty-turn guard emits
+  // (server/src/ai/clarifications.ts:347-381): ONE request, id
+  // 'empty-turn-absence-1', kind 'labware', menuProvider '/l', options: [],
+  // absence: { mention, reason }.
+  const mention = '96-well plate'
+  const reason = "Not in this lab's records: 96-well plate"
+  const question = 'The draft names "96-well plate" and the lab spine could not bind it (unknown-noun). Choose what it is, or create a local term.'
+  const absenceRequest = {
+    id: 'empty-turn-absence-1', kind: 'labware' as const, prompt: question, entityType: 'labware' as const,
+    menuProvider: '/l' as const, options: [] as { id: string; label: string }[],
+    absence: { mention, reason },
+  }
+  const renderSingleAbsence = (onClarificationPick = vi.fn()) =>
+    render(<ChatLog {...props} onClarificationPick={onClarificationPick} messages={[
+      { ...message('clar-absent', 'assistant', question), clarificationRequests: [absenceRequest] },
+    ]} />)
+
+  it('(1) ONE absence request (options: [], menuProvider \'/l\') renders the absence statement + the create affordance inside .chat-log-clarification — NO picker shadow, exactly ONE create link', () => {
+    renderSingleAbsence()
+    // The single-request card mounts (the card owns the prompt <p> as in the
+    // pinned D1 behaviour — the bubble is suppressed because content ===
+    // prompt) and is the .chat-log-clarification node.
+    const card = screen.getByTestId('chat-log-request-empty-turn-absence-1')
+    expect(card.classList.contains('chat-log-clarification')).toBe(true)
+    // The absence statement: the server's ONE sentence VERBATIM (the card's
+    // absence arm mirrors ChatClarificationCard.tsx:214-224 — same classes,
+    // same testid, same href shape).
+    const reasonP = card.querySelector('.chat-clarification-card__absent-reason')
+    expect(reasonP).not.toBeNull()
+    expect(reasonP).toHaveTextContent(reason)
+    // The create affordance: href = /lab/labware/new?prefillName=<mention>,
+    // the door that prefills the create form with the missing noun.
+    const create = screen.getByTestId('chat-clarification-absent-create')
+    const href = create.getAttribute('href') ?? ''
+    expect(href).toContain('/lab/labware/new?prefillName=')
+    expect(href).toContain(encodeURIComponent(mention))
+    // NO ClarificationPicker shadow on this request: the picker (the defect)
+    // is ABSENT from the card and from the whole log.
+    expect(card.querySelector('.message-log__clarification-picker')).toBeNull()
+    expect(screen.queryByTestId('clarification-identity-search')).toBeNull()
+    // NO option list (options: []) and exactly ONE create affordance in the
+    // whole log (never a second surface for the same request).
+    expect(card.querySelector('.chat-log-clarification-options')).toBeNull()
+    expect(screen.getAllByTestId('chat-clarification-absent-create')).toHaveLength(1)
+  })
+
+  it('(2) RULING 1 non-regression pin: the single absence request produces exactly ONE chat-log-request node — the count is NOT load-bearing (the forbidden synthetic second request would add a node and fail here)', () => {
+    renderSingleAbsence()
+    const nodes = Array.from(document.querySelectorAll('[data-testid^="chat-log-request-"]'))
+    expect(nodes).toHaveLength(1)
+    expect(nodes[0]?.getAttribute('data-testid')).toBe('chat-log-request-empty-turn-absence-1')
+    // The ruling's "or its absence branch": the grouped card never mounts for
+    // length === 1 (the :604 gate is untouched), so the single arm itself owns
+    // the statement + the affordance INSIDE that one node.
+    const node = nodes[0] as HTMLElement
+    expect(node.querySelector('.chat-clarification-card__absent')).not.toBeNull()
+    expect(node.querySelector('[data-testid="chat-clarification-absent-create"]')).not.toBeNull()
+  })
+})
