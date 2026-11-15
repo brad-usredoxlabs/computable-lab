@@ -17,7 +17,7 @@ type MeasurementPayload = {
   kind: 'measurement';
   recordId: string;
   title: string;
-  assayType: 'qpcr' | 'plate_reader' | 'microscopy' | 'gc_ms' | 'flow' | 'other';
+  assayType: 'qpcr' | 'plate_reader' | 'microscopy' | 'gc_fid' | 'gc_ms' | 'flow' | 'other';
   eventGraphRef?: Ref;
   readEventRef?: string;
   equipmentRef?: Ref;
