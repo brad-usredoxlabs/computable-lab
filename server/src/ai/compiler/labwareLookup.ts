@@ -158,3 +158,77 @@ export function createLabwareLookup(
     return scored.slice(0, 5).map(({ recordId, title }) => ({ recordId, title }));
   };
 }
+
+/**
+ * L2-P1-ABSENCE-PROBE-TIERS-1 (u1probe) — the DEFINITION tier of the
+ * two-tier absence probe (decision ABSENCE-RENDERING-AND-PROBE-TIERS-l2-
+ * 20261114, ruling 2): an absence assertion requires a probe across BOTH
+ * `kind:'labware'` store records AND the labware-definition registry.
+ *
+ * createLabwareLookup scores ONLY `kind:'labware'` instance records by
+ * payload['name'] (its identity tier is recordId-only, and it also feeds the
+ * compile/resolution path — labwareInstanceLookup — so it stays unchanged).
+ * This function walks `kind:'labware-definition'` records by
+ * payload.display_name (plus payload.aliases when present) with the SAME
+ * scoring rules as the record tier's name/alias tier (exact=100, alias=90,
+ * squash=80/70, includes=50, alias-includes=40, squash-includes=30). It is a
+ * lookup by NAME, not identity: the definition recordId never binds a name
+ * hint here (identity stays the record tier's exclusive tier).
+ */
+export function createLabwareDefinitionLookup(
+  store: RecordStore,
+): (hint: string) => Promise<Array<{ recordId: string; title: string }>> {
+  return async (hint: string) => {
+    const normalized = hint.toLowerCase().trim();
+    if (!normalized) return [];
+
+    const definitionRecords = await store.list({ kind: 'labware-definition' });
+
+    interface Scored {
+      recordId: string;
+      title: string;
+      score: number;
+    }
+
+    const scored: Scored[] = [];
+    for (const record of definitionRecords) {
+      const payload = record.payload as Record<string, unknown>;
+      const name = typeof payload['display_name'] === 'string' ? payload['display_name'] : '';
+      const aliasesRaw = payload['aliases'];
+      const aliases = Array.isArray(aliasesRaw)
+        ? (aliasesRaw as unknown[]).filter((a): a is string => typeof a === 'string')
+        : [];
+
+      const normalizedName = name.toLowerCase();
+      const normalizedAliases = aliases.map((a) => a.toLowerCase());
+
+      let score = 0;
+      if (normalizedName === normalized) {
+        score = 100;
+      } else if (normalizedAliases.includes(normalized)) {
+        score = 90;
+      } else if (normalizedName.includes(normalized)) {
+        score = 50;
+      } else if (normalizedAliases.some((a) => a.includes(normalized))) {
+        score = 40;
+      } else {
+        const squash = (s: string) => s.replace(/[^a-z0-9]+/g, '');
+        const squashedHint = squash(normalized);
+        if (squash(normalizedName) === squashedHint) {
+          score = 80;
+        } else if (normalizedAliases.some((a) => squash(a) === squashedHint)) {
+          score = 70;
+        } else if (squash(normalizedName).includes(squashedHint)) {
+          score = 30;
+        }
+      }
+
+      if (score > 0) {
+        scored.push({ recordId: record.recordId, title: name, score });
+      }
+    }
+
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, 5).map(({ recordId, title }) => ({ recordId, title }));
+  };
+}

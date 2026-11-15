@@ -1651,6 +1651,12 @@ export function createAgentOrchestrator(
         shorthandDeckLabwares,
         deps.searchLabwareByHint,
       );
+      // L2-P1-ABSENCE-PROBE-TIERS-1 (u1probe): the DEFINITION tier of the
+      // two-tier absence probe — the labware-definition registry (display
+      // names the lab KNOWS), as opposed to the record tier above (kind
+      // 'labware' the lab HOLDS). Consulted by the two empty-turn absence
+      // call sites only AFTER the record tier misses.
+      const shorthandSearchDefinitionsByHint = deps.searchLabwareDefinitionsByHint;
 
       /**
        * PROTO-AI-12 §4 — fire-and-forget shadow classification. Called ONLY
@@ -3149,6 +3155,7 @@ export function createAgentOrchestrator(
             const emptyTurnAbsence = await emptyTurnAbsenceRequests(
               effectivePrompt,
               shorthandSearchLabwareByHint ?? (async () => []),
+              shorthandSearchDefinitionsByHint ?? (async () => []),
             );
             if (!(result.notes?.length ?? 0)) {
               result = {
@@ -3602,6 +3609,7 @@ export function createAgentOrchestrator(
                 const shEmptyTurnAbsence = await emptyTurnAbsenceRequests(
                   effectivePrompt,
                   shorthandSearchLabwareByHint ?? (async () => []),
+                  shorthandSearchDefinitionsByHint ?? (async () => []),
                 );
                 if (shEmptyTurnAbsence.length > 0) {
                   shResult.clarificationRequests = shEmptyTurnAbsence;

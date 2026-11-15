@@ -167,6 +167,16 @@ export interface ResolveMentionDeps {
   fetchProtocol?: (id: string) => Promise<Record<string, unknown> | null>;
   fetchGraphComponent?: (id: string) => Promise<Record<string, unknown> | null>;
   searchLabwareByHint?: (hint: string) => Promise<Array<{ recordId: string; title: string }>>;
+  // L2-P1-ABSENCE-PROBE-TIERS-1 (u1probe): the DEFINITION tier of the two-tier
+  // absence probe. The empty-turn absence probe (clarifications.ts
+  // emptyTurnAbsenceRequests) must probe BOTH tiers before asserting absence:
+  // the record tier (searchLabwareByHint, kind:'labware' = held stock) and the
+  // definition tier (this, kind:'labware-definition' display names = what the
+  // lab knows). Optional — callers without it keep the single-tier behavior.
+  // Placed beside the record-tier slot on ResolveMentionDeps (the orchestrator
+  // deps type AgentOrchestratorDeps extends this), the same seam the two
+  // absence call sites already read searchLabwareByHint from.
+  searchLabwareDefinitionsByHint?: (hint: string) => Promise<Array<{ recordId: string; title: string }>>;
 }
 
 // ============================================================================
