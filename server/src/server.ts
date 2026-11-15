@@ -158,7 +158,7 @@ import type { PlatformRegistry } from './platform-registry/PlatformRegistry.js';
 import { ArtifactBlobStore, LegacyArtifactBlobStore, createArtifactBlobStoreRecorder } from './ingestion/ArtifactBlobStore.js';
 import { LifecycleEngine, loadLifecyclesFromDir } from './lifecycle/index.js';
 import { PolicyBundleService } from './policy/PolicyBundleService.js';
-import { createLabwareLookup } from './ai/compiler/labwareLookup.js';
+import { createLabwareDefinitionLookup, createLabwareLookup } from './ai/compiler/labwareLookup.js';
 import { loadDefaultSurfacesRegistry } from './surfaces/surfaces.js';
 import { createLedgerQueryHost } from './workspace-session/ledgerQuery.js';
 import { journalPolicyPath } from './workspace-session/WorkstateJournal.js';
@@ -1263,6 +1263,14 @@ export async function createServer(
         fetchProtocol: fetchRecordPayload,
         fetchGraphComponent: fetchRecordPayload,
         searchLabwareByHint: createLabwareLookup(ctx.store),
+        // L2-P1-ABSENCE-PROBE-TIERS-1 (u1probe): the DEFINITION tier of the
+        // two-tier absence probe — the labware-definition registry by display
+        // name, probed only after the record tier misses, so a definition-only
+        // labware is never falsely declared "not in this lab's records".
+        // Wired here (the orchestrator deps the two absence call sites read),
+        // not in the runChatbotCompile deps: the compile path never calls the
+        // absence probe, so a slot there would be dead wiring.
+        searchLabwareDefinitionsByHint: createLabwareDefinitionLookup(ctx.store),
         extractionService: runner,
         llmClient: inferenceClient,
         ...(compileOntologyResolver ? { ontologyResolver: compileOntologyResolver } : {}),
