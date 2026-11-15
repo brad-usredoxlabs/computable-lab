@@ -98,4 +98,4 @@ Ready for adversarial review; acceptance still owned by the reviewer (and by the
 reload of the lane stack if a live AIA ingest is re-run against the schema — YAML changed, so the
 lane stack must be reloaded before live verification).
 
-L2-GC-AIA-PARSER-SHAPE-1 UNIT L2-GC-AIA-PARSER-SHAPE-1-u3enum DONE REPORT_SHA_PLACEHOLDER
+L2-GC-AIA-PARSER-SHAPE-1 UNIT L2-GC-AIA-PARSER-SHAPE-1-u3enum DONE 230b366a88fd15e3ee0e3a1cfdb33cee0f76ea10

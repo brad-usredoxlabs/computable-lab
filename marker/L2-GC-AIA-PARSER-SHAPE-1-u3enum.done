@@ -1,0 +1,8 @@
+unit: u3enum
+unit-id: L2-GC-AIA-PARSER-SHAPE-1-u3enum
+branch: cl/lane2-parsershape-u3enum-l2t2643
+base: 159dd242b10bc737c5e784d1c47b3d90d0eb2f1f
+commits: 5363a1818 (schema/lab/measurement.schema.yaml enum + MeasurementService.ts union + RunSheetHandlers.ts union/refusal text + gc_fid schema-validity test), 230b366a88fd15e3ee0e3a1cfdb33cee0f76ea10 (report)
+report: .hermes/reports/L2-GC-AIA-PARSER-SHAPE-1-u3enum-report.md
+tests: src/measurement/ 45 passed | 4 failed (same 4 at base 159dd242b, missing records/inbox/gemini.csv) ; RunSheetHandlers.test.ts 21 passed (21)
+typecheck: 6 pre-existing Fastify errors at HEAD, identical to base (delta 0)
