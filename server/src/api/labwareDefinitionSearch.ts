@@ -252,7 +252,13 @@ export async function searchLabwareDefinitions(
               offerable: false,
               offer_reason: declaredOff
                 ? 'entry declares offerable: false (declared non-stock)'
-                : 'registry entry with no record in the lab store (not lab stock)',
+                : storeTier.status === 'unavailable'
+                  // The store was never read — absence is UNVERIFIED, not a
+                  // fact. Claiming "no record in the lab store" here would
+                  // assert what the lab holds from a read that never
+                  // happened (a search failure is not an absence).
+                  ? `lab store could not be read (${storeTier.reason}) — stock unverified`
+                  : 'registry entry with no record in the lab store (not lab stock)',
             };
       return toHit(def, undefined, offerability);
     })
