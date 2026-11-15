@@ -4,6 +4,10 @@ This is a workflow.  These propmts are meant to follow one another being part of
 
 EVERYTHING in this series of prompts should have SIGNIFICANT code underpinning it in the repo, EVEN the idea that the HepG2 cells growth will be modelled following the algorithm.  This exercise should just be stitching together components that already exist.
 
+ Note: these percentages are the arithmetic consequence of the stated quench mixture and the 100 µL of
+      plain DMEM already in the well. They are not a claim that the mixture is a viable culture condition —
+      8.6% residual trypsin is high. Culture medium is introduced where the protocol introduces it.
+
 ## When something isn't in the system yet
 
 Anywhere below where I name something - a plate type, a material, a cell line, equipment, a protocol - and the system doesn't already have it: don't tell me the word is unknown and stop.  Do it in this order: 1) create the type, 2) create an instance of the type, 3) carry on with the prompt I actually typed.  A new plate type gets created and then a plate of that type goes on the deck.  A new material gets its concept created and then the vendor product that points at it.
@@ -13,6 +17,15 @@ If the thing exists in an ontology, anchor the new record to that term and show 
 Two things not to do: don't pick a near miss for me (DMEM is not DMEM/F-12), and don't invent a catalogue number - ask me for it.
 
 ## Prompt 1
+
+Surface: Event Editor
+Bench: Single SBS plate manual
+Prompt:  Place a 96-well plate on the deck.
+Expectation: It uses the generic 96-well plate the lab already has in its library and puts a plate of that type on the deck.
+Expectation: The plate on the deck is backed by a record: I can see which labware definition it used, and it is the generic 96-well plate rather than something invented, re-shaped or re-formatted.
+Expectation: I can see visually that a 96-well plate has been added to the deck.
+
+## Prompt 1b
 
 Surface: Event Editor
 Bench: Single SBS plate manual
@@ -56,7 +69,7 @@ Activity:  HepG2 isn't in the system yet - create the cell line material anchore
 Activity:  Trypsin-EDTA, DMEM and FBS are all vendor products.  If any of them is missing, create the concept first (anchored where an ontology term exists) and then the vendor product with the real catalogue number: Thermo 25200056 for the trypsin-EDTA, Sigma D6429-500ML for the DMEM, Sigma F4135-100ML for the FBS.
 Expectation: The next add material will be 20.7 ul of the 50:50 mix of (Trypsin-EDTA):(90% DMEM) + (10% FBS) containing 483 cells/ul.
 Activity: accept.
-Expectation:  Upon mouseover of any well (that is in A2-H5), the tooltip will show the 10,000 HepG2 cells and the final concentrations of FBS, DMEM, Trypsin-EDTA (~8.6%, ~82.9%, ~8.6%).  The wells E2-H5 will also show ~0.7% DMSO.
+Expectation:  Upon mouseover of any well (that is in A2-H5), the tooltip will show the 10,000 HepG2 cells and the final concentrations of DMEM, Trypsin-EDTA, FBS  (~90.6%, ~8.6%, ~0.9%).  The wells E2-H5 will also show ~0.7% DMSO.
 
 ## Prompt 3a
 

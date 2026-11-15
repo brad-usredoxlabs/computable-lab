@@ -32,11 +32,72 @@ version: 1
 status: adopted
 adopted_by: "Brad, 2026-11-13, verbatim: \"The shape is correct.\""
 source_file: test-prompts/AI-Chat-Corpus2.md
-source_sha256: b57334ca7dbeaab1ad79c0a21bbea39dcdc71ea575d5376885fe227e8a3bf0dd   # AI-Chat-Corpus2.md after the prompt-1 rewrite (Thermo A58941)
+source_sha256: 3a92e094488e729a19a815ef13ce18472a48286908e3a7bb33e25c7756e31fad   # AI-Chat-Corpus2.md after the prompt-1 rewrite (Thermo A58941)
 
 scenarios:
   - id: prompt-1
-    title: a plate type that does not exist yet — named as a vendor product with a catalogue number
+    title: a generic plate the lab already knows — reuse the library entry, do not mint a new one
+    continues_from: null
+    starts_at: /runs
+    utterances:
+      - "Place a 96-well plate on the deck."
+    entry_state: >-
+      The person is in a run, looking at the plate deck. The lab ships a starter pack of generic labwares
+      and the generic 96-well plate is a REAL store record in it (id lbw-def-generic-96-well-plate;
+      GET /api/records/<id> returns it). Nothing has to be created for this request. Brad, 2026-11-14
+      (one-time authority): the specificity test moves to the companion scenario prompt-1b so that a
+      first step exists which the AI can complete by pulling from the generic library — the same thing a
+      person can do in the UI with a right-click.
+    human_choices:
+      - The person accepts the placed plate; no creation, registration or curation step is required to
+        put a generic plate on the deck (frictionless-science statement, 2026-11-14).
+      - If the assistant asks which definition to use, the person confirms the generic 96-well plate.
+    return_expectation: >-
+      The person is back where they started, the original sentence unchanged, a note saying what was
+      placed and which definition it used, and one click resumes the sentence.
+    completed_when:
+      - >-
+        A 96-well plate is VISIBLY on the deck, where the person can see it.
+      - >-
+        The plate is backed by a labware instance record that points at a labware-definition record by
+        record id, and that definition id resolves (read back by id) to the generic 96-well plate the
+        lab already had.
+      - >-
+        No new labware-definition record was created for this request: the definition count is unchanged
+        before and after, because reuse — not minting — is the correct behaviour here.
+      - >-
+        Resuming drafts the original instruction, and the plate is not added a second time.
+    not_done_if:
+      - >-
+        A new labware-definition was created, or an existing one was edited, when the lab already had a
+        suitable generic 96-well plate.
+      - >-
+        The plate on the deck has no backing instance or definition — a drawing with no record behind it.
+      - >-
+        The type was re-shaped or re-formatted (a 96-well presented as something else, or a vendor
+        identity invented that the person never supplied).
+      - >-
+        The person was sent through a registration, catalogue or ontology form to place a generic plate.
+      - >-
+        The original sentence was rewritten, or the person had to retype it.
+    evidence_required:
+      - >-
+        Screenshots of the settled turn and of the deck showing the plate.
+      - >-
+        Record read-back naming the instance id, its definition id, and the definition's own record id.
+      - >-
+        Definition count before and after (must be equal).
+      - >-
+        The served application revision the drive ran against.
+    fault_injection_leg: >-
+      Interrupt after the instance is durably written but before the continuation is acknowledged, then
+      reload and resume, and also try from a second tab. Acceptable — one plate, no duplicate instance,
+      a recoverable note. Not acceptable — two plates, a lost record, or a journey reported complete
+      with nothing on the deck.
+    open_questions: []
+
+  - id: prompt-1b
+    title: a vendor product that does not exist yet — created from the person's description, never substituted
     continues_from: null
     starts_at: /runs
     utterances:
@@ -46,8 +107,8 @@ scenarios:
       labwares (96/384-well plates, reservoirs, tubes, racks, tip racks) and that pack is expected to stay.
       What must NOT exist is this specific type as lab stock and the Thermo A58941 product record. A generic
       384-well shape existing is fine and is exactly the distinction under test: a generic TYPE is not a
-      registered PRODUCT and neither is stock. Brad, 2026-11-14: the goal is to ship computable-lab with a
-      starter pack of generic labwares; the earlier deepwell wording collided with that pack.
+      registered PRODUCT and neither is stock. This is the SPECIFIC-PRODUCT companion to prompt-1; the
+      generic first step must never be used to waive it.
     human_choices:
       - The assistant says plainly that this type is not in the system and offers to create it, rather than
         binding to a generic 384-well shape as if it were the Thermo product.
