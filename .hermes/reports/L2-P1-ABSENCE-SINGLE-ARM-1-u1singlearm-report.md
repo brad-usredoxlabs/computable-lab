@@ -137,3 +137,4 @@ Command 4 (typecheck — run on the final state):
   reloaded; drive an empty-turn utterance on a clean thread and expect the absence
   statement + prefilled create link.
 - Implementation complete; acceptance complete is a separate state (lane rule).
+L2-P1-ABSENCE-SINGLE-ARM-1 UNIT L2-P1-ABSENCE-SINGLE-ARM-1 DONE 024f428b3f8d9732dee23ab7cf61a9e833d1cbc8
