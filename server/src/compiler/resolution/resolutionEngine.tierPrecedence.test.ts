@@ -2,19 +2,28 @@
  * L2-P1-AMBIGUITY-TIER-RULE-1 (unit 1) — declared candidate-tier precedence.
  *
  * Ruling DEFINITION-IDENTITY-UNIQUENESS (amended option (a)): a
- * labware-DEFINITION candidate outranks a legacy labware SEED. The rule is
- * DECLARED IN DATA (policies.ambiguity.candidatePrecedence) — the
- * declaration_precedence strategy APPLIES it; the TS carries no kind/name
- * literal. A genuine same-kind tie still clarifies (never arbitrary winner).
+ * labware-DEFINITION candidate outranks a legacy labware seed. The rule is
+ * DECLARED IN DATA (policies.ambiguity.candidatePrecedence — the shipped
+ * vocabulary block, pinned at the bottom of this file); the
+ * declaration_precedence strategy APPLIES it. Zero kind/name literal in TS.
+ * A genuine same-tier tie still clarifies — never an arbitrary winner.
  *
- * (a) labware + labware-definition, same normalized label -> bind the
- *     definition, the seed NEVER offered (no clarification).
- * (b) two same-kind (labware) candidates, same label -> still clarifies.
- * (c) material + labware (kinds absent from the rule's whenKinds) -> untouched.
- * (d) removing the candidatePrecedence block restores clarification (data).
+ * Identity predicate: normalized-label equality (lowercase, non-alphanumerics
+ * stripped) — the same predicate family as policies.ambiguity.identityCollapse
+ * key [normalized_label, candidate_level]. The real legA2 pair is driven
+ * AS-IS: the seed name "Generic 96 Well Plate, Flat Bottom (seed)" does NOT
+ * normalize-equal the definition display_name "Generic 96-Well Plate", so the
+ * rule leaves that tie to clarify (the unit invents no name table); the
+ * synthetic equal-label pair drives the narrowing bar.
+ *
+ * The slot contract declares NO domain: the domain filter is then a declared
+ * no-op (declaredDomains(undefined) = [] -> every candidate eligible), so the
+ * pair reaches the strategy's declared-precedence arm — the unit under test.
+ * The production labware slots' domain tag (the landing-zone filter,
+ * adapters.ts) is a separate contract, out of this unit's scope.
  */
 import { describe, expect, it } from 'vitest';
-import { loadScientistIntentVocabulary } from '../scientistIntent/vocabulary.js';
+import { loadScientistIntentVocabulary, type ScientistIntentArgContract } from '../scientistIntent/vocabulary.js';
 import { createResolveSpine } from '../../resolve/ResolveSpine.js';
 import type { ProviderHit, ResolveProvider } from '../../resolve/types.js';
 import {
@@ -27,93 +36,118 @@ import {
 import { buildStrategyRegistry } from './strategies.js';
 import { resolveNoun, type EngineDeps, type ResolutionRequest } from './resolutionEngine.js';
 
-const LABW = { name: 'labware', kind: 'labware', required: false, domain: 'labware' } as ResolutionRequest['declared'];
+const SLOT = { name: 'target', kind: 'resolvable', required: false } as ScientistIntentArgContract;
 
-function hits(...hs: ProviderHit[]): ResolveProvider { return async () => hs; }
+function hits(...hs: ProviderHit[]): ResolveProvider {
+  return async () => hs;
+}
 
-function depsFor(spine: ReturnType<typeof createResolveSpine>, tracker: { failed: boolean }, strategies: Parameters<typeof resolveNoun>[2]['strategies']): EngineDeps {
+function vocab(): ReturnType<typeof loadScientistIntentVocabulary> {
+  const base = loadScientistIntentVocabulary();
+  const p = base.policies();
+  return {
+    ...base,
+    policies: () => ({
+      ...p,
+      strategyOrder: ['declaration_precedence', ...p.strategyOrder.filter((s) => s !== 'declaration_precedence')],
+      ambiguity: { ...p.ambiguity, strategyRef: 'declaration_precedence' },
+    }),
+  };
+}
+
+/** Same wrapper minus the candidatePrecedence block — the DATA proof: the
+ *  rule is data, not code (removing the block restores clarification). */
+function vocabOff(): ReturnType<typeof loadScientistIntentVocabulary> {
+  const base = loadScientistIntentVocabulary();
+  const p = base.policies();
+  const amb = { ...p.ambiguity, strategyRef: 'declaration_precedence' } as Record<string, unknown>;
+  delete amb.candidatePrecedence;
+  return {
+    ...base,
+    policies: () => ({
+      ...p,
+      strategyOrder: ['declaration_precedence', ...p.strategyOrder.filter((s) => s !== 'declaration_precedence')],
+      ambiguity: amb as typeof p.ambiguity,
+    }),
+  };
+}
+
+function run(label: string, recordHits: ProviderHit[], v: ReturnType<typeof loadScientistIntentVocabulary>) {
+  const tracker = { failed: false };
+  const spine = createResolveSpine({
+    termProvider: createFailureTrackingProvider(hits(), tracker),
+    recordProvider: createFailureTrackingProvider(hits(...recordHits), tracker),
+    localTimeoutMs: 500,
+    remoteTimeoutMs: 500,
+  });
   const adapters = [
     createSpineAdapter(spine, tracker),
     createLabwareHintAdapter(async () => []),
     createRegistryAdapter({ labwareDefinitionRegistry: { findByName: () => undefined }, compoundClassRegistry: { findByName: () => undefined } }),
     createRoleAddressAdapter(),
   ];
-  return { adapters, strategies };
+  const deps: EngineDeps = { adapters, strategies: buildStrategyRegistry(v) };
+  const req: ResolutionRequest = {
+    verb: 'create_container',
+    argument: 'labware',
+    label,
+    declared: SLOT,
+    actionIndex: 0,
+    actionLocation: { actionIndex: 0, action: 'create_container' as never, argument: 'labware' },
+  };
+  return resolveNoun(req, v, deps);
 }
 
-function run(verb: string, argument: string, label: string, hitsFn: ResolveProvider, strategies: Map<string, unknown>): Promise<Awaited<ReturnType<typeof resolveNoun>>> {
-  const tracker = { failed: false };
-  const spine = createResolveSpine({ termProvider: createFailureTrackingProvider(hits(), tracker), recordProvider: createFailureTrackingProvider(hitsFn, tracker), localTimeoutMs: 500, remoteTimeoutMs: 500 });
-  const req = { verb, argument, label, declared: LABW, actionIndex: 0, actionLocation: { actionIndex: 0, action: verb as never, argument } } as ResolutionRequest;
-  return resolveNoun(req, vocab(), depsFor(spine, tracker, strategies));
-}
-
-const RULE: readonly { whenKinds: readonly string[]; supersededByKind: string }[] = [
-  { whenKinds: ['labware', 'labware-definition'], supersededByKind: 'labware-definition' },
-];
-
-function vocab(): ReturnType<typeof loadScientistIntentVocabulary> {
-  const base = loadScientistIntentVocabulary();
-  const p = base.policies();
-  return { ...base, policies: () => ({ ...p, strategyOrder: ['declaration_precedence', ...p.strategyOrder], ambiguity: { ...p.ambiguity, strategyRef: 'declaration_precedence', candidatePrecedence: RULE } }) };
-}
-function vocabOff(): ReturnType<typeof loadScientistIntentVocabulary> {
-  const base = loadScientistIntentVocabulary();
-  const p = base.policies();
-  const amb = { ...p.ambiguity, strategyRef: 'declaration_precedence' } as typeof p.ambiguity;
-  delete (amb as Record<string, unknown>).candidatePrecedence;
-  return { ...base, policies: () => ({ ...p, strategyOrder: ['declaration_precedence', ...p.strategyOrder], ambiguity: amb }) };
-}
+const seed96: ProviderHit = { curie: 'local:seed-x', label: 'Well Plate A', namespace: 'local', level: 'unknown', termKind: 'labware' };
+const def96: ProviderHit = { curie: 'local:def-x', label: 'Well Plate A', namespace: 'local', level: 'unknown', termKind: 'labware-definition' };
 
 describe('resolutionEngine.tierPrecedence (L2-P1-AMBIGUITY-TIER-RULE-1 u1)', () => {
-  it('(a) labware + labware-definition, same label -> binds the definition, the seed is never offered', async () => {
-    const seed: ProviderHit = { curie: 'local:seed-96', label: 'Well Plate A', namespace: 'local', level: 'unknown', termKind: 'labware' };
-    const definition: ProviderHit = { curie: 'local:def-96', label: 'Well Plate A', namespace: 'local', level: 'unknown', termKind: 'labware-definition' };
-    const out = await run('create_container', 'labware', 'Well Plate A', hits(seed, definition), buildStrategyRegistry(vocab()));
+  it('(a) labware + labware-definition, same normalized label -> binds the definition, the seed is never offered', async () => {
+    const out = await run('Well Plate A', [seed96, def96], vocab());
     expect(out.clarifications).toEqual([]);
     expect(out.bindings).toHaveLength(1);
-    expect(out.bindings[0]!.curie).toBe('local:def-96');
+    expect(out.bindings[0]!.curie).toBe('local:def-x');
   });
 
   it('(b) two same-kind (labware) candidates, same label -> still clarifies (no arbitrary winner)', async () => {
     const a: ProviderHit = { curie: 'local:lwa', label: 'Well Plate A', namespace: 'local', level: 'unknown', termKind: 'labware' };
     const b: ProviderHit = { curie: 'local:lwb', label: 'Well Plate A', namespace: 'local', level: 'unknown', termKind: 'labware' };
-    const out = await run('create_container', 'labware', 'Well Plate A', hits(a, b), buildStrategyRegistry(vocab()));
+    const out = await run('Well Plate A', [a, b], vocab());
     expect(out.bindings).toEqual([]);
     expect(out.clarifications).toHaveLength(1);
     expect(out.clarifications[0]!.reason).toBe('ambiguous-noun');
   });
 
-  it('(c) material + labware (kinds absent from whenKinds) -> behavior untouched', async () => {
+  it('(c) material + labware (kinds absent from the declared whenKinds pair) -> behavior untouched', async () => {
     const mat: ProviderHit = { curie: 'local:matx', label: 'Well Plate A', namespace: 'local', level: 'concept', termKind: 'material' };
     const lab: ProviderHit = { curie: 'local:lwb', label: 'Well Plate A', namespace: 'local', level: 'unknown', termKind: 'labware' };
-    const out = await run('create_container', 'labware', 'Well Plate A', hits(mat, lab), buildStrategyRegistry(vocab()));
+    const out = await run('Well Plate A', [mat, lab], vocab());
     expect(out.bindings).toEqual([]);
     expect(out.clarifications).toHaveLength(1);
     expect(out.clarifications[0]!.reason).toBe('ambiguous-noun');
   });
 
-  it('(d) with the candidatePrecedence block ABSENT the pair clarifies again (the rule is data, not code)', async () => {
-    const seed: ProviderHit = { curie: 'local:seed-96', label: 'Well Plate A', namespace: 'local', level: 'unknown', termKind: 'labware' };
-    const definition: ProviderHit = { curie: 'local:def-96', label: 'Well Plate A', namespace: 'local', level: 'unknown', termKind: 'labware-definition' };
-    const out = await run('create_container', 'labware', 'Well Plate A', hits(seed, definition), buildStrategyRegistry(vocabOff()));
+  it('(d) candidatePrecedence block ABSENT -> the pair clarifies again (the rule is data, not code)', async () => {
+    const out = await run('Well Plate A', [seed96, def96], vocabOff());
     expect(out.bindings).toEqual([]);
     expect(out.clarifications).toHaveLength(1);
     expect(out.clarifications[0]!.reason).toBe('ambiguous-noun');
   });
 
-  it('real-record labels (legA2 pair): the seed name does not normalize-equal the definition display_name, so the rule leaves the tie to clarify', async () => {
+  it('real legA2 pair driven as-is: seed name does not normalize-equal the definition display_name -> the rule leaves the tie to clarify', async () => {
     const definition: ProviderHit = { curie: 'local:lbw-def-96', label: 'Generic 96-Well Plate', namespace: 'local', level: 'unknown', termKind: 'labware-definition' };
     const seed: ProviderHit = { curie: 'local:lbw-seed-96', label: 'Generic 96 Well Plate, Flat Bottom (seed)', namespace: 'local', level: 'unknown', termKind: 'labware' };
-    const out = await run('create_container', 'labware', '96-well plate', hits(definition, seed), buildStrategyRegistry(vocab()));
+    const out = await run('96-well plate', [definition, seed], vocab());
     expect(out.bindings).toEqual([]);
     expect(out.clarifications).toHaveLength(1);
     expect(out.clarifications[0]!.reason).toBe('ambiguous-noun');
   });
 
-  it('shipped vocabulary declares the candidatePrecedence rule (data, not code)', () => {
-    const block = loadScientistIntentVocabulary().policies().ambiguity.candidatePrecedence;
-    expect(block, 'shipped vocabulary must declare candidatePrecedence').toBeDefined();
+  it('shipped vocabulary declares the candidatePrecedence rule (the rule is DATA, not code)', () => {
+    const block = (loadScientistIntentVocabulary().policies().ambiguity as {
+      candidatePrecedence?: readonly { whenKinds: readonly string[]; supersededByKind: string }[];
+    }).candidatePrecedence;
+    expect(block, 'shipped vocabulary must declare policies.ambiguity.candidatePrecedence').toBeDefined();
     expect(block![0]!.supersededByKind).toBe('labware-definition');
     expect([...block![0]!.whenKinds].sort()).toEqual(['labware', 'labware-definition']);
   });
