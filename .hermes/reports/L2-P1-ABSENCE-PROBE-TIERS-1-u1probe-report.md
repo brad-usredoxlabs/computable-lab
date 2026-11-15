@@ -139,3 +139,5 @@ results (measured 35).
   so I omitted it). If not required, this unit is complete as-is.
 - reviewer: implementation complete (green code, typecheck clean, report + marker
   committed). Acceptance review pending; the independent reviewer still owns it.
+
+L2-P1-ABSENCE-PROBE-TIERS-1 UNIT L2-P1-ABSENCE-PROBE-TIERS-1 DONE 8d162baebf5acebfb064189b43aa4d2466291c90
