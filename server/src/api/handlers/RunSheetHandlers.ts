@@ -84,7 +84,7 @@ interface RegisterBody {
   entryRef?: { kind: 'record'; id: string; type: string };
   eventGraphRef?: { kind: 'record'; id: string; type: string };
   equipmentRef?: { kind: 'record'; id: string; type: string };
-  assayType?: 'qpcr' | 'plate_reader' | 'microscopy' | 'gc_ms' | 'flow' | 'other';
+  assayType?: 'qpcr' | 'plate_reader' | 'microscopy' | 'gc_fid' | 'gc_ms' | 'flow' | 'other';
   title?: string;
 }
 
