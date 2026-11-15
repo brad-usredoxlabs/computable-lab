@@ -64,3 +64,5 @@ Environment materialization (not committed, git-ignored): `server/node_modules` 
 ## Next actions / blockers
 - None blocking for this unit. If the orchestrator re-baselines the green bars at the r13 rev (e52e9d01c) node_modules, re-run the two bar commands; expected clean.
 - Downstream (out of scope here): the fold now splices the chosen label but the noun still re-bars on recompile because the answer's record identity (optionId `lbw-def-generic-96-well-plate`) is not yet converted into a compiler `binding`/answeredSlot at the orchestrator seam — that is the u4foldbind leg this unit rides on; this unit closed the join it needs.
+
+L2-P1-AMBIGUOUS-OPTIONS-1 UNIT u5optbind DONE 7d201f5c045e890e8a43b450e9542fc396e0c30f
