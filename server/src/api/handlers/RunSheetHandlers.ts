@@ -190,7 +190,7 @@ export function createRunSheetHandlers(ctx: AppContext): RunSheetHandlers {
       // NAMED refusal: never a default (§2.15).
       if (eventGraphId && !entryId && body.assayType === undefined) {
         reply.status(400);
-        return { error: 'ASSAY_TYPE_REQUIRED', message: 'assayType is required for an event-graph-scoped acquisition — declare the assay (qpcr, plate_reader, microscopy, gc_ms, flow or other); the handler never defaults it.' };
+        return { error: 'ASSAY_TYPE_REQUIRED', message: 'assayType is required for an event-graph-scoped acquisition — declare the assay (qpcr, plate_reader, microscopy, gc_fid, gc_ms, flow or other); the handler never defaults it.' };
       }
 
       // AUTH (fix-cycle-1 D1): the SAME gate RecordHandlers.updateRecord
