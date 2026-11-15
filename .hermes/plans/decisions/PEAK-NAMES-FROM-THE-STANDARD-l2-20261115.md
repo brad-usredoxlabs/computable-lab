@@ -19,13 +19,26 @@ say where peak identity comes from).
 2. **The naming is an annotation over the measurement, never an edit of it.** The parsed peak table is
    evidence and stays byte-identical. What is written is a peak-identification record: measurement id, peak
    index, compound id, observed RT, unit, author, timestamp, source of the name.
-3. **The standard's names compose a retention-time reference library** — a versioned record derived from
-   the annotations, scoped to the GC method (column, temperature program, flow, detector). It is never typed
-   by hand and never assumed to apply to a different method.
-4. **A sample is named by mapping, not by asking again.** Sample peaks are matched against the library
-   within a tolerance declared in data, and each match is presented as a *proposal* with its evidence
-   (matched reference peak, ΔRT, tolerance, library revision). Acceptance writes sample-scoped annotations
-   citing that revision. A peak with no match is shown as unnamed — never guessed, never defaulted.
+3. **The standard is labelled by a role assignment, not by its name.** The mechanism already exists:
+   `well-role-assignment` declares `role_family: calibration` with `role_type: standard | calibrator |
+   external_standard | internal_standard | reference`, an optional `calibration` block, and four refs that
+   bridge into the knowledge layer (`generated_context_ref`, `generated_claim_ref`,
+   `generated_assertion_ref`, `generated_evidence_ref`). What does not exist yet: a single such record, or a
+   material record for the FAME mix. So the first task is to label it — with a `CR-reference-standard`
+   context-role whose prerequisites are machine-checkable.
+4. **A named peak is an assertion, and its evidence is the chromatogram.** `claim` ("compound X elutes at RT r
+   under gc-method M") → `assertion` in the standard's context, with `roles: [{role_ref: CR-reference-standard,
+   context_ref: <the standard's run>}]` and `evidence_refs: [<the measurement>]`. The measurement's parsed rows
+   are never edited; the name is a separate claim with its own author, confidence and status.
+5. **The retention-time library is a derived index, never the authority.** It is recomputable from the
+   assertions alone, scoped to `gc-methodRef` + `method_version`, and it lists the assertion ids it was built
+   from. Delete it and rebuild it: same content. That is what stops it from becoming a second place where
+   peak identity is decided.
+6. **A sample is named by new assertions in its own context, not by copying the standard's.** Each sample
+   assertion cites the source assertion and the method version, carries its own confidence, and a peak with no
+   match stays unnamed — never guessed, never defaulted.
+7. **Naming is refused on an unlabelled run.** If the run carries no role assignment declaring the material's
+   role, the person is told why; you cannot name peaks into reference truth on a sample you have not labelled.
 
 ## Why it is this shape and not "just type a name in the table"
 
