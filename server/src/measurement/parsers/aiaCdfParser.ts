@@ -22,9 +22,12 @@ import type { MeasurementParseResult, MeasurementParser, MeasurementRow } from '
 //
 // Every number in the result comes from the file, units included (the file
 // declares retention_unit and detector_unit; neither is defaulted). The only
-// conversion is seconds -> minutes for timeMin, noted in metadata. The trace
-// is summarized in metadata; the 56-peak table is emitted as rows keyed by
-// retention time, one row per peak field.
+// conversion is seconds -> minutes for timeMin, noted in metadata. The full
+// ordinate series is carried on result.trace (and summarized in metadata);
+// the 56-peak table is emitted as rows keyed by the 1-based peak index on the
+// 'chromatogram' channel, one row per peak field. The assayType is derived
+// from the file's detector_name (gc_fid / gc_ms), with the source noted in
+// metadata['assay_type_source'].
 
 const NC_CHAR = 2;
 const NC_SHORT = 3;
@@ -184,10 +187,17 @@ function parseAiaCdf(bytes: Buffer): MeasurementParseResult {
   scalar('actual_delay_time', 'delay_time_seconds');
   scalar('detector_minimum_value', 'detector_minimum_value');
   scalar('detector_maximum_value', 'detector_maximum_value');
+  const samplingIntervalSeconds = Number(metadata['sampling_interval_seconds']);
+  if (metadata['sampling_interval_seconds'] === undefined || !Number.isFinite(samplingIntervalSeconds) || samplingIntervalSeconds <= 0) {
+    throw refuse('AIA_CDF_SAMPLING_INTERVAL', `the file must carry a positive actual_sampling_interval so the trace grid (point i at i * interval) is transcribed, not guessed`);
+  }
+  // The full ordinate series in file order (the trace the metadata also summarizes).
+  const traceValues: number[] = [];
   let traceMin = Number.POSITIVE_INFINITY;
   let traceMax = Number.NEGATIVE_INFINITY;
   for (let i = 0; i < trace.elems; i += 1) {
     const v = f32(trace, i);
+    traceValues.push(v);
     if (v < traceMin) traceMin = v;
     if (v > traceMax) traceMax = v;
   }
@@ -196,6 +206,32 @@ function parseAiaCdf(bytes: Buffer): MeasurementParseResult {
   metadata['trace_max_value'] = String(traceMax);
   metadata['trace_unit'] = intensityUnit;
   metadata['time_axis'] = `retention in ${retentionUnit}; timeMin = ${retentionUnit} / 60`;
+  // D2: derive the assay type from the file's own detector declaration. Only a
+  // DETECTED declaration may be reported as 'detector_name'; every other path is
+  // a fallback and must say so — a present-but-unmapped name (TCD/ECD/blank) is
+  // not a derivation, it is today's gc_ms default.
+  const detectorName = gattrs['detector_name'];
+  const detectorLabel = (detectorName ?? '').trim();
+  const detectorNameUpper = detectorLabel.toUpperCase();
+  let assayType: MeasurementParseResult['assayType'];
+  let assayTypeSource: string;
+  if (detectorNameUpper.startsWith('FID')) {
+    assayType = 'gc_fid';
+    assayTypeSource = 'detector_name';
+  } else if (detectorNameUpper.includes('MSD') || detectorNameUpper.includes('MS ')) {
+    assayType = 'gc_ms';
+    assayTypeSource = 'detector_name';
+  } else {
+    // Today's fallback, kept and made explicit.
+    assayType = 'gc_ms';
+    assayTypeSource =
+      detectorName === undefined
+        ? 'fallback (no detector_name declared)'
+        : detectorLabel === ''
+          ? 'fallback (detector_name declared empty)'
+          : `fallback (unrecognized detector_name "${detectorLabel}")`;
+  }
+  metadata['assay_type_source'] = assayTypeSource;
 
   const peaks = retention.elems;
   const peakFieldVars = PEAK_FIELDS.map((field) => ({ field, v: findVar(field.name) })).filter(
@@ -209,7 +245,10 @@ function parseAiaCdf(bytes: Buffer): MeasurementParseResult {
   const data: MeasurementRow[] = [];
   for (let p = 0; p < peaks; p += 1) {
     const rt = f32(retention, p);
-    const well = String(rt);
+    // D1: a chromatogram has no wells — the row belongs to the chromatogram
+    // channel and peak identity is the 1-based peak index. The retention time
+    // lives in the peak_retention_time value and timeMin, never in `well`.
+    const well = String(p + 1);
     const timeMin = rt / 60;
     for (const { field, v } of peakFieldVars) {
       const perPeak = v.elems / peaks; // 1 for the scalar-per-peak vars, 2 for the char[2] code vars
@@ -229,12 +268,14 @@ function parseAiaCdf(bytes: Buffer): MeasurementParseResult {
       }
       const unit = field.unitKey === 'time' ? retentionUnit : field.unitKey === 'intensity' ? intensityUnit : null;
       data.push(
-        unit !== null ? { well, metric: field.name, value, unit, timeMin } : { well, metric: field.name, value, timeMin }
+        unit !== null
+          ? { well, metric: field.name, value, unit, timeMin, channelId: 'chromatogram' }
+          : { well, metric: field.name, value, timeMin, channelId: 'chromatogram' }
       );
     }
   }
   return {
-    assayType: 'gc_ms',
+    assayType,
     parserId: 'aia_andi_cdf',
     parserVersion: '1.0.0',
     data,
@@ -242,6 +283,17 @@ function parseAiaCdf(bytes: Buffer): MeasurementParseResult {
     mimeType: 'application/x-netcdf',
     units: { time: retentionUnit, intensity: intensityUnit },
     metadata,
+    // D3: the ordinate series itself, in file order. Uniform sampling grid:
+    // this writer's grid spans points * actual_sampling_interval ==
+    // actual_run_time_length (3640.05 s over 72801 points at 0.05 s on the
+    // fixture), so the time of point i is i * samplingIntervalSeconds.
+    trace: {
+      channelId: 'chromatogram',
+      samplingIntervalSeconds,
+      values: traceValues,
+      timeUnit: retentionUnit,
+      intensityUnit,
+    },
   };
 }
 
