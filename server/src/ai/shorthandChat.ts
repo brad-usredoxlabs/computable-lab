@@ -803,6 +803,34 @@ function factReadings(fact: ScientistIntentUnresolvedFact): readonly Composition
   return Array.isArray(readings) && readings.length > 0 ? readings as readonly CompositionReading[] : undefined;
 }
 
+/**
+ * W28-OPTIONBIND-1 (ruling scientistIntent/types.ts:119-127): the
+ * AMBIGUOUS-NOUN option arm (the structural candidate read — the twin of
+ * `factReadings`). The engine attaches ordered candidates to an
+ * ambiguous-noun fact (`fact.candidates` — sortCandidates + candidateFact;
+ * NOTHING in the compiler changes). A candidate `ref` is the engine's
+ * STORE-BACKED record id ONLY when the engine emitted one (tier<=1 CURIE
+ * naming a record; mint affordances and tier>1 hits carry none): ONLY a
+ * candidate carrying a NON-EMPTY string ref becomes an option — `id` is
+ * the candidate's ref (the engine's record id, never an invented one),
+ * `label` the candidate's own label, in candidate order. A candidate
+ * WITHOUT a string ref renders NO option (anti-fabrication: an option
+ * button must carry a real record handle — the pin at
+ * resolutionEngine.optionRef.test.ts:7). No candidates => the empty set,
+ * so the unknown-noun card keeps `options: []` byte-identically.
+ */
+function factCandidateOptions(fact: ScientistIntentUnresolvedFact): Array<{ id: string; label: string }> {
+  const candidates = fact.candidates;
+  if (candidates === undefined || candidates.length === 0) return [];
+  const options: Array<{ id: string; label: string }> = [];
+  for (const candidate of candidates) {
+    if (typeof candidate.ref === 'string' && candidate.ref.length > 0) {
+      options.push({ id: candidate.ref, label: candidate.label });
+    }
+  }
+  return options;
+}
+
 /** The bar's own data-derived question text, when the producer attached one
  *  (the same generic read — the fact type's declared envelope is
  *  {label, reason, actionLocation}; the producer clarification's optional
@@ -1000,6 +1028,13 @@ export function clarificationsFromUnresolvedFacts(
     // The reading arm is STRUCTURAL (factReadings): a readings-bearing
     // fact is a choice card; every other fact keeps the domain map verbatim.
     const readings = factReadings(fact);
+    // W28-OPTIONBIND-1 (r10 DEFECT 1): a NON-reading fact carrying the
+    // engine's ordered candidates (the ambiguous-noun card) offers the
+    // ref-carrying candidates AS its selectable options — option id = the
+    // engine's store-backed record id (the candidate ref); ref-less
+    // candidates render nothing (never an invented id). The readings arm
+    // below stays byte-identical; no candidates keeps `options: []`.
+    const candidateOptions = factCandidateOptions(fact);
     const menuProvider = readings
       ? 'choice'
       : domain === 'labware' ? '/l' : domain === 'material' ? '/m' : 'choice';
@@ -1143,12 +1178,17 @@ export function clarificationsFromUnresolvedFacts(
       // search (real records + ontologies) is the only menu. The bar's own
       // candidates ride on `unresolvedFact`, untouched. A READING fact's
       // options ARE the bar's own readings (Ruling 2): the scientist chooses
-      // a READING, seeing what each does to the fractions.
-      options: (readings ?? []).map((reading) => ({
-        id: reading.id,
-        label: reading.label,
-        snippet: readingOptionSnippet(reading, fractionConfig),
-      })),
+      // a READING, seeing what each does to the fractions. W28-OPTIONBIND-1
+      // (r10 DEFECT 1): a NON-reading fact carrying engine candidates offers
+      // the ref-carrying candidates as the options (id = the engine's
+      // store-backed record id); no candidates => `[]`.
+      options: readings
+        ? readings.map((reading) => ({
+            id: reading.id,
+            label: reading.label,
+            snippet: readingOptionSnippet(reading, fractionConfig),
+          }))
+        : candidateOptions,
       allowCreateLocal,
       unresolvedFact: fact,
       ...(clarifyControl !== undefined ? { clarifyControl } : {}),
