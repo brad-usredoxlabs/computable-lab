@@ -406,3 +406,44 @@ describe('identity lives on the ENVELOPE, not the payload (production wire shape
     expect(hit!.offer_reason, 'no reason key on an offerable hit').toBeUndefined();
   });
 });
+
+// L2-P1-SEARCH-STORE-CLAIM-1 (unit u1tierword): the picker must never claim
+// "no record in the lab store" when the store was NEVER read (absent, or
+// list() threw) — absence is unknown there (architect-context-l2 §0: a search
+// failure is not an absence; report "I could not verify", never "does not
+// exist"). The searched-tier wording and the declared-off wording are pinned
+// byte-identical in the offerfilter describe above.
+describe('unavailable store tier: offer_reason says unverified, never asserts absence', () => {
+  it('AC2: a store whose list() throws yields no "no record in the lab store" claim; reason names the condition + stock unverified', async () => {
+    const store = {
+      list: async () => {
+        throw new Error('store offline');
+      },
+    } as unknown as LabwareDefinitionSearchOptions['store'];
+    const { hits, storeTier } = await searchLabwareDefinitions({ store, q: '', limit: 50 });
+    expect(storeTier).toEqual({ status: 'unavailable', reason: 'store offline' });
+    expect(hits.length).toBeGreaterThan(0);
+    expect(
+      hits.every((h) => h.offerable || !/no record in the lab store/.test(h.offer_reason ?? '')),
+    ).toBe(true);
+    const unverified = hits.filter(
+      (h) => h.offerable === false && /stock unverified/.test(h.offer_reason ?? ''),
+    );
+    expect(unverified.length).toBeGreaterThan(0);
+    expect(unverified[0]!.offer_reason).toContain('store offline');
+  });
+
+  it('AC2: no store at all yields the same truthfulness, naming no-store (never "no record in the lab store")', async () => {
+    const { hits, storeTier } = await searchLabwareDefinitions({ q: '', limit: 50 });
+    expect(storeTier).toEqual({ status: 'unavailable', reason: 'no-store' });
+    expect(hits.length).toBeGreaterThan(0);
+    expect(
+      hits.every((h) => h.offerable || !/no record in the lab store/.test(h.offer_reason ?? '')),
+    ).toBe(true);
+    const unverified = hits.filter(
+      (h) => h.offerable === false && /stock unverified/.test(h.offer_reason ?? ''),
+    );
+    expect(unverified.length).toBeGreaterThan(0);
+    expect(unverified[0]!.offer_reason).toContain('no-store');
+  });
+});
