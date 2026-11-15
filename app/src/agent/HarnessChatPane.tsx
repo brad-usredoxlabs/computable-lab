@@ -68,6 +68,11 @@ function ThreadPicker({ chat }: { chat: UseAiChatReturn }) {
   const listThreads = chat.listThreads
   const switchThread = chat.switchThread
   const newThread = chat.newThread
+  // L2-P1-THREAD-RESTORE-1 u4scope: the hook's resolved (tab, scope) tab id.
+  // The hook knows its own scope — the bare getThreadTabId() below (kept for
+  // non-thread-scoped stubs) hits the no-scope bucket and never matches a
+  // scoped host's persisted row (r12 legB: run-door reload never resumes).
+  const tabThreadId = chat.tabThreadId
   const [threads, setThreads] = useState<ThreadSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   // u3reloadresume (r11 gate defect 2): while `threads` is null the list is
@@ -88,12 +93,14 @@ function ThreadPicker({ chat }: { chat: UseAiChatReturn }) {
         if (cancelled) return
         setThreads(list)
         setError(null)
-        // u3reloadresume: if the tab's persisted id (threadTabIds — same single
-        // mint the hook and the wire header use, so this mints nothing new)
+        // u3reloadresume / u4scope: if the tab's persisted id — read THROUGH
+        // the hook's tabThreadId accessor (the hook knows its own (tab, scope)
+        // bucket, same single mint it and the wire header use; the bare
+        // getThreadTabId() below is the non-thread-scoped-stub fallback only)
         // names a fetched row WITH messages and we are not already on it,
         // activate it via the registered switchThread (hook re-keys/rehydrates).
         // A messageless row is never auto-selected (honest blank).
-        const persisted = getThreadTabId()
+        const persisted = (tabThreadId ? tabThreadId() : undefined) ?? getThreadTabId()
         const row = list.find((t) => t.threadId === persisted)
         // switchThread is null-checked in the render body; TS does not narrow a
         // captured const here, so re-check.
@@ -110,7 +117,7 @@ function ThreadPicker({ chat }: { chat: UseAiChatReturn }) {
     return () => {
       cancelled = true
     }
-  }, [listThreads, switchThread])
+  }, [listThreads, switchThread, tabThreadId])
 
   useEffect(() => load(), [load])
 

@@ -110,6 +110,15 @@ function HookHost({ chatRef, scopeStatus }: { chatRef: { current: ReturnType<typ
   return null
 }
 
+/** A host owning a REAL useAiChat WITH A SCOPE and NO pane — the r12 legB
+ * surface (the run door resolves scope = the run's record identity). Drives
+ * the hook's returned tabThreadId accessor directly. */
+function ScopedHookHost({ chatRef, scope }: { chatRef: { current: ReturnType<typeof useAiChat> | null }; scope: string }) {
+  const chat = useAiChat({ aiContext, endpoint: 'event-editor', scope })
+  chatRef.current = chat
+  return null
+}
+
 const select = () => screen.getByTestId('thread-picker-select') as HTMLSelectElement
 const logMessages = () => screen.getAllByRole('log').flatMap((l) => [...l.querySelectorAll<HTMLElement>('.chat-log-msg')])
 
@@ -195,5 +204,28 @@ describe('u3selectid — a second tab selects a listed thread: the wire carries 
     })
     // The read that PROVED the thread is what the tab keeps (AC4: reload).
     expect(JSON.parse(sessionStorage.getItem('cl.ai-thread-tab-ids') ?? '{}')['']).toBe(FIXTURE_TID)
+  })
+})
+
+describe('u4scope — the hook exposes the RESOLVED (tab, scope) tab id (r12 legB)', () => {
+  it('tabThreadId() on a SCOPED chat returns exactly getThreadTabId(scope) — never the bare no-scope bucket', async () => {
+    const SCOPE = 'run:RUN-1'
+    const chatRef = { current: null as ReturnType<typeof useAiChat> | null }
+    render(<ScopedHookHost chatRef={chatRef} scope={SCOPE} />)
+    // The lazy-mint effect resolves the scoped tab id one render after the
+    // first (activeThread null → the accessor returns undefined until then).
+    await waitFor(() => expect(chatRef.current!.tabThreadId).toBeTypeOf('function'))
+    const scoped = getThreadTabId(SCOPE)
+    const bare = getThreadTabId() // the bare read the pre-fix picker performed
+    expect(scoped).not.toBe(bare) // a scoped host's bucket is its OWN
+    // THE seam (r12 legB): the accessor returns the SCOPED id the hook
+    // mints/persists under — equality, so the pane's resume check matches
+    // the row the scoped host persisted. A bare getThreadTabId() here is
+    // the pre-fix defect shape (wrong bucket → row never matches → no
+    // resume on the run-door reload).
+    await waitFor(() => expect(chatRef.current!.tabThreadId!()).toBe(scoped))
+    // ...and it IS the id persisted under this (tab, scope) — the same
+    // single mint (read through the real storage map, like AC4 above).
+    expect(JSON.parse(sessionStorage.getItem('cl.ai-thread-tab-ids') ?? '{}')[SCOPE]).toBe(scoped)
   })
 })
