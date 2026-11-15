@@ -395,8 +395,14 @@ export type AcceptEventHandler = (event: PlateEvent) => void
  */
 export interface DeckAdoptionOutcome {
   adopted: boolean
-  /** Refused at the ontology sign-off gate: unsigned decisionNeeded terms. */
+  /** Refused before any write: `blocked` names the count (unsigned
+   *  decisionNeeded terms, or placed labwares with no resolvable definition). */
   blocked?: number
+  /** u3ghostfix D3: WHY it was refused — the refusal wording branches on this
+   *  (a ghost-gate refusal is not an ontology sign-off). */
+  reason?: 'ontology-signoff' | 'unplaceable-labware'
+  /** Ghost-gate refusals: the deck keys that could not name a definition. */
+  unplaceable?: string[]
   /** Adopted: the counts of what was ACTUALLY committed (for the summary
    *  line — never "Accepted N events." while labware/placements were
    *  silently dropped). */
@@ -2506,14 +2512,22 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
         return
       }
       if (adoption) {
-        // Refused at the ontology sign-off gate (NOT bypassable): VISIBLE in
-        // the conversation; the ghost STAYS mounted and the staged state
-        // stays (the scientist signs off in the changes panel and retries).
-        // Never silently materialize.
+        // Refused BEFORE any write: VISIBLE in the conversation; the ghost
+        // STAYS mounted and the staged state stays (the scientist resolves it
+        // and retries). Never silently materialize. u3ghostfix D3: the wording
+        // follows the REFUSAL's reason — a ghost-gate refusal is not an
+        // ontology sign-off, and telling the user to sign off terms would be a
+        // false instruction.
         const blocked = adoption.blocked ?? 0
+        const unplaceable = adoption.unplaceable ?? []
+        const named = unplaceable.length > 0 ? unplaceable.join(', ') : `${blocked} placed labware`
+        const content =
+          adoption.reason === 'unplaceable-labware'
+            ? `${named} ${blocked === 1 ? 'was' : 'were'} placed without a resolvable labware definition record — nothing was applied; the ghost stays on the deck.`
+            : `${blocked} ontology terms need sign-off in the changes panel — nothing was applied.`
         setMessages((prev) => [
           ...prev,
-          { id: generateMessageId(), role: 'system', content: `${blocked} ontology terms need sign-off in the changes panel — nothing was applied.`, timestamp: Date.now() },
+          { id: generateMessageId(), role: 'system', content, timestamp: Date.now() },
         ])
         return
       }
