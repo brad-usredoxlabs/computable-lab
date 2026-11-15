@@ -256,7 +256,12 @@ describe('createLabwareLookup', () => {
       },
     ];
 
-    vi.mocked(fakeStore.list).mockResolvedValue(labwareRecords);
+    // u1restier: the mock now mirrors the real store contract — a kind
+    // filter only ever returns records of that kind (a labware-definition
+    // list never returns labware instance records).
+    vi.mocked(fakeStore.list).mockImplementation(async (filter) =>
+      filter?.kind === 'labware' ? labwareRecords : [],
+    );
 
     const lookup = createLabwareLookup(fakeStore);
     
@@ -350,7 +355,11 @@ describe('createLabwareLookup', () => {
       },
     ];
 
-    vi.mocked(fakeStore.list).mockResolvedValue(labwareRecords);
+    // u1restier: the mock now mirrors the real store contract — a kind
+    // filter only ever returns records of that kind.
+    vi.mocked(fakeStore.list).mockImplementation(async (filter) =>
+      filter?.kind === 'labware' ? labwareRecords : [],
+    );
 
     const lookup = createLabwareLookup(fakeStore);
     const result = await lookup('12-well reservoir');
@@ -409,12 +418,15 @@ describe('createLabwareLookup', () => {
     // record holds) does NOT bind — identity, never name or slug.
     expect(await lookup('lbw-def-generic-96-well-deepwell-plate')).toEqual([]);
 
-    // The bare display name must ALSO not bind (AC2 / the IDENTITY-BY-NAME
-    // bait). The label (name/alias) tier scores only `kind:'labware'`
-    // INSTANCE records, never labware-definition records, and no instance
-    // carries this name here — so the display name resolves to nothing. Only
-    // the recordId binds.
-    expect(await lookup('Generic 96-Well Deep Well Plate')).toEqual([]);
+    // u1restier: the bare display name now RESOLVES. The scored tier spans
+    // BOTH record sets (labware + labware-definition) and scores the
+    // definition's display_name through the same ladder (exact name = 100),
+    // so a free-text name pre-selects the candidate at the top score. It
+    // does NOT bind identity: identity remains the exact, case-sensitive
+    // recordId (the assertions above), never a name.
+    expect(await lookup('Generic 96-Well Deep Well Plate')).toEqual([
+      { recordId: 'lbw-def-generic-96-well-deep-plate', title: 'Generic 96-Well Deep Well Plate' },
+    ]);
   });
 
   it('binds an instance recordId through the labware tier too', async () => {
