@@ -353,6 +353,42 @@ export function extractEmptyTurnLabwarePhrases(sentence: string): string[] {
   return fragments;
 }
 
+/** Prepositions that open a trailing location phrase inside a kept-whole clause. */
+const EMPTY_TURN_LOCATION_PREPOSITION = /\b(?:on|onto|into|in|at|to|from)\b/gi;
+
+/**
+ * Probe forms for ONE candidate: the candidate, its prepositional TAIL (text
+ * after the last on|onto|into|in|at|to|from, determiner stripped) and its bare
+ * head-noun WORD. The lookup's name tier is `name.includes(hint)`
+ * (labwareLookup.ts:135), so a kept-whole CLAUSE ("sample into the 96-well
+ * plate") is longer than any record name and can never match even when the lab
+ * HOLDS the plate. The tail and head word are what a name can contain, and the
+ * head word absorbs hyphen/space drift ("96-well plate" vs "Generic 96 Well
+ * Plate"). Head-word probing deliberately UNDER-requests beside an existing
+ * labware (friction-first: a missed absence card costs a re-ask; a false one
+ * invents a gap the lab does not have).
+ */
+function emptyTurnProbeForms(candidate: string): string[] {
+  const forms = [candidate];
+  const found = [...candidate.matchAll(EMPTY_TURN_LOCATION_PREPOSITION)];
+  const last = found[found.length - 1];
+  const tail = last
+    ? candidate
+        .slice((last.index ?? 0) + last[0].length)
+        .trim()
+        .replace(/^(?:a|an|the)\s+/i, '')
+        .trim()
+    : '';
+  if (tail.length > 0 && EMPTY_TURN_LABWARE_HEAD.test(tail) && !EMPTY_TURN_NOISE.test(tail)) {
+    forms.push(tail);
+  }
+  const headWord = new RegExp(EMPTY_TURN_LABWARE_HEAD.source, 'i').exec(candidate);
+  if (headWord) forms.push(headWord[0]);
+  const unique = new Map<string, string>();
+  for (const form of forms) if (form.trim()) unique.set(form.trim().toLowerCase(), form);
+  return [...unique.values()];
+}
+
 /**
  * Given the user turn text and the composed `searchLabwareByHint`, return
  * `AgentClarificationRequest[]` with AT MOST ONE request: a NAMED ABSENCE for
@@ -368,15 +404,23 @@ export async function emptyTurnAbsenceRequests(
 ): Promise<AgentClarificationRequest[]> {
   const candidates = extractEmptyTurnLabwarePhrases(turnText);
   if (candidates.length === 0) return [];
-  // Longest first; probe the FULL extracted phrase (never a sub-window — the
-  // lookup's name tier is substring-based, a sub-phrase probe could miss a
-  // longer-held name and declare a false absence).
+  // Longest first. Each candidate is probed by ITSELF, by its prepositional
+  // tail and by its bare head-noun word (see emptyTurnProbeForms), so a record
+  // the lab HOLDS is never falsely declared absent.
   const ordered = [...candidates].sort(
     (a, b) => b.length - a.length || candidates.indexOf(a) - candidates.indexOf(b),
   );
   for (const candidate of ordered) {
-    const matches = await searchLabwareByHint(candidate);
-    if (matches.length === 0) {
+    // Absent ONLY if EVERY probe form misses; a hit on any form means held.
+    let held = false;
+    for (const form of emptyTurnProbeForms(candidate)) {
+      const matches = await searchLabwareByHint(form);
+      if (matches.length > 0) {
+        held = true;
+        break;
+      }
+    }
+    if (!held) {
       const mention = candidate.trim();
       if (!mention) return [];
       // FIX-2a: the candidate PASSED the labware-head test upstream, so the ask

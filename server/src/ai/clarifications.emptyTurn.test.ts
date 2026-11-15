@@ -18,10 +18,23 @@ const MANIFEST =
   'Place a Thermo Optical-Quality Imaging Plate, 384-well, black-walled, ' +
   'clear bottom (catalog number A58941) on the deck.';
 
-/** Stub lookup: the named plate phrase resolves to nothing, nothing else. */
+// L2-P1-EMPTY-TURN-CARD-2 u3falseabsence: the stub now speaks the SHIPPED name
+// tier (compiler/labwareLookup.ts:135 `name.includes(hint)`), not /phrase/i.
+const HELD_RECORDS = ['Generic 96 Well Plate', 'Generic 12-Channel Reservoir', 'Cool Rack'];
+
+/** Shipped name-tier direction: a record matches when its NAME contains the hint. */
+function shippedLookup(records: string[] = HELD_RECORDS) {
+  return async (hint: string): Promise<Array<{ recordId: string; title: string }>> => {
+    const normalized = hint.trim().toLowerCase();
+    return records
+      .filter((name) => name.toLowerCase().includes(normalized))
+      .map((name, index) => ({ recordId: `LAB-${index}`, title: name }));
+  };
+}
+
+/** Stub lookup: a store holding ONE rack — the manifest's plate is absent. */
 function stubLookup() {
-  return async (hint: string): Promise<Array<{ recordId: string; title: string }>> =>
-    /Thermo Optical-Quality Imaging Plate/i.test(hint) ? [] : [{ recordId: 'LAB-x', title: 'X' }];
+  return shippedLookup(['Cool Rack']);
 }
 
 describe('L2-P1-EMPTY-TURN-CARD-2 u1emptycard - empty-turn named absence', () => {
@@ -152,26 +165,11 @@ describe('L2-P1-EMPTY-TURN-CARD-2 u2mentionfix — the phrase extractor keeps th
 });
 
 // ---------------------------------------------------------------------------
-// L2-P1-EMPTY-TURN-CARD-2 u3falseabsence — cycle-2 adversarial DEFECT 1 (MAJOR):
-// the kept-whole CLAUSE candidate was probed against the SHIPPED name tier
-// (compiler/labwareLookup.ts:135 `normalizedName.includes(normalized)`), where
-// the record NAME must contain the HINT. A clause hint is longer than any
-// record name, so it could never match even when the lab HELD the labware —
-// a FALSE absence card. The stub below is the shipped direction (name includes
-// hint, lowercased); the earlier /plate/i stub accepted clauses and hid this.
+// L2-P1-EMPTY-TURN-CARD-2 u3falseabsence — cycle-2 DEFECT 1: the kept-whole
+// CLAUSE was probed against the SHIPPED name tier (labwareLookup.ts:135
+// `name.includes(hint)`); a clause is longer than any record name, so a HELD
+// labware was falsely declared absent. shippedLookup() stubs that direction.
 // ---------------------------------------------------------------------------
-
-const HELD_RECORDS = ['Generic 96 Well Plate', 'Generic 12-Channel Reservoir', 'Cool Rack'];
-
-/** Shipped name-tier direction: a record matches when its NAME contains the hint. */
-function shippedLookup(records: string[] = HELD_RECORDS) {
-  return async (hint: string): Promise<Array<{ recordId: string; title: string }>> => {
-    const normalized = hint.trim().toLowerCase();
-    return records
-      .filter((name) => name.toLowerCase().includes(normalized))
-      .map((name, index) => ({ recordId: `LAB-${index}`, title: name }));
-  };
-}
 
 describe('L2-P1-EMPTY-TURN-CARD-2 u3falseabsence — cycle-2 DEFECT 1: a held record is never falsely declared absent', () => {
   const HELD_TURNS = [
