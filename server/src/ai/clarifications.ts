@@ -397,10 +397,23 @@ function emptyTurnProbeForms(candidate: string): string[] {
  * absence vocabulary as clarificationRequestsFromAssurance: absence.mention =
  * trimmed original-casing noun, reason = `Not in this lab's records: <mention>`,
  * options empty, query/snippet = mention, kind via normalizeClarificationKind.
+ *
+ * L2-P1-ABSENCE-PROBE-TIERS-1 (u1probe), decision
+ * ABSENCE-RENDERING-AND-PROBE-TIERS-l2-20261114 ruling 2 — an absence
+ * assertion requires a probe across BOTH tiers before it is made. The
+ * DEFINITION tier (`searchDefinitionByHint`, optional) is consulted only after
+ * the record tier missed every probe form of a candidate:
+ *   - record hit            -> held, no absence (unchanged);
+ *   - definition-only hit   -> reason =
+ *     `A definition exists in the registry, with no record in this lab's
+ *      store (not lab stock): <mention>` (the approved starter-pack wording);
+ *   - neither               -> the verbatim
+ *     `Not in this lab's records: <mention>` (unchanged).
  */
 export async function emptyTurnAbsenceRequests(
   turnText: string,
   searchLabwareByHint: (hint: string) => Promise<Array<{ recordId: string; title: string }>>,
+  searchDefinitionByHint?: (hint: string) => Promise<Array<{ recordId: string; title: string }>>,
 ): Promise<AgentClarificationRequest[]> {
   const candidates = extractEmptyTurnLabwarePhrases(turnText);
   if (candidates.length === 0) return [];
@@ -421,6 +434,21 @@ export async function emptyTurnAbsenceRequests(
       }
     }
     if (!held) {
+      // DEFINITION tier (ruling 2: both tiers probed BEFORE any absence is
+      // made). Consulted only after the record tier missed every form, with
+      // the SAME forms — a definition hit means the lab KNOWS the labware;
+      // the wording is then "in the registry, not lab stock", never
+      // "not in this lab's records". Absent tier => state 3, verbatim.
+      let definitionHeld = false;
+      if (searchDefinitionByHint) {
+        for (const form of emptyTurnProbeForms(candidate)) {
+          const matches = await searchDefinitionByHint(form);
+          if (matches.length > 0) {
+            definitionHeld = true;
+            break;
+          }
+        }
+      }
       const mention = candidate.trim();
       if (!mention) return [];
       // FIX-2a: the candidate PASSED the labware-head test upstream, so the ask
@@ -439,7 +467,12 @@ export async function emptyTurnAbsenceRequests(
         options: [],
         query: mention,
         snippet: mention,
-        absence: { mention, reason: `Not in this lab's records: ${mention}` },
+        absence: {
+          mention,
+          reason: definitionHeld
+            ? `A definition exists in the registry, with no record in this lab's store (not lab stock): ${mention}`
+            : `Not in this lab's records: ${mention}`,
+        },
       };
       return [request];
     }
