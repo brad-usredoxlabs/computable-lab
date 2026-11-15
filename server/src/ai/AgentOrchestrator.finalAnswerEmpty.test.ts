@@ -30,16 +30,10 @@ import { createLabwareLookup } from './compiler/labwareLookup.js';
 import { AGENT_INTENT_TOOL_NAME } from './submitSuggestionTool.js';
 import type { AgentRequest, CompletionResponse } from './types.js';
 
-// ---------------------------------------------------------------------------
 // L2-P1-EMPTY-TURN-CARD-2 u2mentionfix (FIX-3): the SHORTHAND (arm-2) backstop
-// at AgentOrchestrator.ts:3574-3589 has no other pin — deleting the whole block
-// left every committed suite green (advc c1 mutation M2). This file's arm-2 leg
-// below is that pin. To reach the block deterministically the deterministic
-// compile is stubbed to the ONE shape the guard exists for (outcome 'complete',
-// zero terminal events, zero clarifications): the empty turn the backstop was
-// written to degrade HONESTLY. Everything else (mapper, guard, absence probe)
-// is the shipped code path — the assertion is on the real arm.
-// ---------------------------------------------------------------------------
+// at AgentOrchestrator.ts:3574-3589 had no pin (advc c1 mutation M2). The
+// deterministic compile is stubbed to the ONE shape the guard exists for; the
+// mapper, guard and absence probe are the shipped code path.
 vi.mock('./shorthandChat.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./shorthandChat.js')>();
   return {
