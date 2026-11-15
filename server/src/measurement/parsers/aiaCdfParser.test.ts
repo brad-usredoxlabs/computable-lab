@@ -87,11 +87,15 @@ describe('aiaAndiCdf parser (unit u1parser)', () => {
     expect(trace?.samplingIntervalSeconds).toBeCloseTo(SAMPLING_INTERVAL, 4);
     expect(trace?.timeUnit).toBe('seconds');
     expect(trace?.intensityUnit).toBe('pA');
-    // First and last samples sit near baseline (~9.8 pA on this file).
-    expect(Math.abs(trace?.values[0] - 9.8)).toBeLessThan(1);
-    expect(Math.abs(trace?.values[trace?.values.length - 1] - 9.8)).toBeLessThan(20);
-    // The 6.56 min peak: index 6.56 / 0.05 = 7872.
-    expect(trace?.values[7872]).toBeGreaterThan(200000);
+    // Baseline ends measured on this file: first sample 9.7135 pA, last sample
+    // 17.0548 pA (index 72800) — the trace closes above baseline, not at it.
+    expect(Math.abs(trace?.values[0] - 9.7135)).toBeLessThan(0.01);
+    expect(Math.abs(trace?.values[trace?.values.length - 1] - 17.0548)).toBeLessThan(0.01);
+    // The 6.56 min peak: apex index 7876 = 6.5633 min, measured 252898.8125 pA
+    // (an apex 21% low fails). Index 7872 (6.56 min) is 0.2 s early and reads
+    // 252264.203125, so it is only a secondary lower bound.
+    expect(trace?.values[7876]).toBeCloseTo(252898.8125, 0);
+    expect(trace?.values[7872]).toBeGreaterThan(250000);
   });
 
   it('emits the 56-peak table keyed by peak index on the chromatogram channel (one metric per peak field)', () => {
