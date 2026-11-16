@@ -141,8 +141,10 @@ is outside u2's OWNED set, so it is reported as a follow-up, not wired.
 
 ## MARKER
 
-Marker sha = `git rev-parse HEAD` at the moment the marker was written (the code-fix commit 7c05efc4c),
-per the brief's marker procedure ("Before the marker run git rev-parse HEAD and paste the FULL
-40-char SHA"); this report + marker are committed in the commit that follows it.
+Marker sha = 26519e0033b715b60ae268a0a1dd0c794563938b — the commit that CONTAINS this report
+(`.hermes/reports/L2-P1-PLACE-AND-MINT-1-u2-report.md`, "report(lane2): L2-P1-PLACE-AND-MINT-1 u2 ...").
+The code + tests it documents are in 7c05efc4cefcafdfc789805a8f39a1d7dcefee1f ("fix(lane2): ...") on top
+of the committed-RED 45a8db2f9. `git log --oneline`: 26519e003 -> 7c05efc4c -> 45a8db2f9 -> a2de24ee3 (base).
+Tree is clean; the final commit after the marker was written contains only the marker sha update.
 
-L2-P1-PLACE-AND-MINT-1 UNIT u2 DONE 7c05efc4cefcafdfc789805a8f39a1d7dcefee1f
+L2-P1-PLACE-AND-MINT-1 UNIT u2 DONE 26519e0033b715b60ae268a0a1dd0c794563938b
