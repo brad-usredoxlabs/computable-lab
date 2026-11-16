@@ -150,7 +150,34 @@ export interface ClarificationCandidateFact {
 
 export type Clarification = Omit<ScientistIntentUnresolvedFact, 'candidates'> & {
   candidates?: ClarificationCandidateFact[];
+  /**
+   * L2-NOUN-CREATION-JOURNEY-1 (unit u1journey): the DECLARED creation journey
+   * an unbound MATERIAL noun is created through — projected from
+   * config/journey/declarations/noun-create.yaml by
+   * journey/journeyDeclarationDoors.ts. Rides the clarification only; the
+   * shared fact envelope is unchanged, and nothing here is a door list of its
+   * own.
+   */
+  journey?: ClarificationJourneyFact;
 };
+
+/** One declared door as it rides a clarification (see JourneyDeclarationDoor). */
+export interface ClarificationJourneyDoorFact {
+  id: string;
+  summary: string;
+  surface: string;
+  capabilityRef: string;
+  /** The person's own noun, carried as a CANDIDATE (never a minted identity). */
+  candidateLabel: string;
+}
+
+export interface ClarificationJourneyFact {
+  journeyId: string;
+  revision: number;
+  checkpointRef: string;
+  candidateLabel: string;
+  doors: ClarificationJourneyDoorFact[];
+}
 
 export interface EngineOutcome {
   bindings: BoundNoun[];

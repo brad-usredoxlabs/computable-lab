@@ -107,6 +107,13 @@ describe('unresolved material noun -> declared noun-create doors', () => {
     const options = (mutated.alternatives as any).options as any[];
     options.splice(1, 1); // delete 'local-formulation'
     options[0]!.alternative_id = 'renamed-door';
+    // the declaration's own consistency rule: the card's controls name the
+    // doors, so a renamed/deleted door is renamed/deleted there too (a
+    // document whose controls and alternatives disagree is malformed and is
+    // refused — see journeyDeclarationDoors.ts).
+    const controls = (mutated.steps as any[])[0].human_task.controls as string[];
+    controls.splice(1, 1);
+    controls[0] = 'renamed-door';
     const doors = doorsFromJourneyDocument(mutated);
     expect(doors.map((d) => d.id)).toEqual(['renamed-door', 'local-product-or-sample']);
   });
