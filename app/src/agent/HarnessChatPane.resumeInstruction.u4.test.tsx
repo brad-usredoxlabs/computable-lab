@@ -27,7 +27,7 @@ import { HarnessChatPane } from './HarnessChatPane'
 
 // Established import-graph mocks (HarnessChatPane.threadPicker.test.tsx).
 vi.mock('pdfjs-dist', () => ({
-  getDocument: vi.fn(() => ({ promise: Promise.resolve({ numPages: 0, fingerprints: [''], getPage: () => Promise.resolve(null), destroy: () => undefined }), destroy: () => undefined }),
+  getDocument: vi.fn(() => ({ promise: Promise.resolve({ numPages: 0, fingerprints: [''], getPage: () => Promise.resolve(null), destroy: () => undefined }), destroy: () => undefined })),
   GlobalWorkerOptions: { workerSrc: '' },
   TextLayer: class { render() { return Promise.resolve() } },
 }))
