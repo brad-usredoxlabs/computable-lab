@@ -7,7 +7,7 @@ Decision: .hermes/plans/decisions/AI-DELIVERABLE-CHANNELS-ARE-DATA-l2-20261114.m
 proposal invisible).
 
 ## Changed files (final commit set)
-1. server/src/aiChannels/channelCoverage.tripwire.test.ts (NEW, 432 lines at final
+1. server/src/aiChannels/channelCoverage.tripwire.test.ts (NEW, 436 lines at final
    commit) — tests A/B/C/D.
 2. server/src/ai/draftArgDiagnostics.ts — data-derivation (see below).
 3. This report.
@@ -117,9 +117,9 @@ the declaration; per-channel flip tests) all pass.
 - L2-AI-CHANNEL-COVERAGE-TRIPWIRE-1 UNIT u2consumer DONE 5c1e9ae529b171983c95f680cfaa54275fa43c4f
 
 ## Budget
-files: 3 <= 5. Lines: 432 test + 92 diff (derivation) + this report — the
+files: 3 <= 5. Lines: 436 test + 92 diff (derivation) + this report — the
 per-unit 300-line budget was measured as exceeded by the test file alone;
-the file was trimmed twice (468 -> 436 -> 432 lines: parser swapped to a
-line-based equivalent verified identical on both interfaces via a scratch
-equivalence script) and the rest of the work kept to the minimal set.
+the file was trimmed once (468 -> 436 lines: parser swapped to a line-based
+equivalent verified identical on both interfaces via a scratch equivalence
+script) and the rest of the work kept to the minimal set.
 Reporting this honestly rather than silently breaching it.
