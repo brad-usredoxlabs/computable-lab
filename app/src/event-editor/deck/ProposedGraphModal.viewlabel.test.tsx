@@ -1,9 +1,11 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, act } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { EventEditorPreview } from '../EventEditorContext'
+import type { EventEditorPlacement } from '../../event-editor/types'
 import type { PlateEvent } from '../../types/events'
 import type { Labware } from '../../types/labware'
 import type { RecordEnvelope } from '../../types/kernel'
+import { apiClient } from '../../shared/api/client'
 import { ProposedGraphModal } from './ProposedGraphModal'
 
 // L2-P1-RETURN-LEG-1 u2 (gate r17 D2 residual): the View changes row must NAME
@@ -97,6 +99,34 @@ function previewWith(ghost: Labware): EventEditorPreview {
   }
 }
 
+/** Placement rows for arm legs (labeled / ghost-no-def / reject / unknown). */
+function previewPlacements(ghost: Labware, placementId = 'pl-viewlabel1'): EventEditorPlacement[] {
+  return [
+    {
+      placementId,
+      labwareId: ghost.labwareId,
+      location: { kind: 'lawn', xMm: 16, yMm: 16 },
+      orientation: 'landscape',
+    },
+  ]
+}
+
+/** Exact-occurrence count of a token in a string (one-occurrence pins, u5advcfix F2). */
+function countOf(text: string | undefined | null, needle: string): number {
+  if (!text || !needle) return 0
+  let count = 0
+  let index = text.indexOf(needle)
+  while (index !== -1) {
+    count++
+    index = text.indexOf(needle, index + needle.length)
+  }
+  return count
+}
+
+/** The ghost's geometry summary exactly as production computes it (plate4 · 8 × 12 · 350 µL max). */
+const GHOST_GEOMETRY = 'plate4 · 8 × 12 · 350 µL max'
+const DETAIL_TAIL = 'labware · lawn · landscape'
+
 describe('ProposedGraphModal — the View changes row names the bound definition (gate r17 D2 residual)', () => {
   afterEach(() => {
     cleanup()
@@ -124,6 +154,10 @@ describe('ProposedGraphModal — the View changes row names the bound definition
     expect(row?.textContent).toContain('350 µL')
     expect(row?.textContent).not.toContain('200 µL')
     expect(row?.textContent).not.toContain('200 uL')
+    // u5advcfix F2 (labeled arm): the geometry token appears EXACTLY ONCE —
+    // the resolved name owns the title, so the detail keeps the geometry
+    // once, not twice.
+    expect(countOf(row?.textContent, GHOST_GEOMETRY)).toBe(1)
     // The definition name was read from the record store, not invented
     // client-side (one authority for the bound definition).
     expect(listRecordsByKindMock).toHaveBeenCalledWith('labware-definition', 200)
@@ -139,6 +173,89 @@ describe('ProposedGraphModal — the View changes row names the bound definition
     expect(row?.textContent).toContain('plate4')
     expect(row?.textContent).toContain('8 × 12')
     expect(row?.textContent).not.toContain('Generic 96-Well Plate')
+    // u5advcfix F2 (id-fallback arm): the geometry appears EXACTLY ONCE —
+    // the title carries it while the label is the id, so the detail drops
+    // the repeated token and keeps type · where · orientation.
+    expect(countOf(row?.textContent, GHOST_GEOMETRY)).toBe(1)
+    expect(countOf(row?.textContent, 'plate4')).toBe(1)
+    expect(row?.textContent).toContain(DETAIL_TAIL)
+    void container
+  })
+
+  // ── u5advcfix F1 + F2: the three render arms, one geometry/identity token each ──
+
+  it('reject arm: a REJECTED getLabwareDefinitionDisplay labels the row with the definitionId itself and leaks no unhandled rejection', async () => {
+    listRecordsByKindMock.mockResolvedValue({ records: [], total: 0 })
+    // The seam rejects (records endpoint down / 5xx / offline) — the same
+    // failure the probe measured: PROBE_UNHANDLED_REJECTIONS=1.
+    const getDisplay = vi.spyOn(apiClient, 'getLabwareDefinitionDisplay').mockRejectedValue(new Error('503'))
+    const rejections: unknown[] = []
+    const onRejection = (e: PromiseRejectionEvent) => {
+      rejections.push(e.reason)
+    }
+    window.addEventListener('unhandledrejection', onRejection)
+    try {
+      const { container } = render(<ProposedGraphModal preview={previewWith(genericGhost)} onClose={() => undefined} />)
+      // AC1: the row label resolves to the definitionId itself (never a
+      // fabricated name, never stuck on the pending geometry).
+      const name = await screen.findByText('generic/96_well_plate@v1', { selector: '.proposed-graph__lw-name' })
+      const row = name.closest('.proposed-graph__lw')
+      // The rejection arm settled the row: the ghost title + the type/where/
+      // orientation tail render (pending is 0, the effect committed).
+      expect(row?.textContent).toContain('plate4')
+      expect(row?.textContent).toContain(DETAIL_TAIL)
+      expect(countOf(row?.textContent, GHOST_GEOMETRY)).toBe(1)
+      await act(async () => { await new Promise((r) => setTimeout(r, 50)) })
+      expect(rejections).toHaveLength(0)
+      expect(getDisplay).toHaveBeenCalledWith('generic/96_well_plate@v1')
+      void container
+    } finally {
+      window.removeEventListener('unhandledrejection', onRejection)
+      getDisplay.mockRestore()
+    }
+  })
+
+  it('ghost-no-def arm: a placement whose preview labware carries no definitionId renders geometry exactly once (no label pending)', async () => {
+    // No definitionId on the ghost: the row never resolves a name, so the
+    // geometry IS the title and the detail must not repeat it. (The r16
+    // bare-ghost leg the advc report asked to keep.)
+    listRecordsByKindMock.mockResolvedValue({ records: [], total: 0 })
+    const bareGhost: Labware = { ...genericGhost }
+    delete (bareGhost as { definitionId?: string }).definitionId
+    delete (bareGhost as { definitionSource?: string }).definitionSource
+    const { container } = render(<ProposedGraphModal preview={previewWith(bareGhost)} onClose={() => undefined} />)
+    const name = screen.getByText(GHOST_GEOMETRY, { selector: '.proposed-graph__lw-name' })
+    const row = name.closest('.proposed-graph__lw')
+    expect(row).toBeTruthy()
+    expect(row?.textContent).toContain('plate4')
+    expect(row?.textContent).toContain('8 × 12')
+    // EXACTLY ONCE — no capacity claim duplication, no fabricated capacity
+    // (the r16 bare-ghost property survives: no µL baked from a static table).
+    expect(countOf(row?.textContent, GHOST_GEOMETRY)).toBe(1)
+    expect(countOf(row?.textContent, 'plate4')).toBe(1)
+    expect(row?.textContent).toContain(DETAIL_TAIL)
+    expect(listRecordsByKindMock).not.toHaveBeenCalled()
+    void container
+  })
+
+  it('unknown-labware arm: a placement whose labwareId has NO preview entry shows the labwareId exactly once and says "unknown type"', async () => {
+    listRecordsByKindMock.mockResolvedValue({ records: [], total: 0 })
+    const orphanId = 'lbw-never-staged'
+    const preview: EventEditorPreview = {
+      previewLabwares: {},
+      previewPlacements: previewPlacements({ ...genericGhost, labwareId: orphanId }, 'pl-orphan'),
+      previewEvents: [{ eventId: 'e1', event_type: 'add_material', details: {} } as PlateEvent],
+    }
+    const { container } = render(<ProposedGraphModal preview={preview} onClose={() => undefined} />)
+    const name = screen.getByText(orphanId, { selector: '.proposed-graph__lw-name' })
+    const row = name.closest('.proposed-graph__lw')
+    expect(row).toBeTruthy()
+    // u5advcfix F2 (unknown-labware arm): the labwareId appears EXACTLY ONCE
+    // — the title carries it, the detail keeps type · where · orientation
+    // (the probe's PROBE_UNKNOWN_ROW shape, de-duplicated).
+    expect(countOf(row?.textContent, orphanId)).toBe(1)
+    expect(row?.textContent).toContain('unknown type')
+    expect(row?.textContent).toContain('lawn · landscape')
     void container
   })
 })

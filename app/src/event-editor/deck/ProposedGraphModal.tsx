@@ -223,20 +223,35 @@ export function ProposedGraphModal({
     let cancelled = false
     const entries: Array<[string, string]> = []
     let pending = 0
+    const settle = () => {
+      pending--
+      if (cancelled || pending > 0) return
+      setDefinitionLabels((prev) => {
+        const next = { ...prev }
+        for (const [labwareId, display] of entries) next[labwareId] = display
+        return next
+      })
+    }
     wanted.forEach((definitionId, labwareId) => {
       pending++
-      void apiClient.getLabwareDefinitionDisplay(definitionId).then((display) => {
-        if (cancelled) return
-        entries.push([labwareId, display])
-        pending--
-        if (pending === 0) {
-          setDefinitionLabels((prev) => {
-            const next = { ...prev }
-            for (const [labwareId, display] of entries) next[labwareId] = display
-            return next
-          })
-        }
-      })
+      void apiClient
+        .getLabwareDefinitionDisplay(definitionId)
+        .then((display) => {
+          if (cancelled) return
+          entries.push([labwareId, display])
+          settle()
+        })
+        // u5advcfix F1: the rejection arm settles the SAME way — the id
+        // verbatim is the label (the same fallback the real method returns
+        // on a miss), so a records read that fails (5xx / offline) never
+        // leaves `pending` > 0 (stuck row) and never leaks an unhandled
+        // rejection. Mirrors useAiChat's catch on the same seam (the note
+        // falls back to the ids verbatim there too).
+        .catch(() => {
+          if (cancelled) return
+          entries.push([labwareId, definitionId])
+          settle()
+        })
     })
     return () => {
       cancelled = true
@@ -438,13 +453,23 @@ export function ProposedGraphModal({
                   // stays visible inside it (its title, not the definition's
                   // name).
                   const definitionLabel = lw ? definitionLabels[p.labwareId] : undefined
+                  // u5advcfix F2: the geometry / identity token appears
+                  // EXACTLY ONCE per row. Once a definition name is
+                  // resolved it occupies the title, so the detail keeps the
+                  // full geometry (a distinct token now). While the label is
+                  // ABSENT (pending, or the id fallback for an unresolvable
+                  // id) the title already carries the geometry (or the
+                  // labwareId for an unknown labware), so the detail drops
+                  // the repeated first token and keeps type · where ·
+                  // orientation.
+                  const geometry = lw ? labwareGeometrySummary(lw) : p.labwareId
                   return (
                     <li key={p.placementId} className="proposed-graph__lw">
                       <span className="proposed-graph__lw-name">
-                        {lw ? (definitionLabel ?? labwareGeometrySummary(lw)) : p.labwareId}
+                        {lw ? (definitionLabel ?? geometry) : p.labwareId}
                       </span>
                       <span className="proposed-graph__muted">
-                        {lw ? labwareGeometrySummary(lw) : p.labwareId} ·{' '}
+                        {definitionLabel ? `${geometry} · ` : ''}
                         {lw ? 'labware' : 'unknown type'} · {where} · {p.orientation}
                       </span>
                     </li>
