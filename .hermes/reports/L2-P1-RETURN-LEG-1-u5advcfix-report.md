@@ -90,4 +90,4 @@ F4 (minor, resume gate): new leg "absent with no completed 'Accepted ' system me
 /tmp/u5advcfix-final-red.txt · /tmp/u5advcfix-mutant-red.txt (F3) · /tmp/u5advcfix-f1-red.txt
 /tmp/u5advcfix-f2-red.txt · /tmp/u5advcfix-f4-mutant.txt
 
-L2-P1-RETURN-LEG-1-u5advcfix UNIT L2-P1-RETURN-LEG-1-u5advcfix DONE a7c11dec00000000000000000000000000000000
+L2-P1-RETURN-LEG-1-u5advcfix UNIT L2-P1-RETURN-LEG-1-u5advcfix DONE 2cd2399765f7355086f564d757a2584f5fe3fd53
