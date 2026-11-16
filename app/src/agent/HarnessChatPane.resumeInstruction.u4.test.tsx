@@ -99,4 +99,32 @@ describe('HarnessChatPane — one click resumes the original sentence after a co
     await act(async () => { await new Promise((r) => setTimeout(r, 50)) })
     expect(screen.queryByTestId('resume-instruction')).toBeNull()
   })
+
+  // u5advcfix F4: the hasCompletedAdopt half of the `showResume` gate was
+  // unpinned — the settled-state leg above carries a completed 'Accepted …'
+  // system message, so dropping the gate from HarnessChatPane.tsx left this
+  // suite 2/2 green. These two arms pin the transcript condition itself,
+  // streaming false on BOTH arms (the only difference is the system note).
+
+  const ADOPTLESS = [
+    { id: 'm1', role: 'user' as const, content: ORIGINAL, timestamp: 1 },
+    { id: 'm2', role: 'assistant' as const, content: 'Placing the plate.', timestamp: 2 },
+  ]
+
+  it('no completed "Accepted …" system message in the transcript: the control is ABSENT (settled, not streaming)', async () => {
+    sessionStorage.setItem('cl.ai-thread-tab-ids', JSON.stringify({ '': 'tid-x' }))
+    const chat = stubChat({ messages: ADOPTLESS, isStreaming: false, listThreads: async () => [SETTLED_ROW] })
+    render(<AiPanelProvider><Registrant chat={chat} /></AiPanelProvider>)
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)) })
+    expect(screen.queryByTestId('resume-instruction')).toBeNull()
+  })
+
+  it('a completed "Accepted …" system message in the transcript: the control IS present (settled, not streaming)', async () => {
+    sessionStorage.setItem('cl.ai-thread-tab-ids', JSON.stringify({ '': 'tid-x' }))
+    const chat = stubChat({ messages: REHYDRATED, isStreaming: false, listThreads: async () => [SETTLED_ROW] })
+    render(<AiPanelProvider><Registrant chat={chat} /></AiPanelProvider>)
+    const resume = await screen.findByTestId('resume-instruction')
+    expect(screen.getAllByTestId('resume-instruction')).toHaveLength(1)
+    void resume
+  })
 })
