@@ -4,7 +4,7 @@ import type { EventEditorPreview } from '../EventEditorContext'
 import type { PlateEvent } from '../../types/events'
 import type { Labware } from '../../types/labware'
 import type { RecordEnvelope } from '../../types/kernel'
-import { apiClient } from '../api/client'
+import { apiClient } from '../../shared/api/client'
 import { ProposedGraphModal } from './ProposedGraphModal'
 
 // L2-P1-RETURN-LEG-1 u2 (gate r17 D2 residual): the View changes row must NAME
@@ -21,7 +21,7 @@ import { ProposedGraphModal } from './ProposedGraphModal'
 // the definition). This fixture pins the production shape instead, so the
 // assertion can only pass when the row resolves the bound definition's own
 // display name.
-vi.mock('../api/client', () => ({
+vi.mock('../../shared/api/client', () => ({
   apiClient: {
     listRecordsByKind: vi.fn(),
   },
