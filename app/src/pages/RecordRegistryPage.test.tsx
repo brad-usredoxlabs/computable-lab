@@ -119,20 +119,6 @@ vi.mock('../components/registry/RecordSearchCombobox', () => ({
   },
 }))
 
-vi.mock('./CompoundClassPanel', () => ({
-  CompoundClassPanel: ({
-    classes,
-    loading,
-  }: {
-    classes: unknown[] | null
-    loading: boolean
-  }) => (
-    <div data-testid="compound-class-panel">
-      <span>loading={String(loading)} classes={classes === null ? 'null' : classes.length}</span>
-    </div>
-  ),
-}))
-
 vi.mock('../components/registry/RelatedRecordsCard', () => ({
   RelatedRecordsCard: ({ recordId }: { recordId: string }) => (
     <div data-testid="related-records-card">
@@ -724,9 +710,9 @@ describe('RecordRegistryPage — Documents tab (QMS-6)', () => {
     expect(screen.getByTestId('search-input')).toHaveAttribute('placeholder', 'Search people...')
 
     fireEvent.click(screen.getByRole('button', { name: 'Compounds' }))
-    // The compound-class registry still renders through the panel.
-    expect(await screen.findByTestId('compound-class-panel')).toBeTruthy()
-    expect(screen.getByTestId('compound-class-panel')).toHaveTextContent('classes=0')
+    // The compound-class registry still renders through the panel (empty).
+    expect(await screen.findByTestId('compound-panel')).toBeTruthy()
+    expect(screen.getByTestId('compound-panel')).toHaveTextContent('No compound classes registered')
     // No dead chrome: no combobox and no search input on this tab.
     expect(screen.queryByTestId('record-search-combobox')).toBeNull()
     expect(screen.queryByTestId('search-input')).toBeNull()
