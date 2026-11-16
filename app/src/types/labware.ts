@@ -390,6 +390,8 @@ export interface Labware {
    * draft proposed has none until Accept creates it — see `proposedRecord`.
    */
   recordId?: string
+  /** Durable labware-instance created on Apply; distinct from its definition. */
+  instanceRecordId?: string
   /** Type of labware */
   labwareType: LabwareType
   /** User-friendly name (e.g., "Source Plate", "Cell Plate 1") */
@@ -1753,6 +1755,10 @@ export function labwareDefinitionRecordToPayload(recordId: string): LabwareRecor
 export function labwareRecordToEditorLabware(
   record: LabwareRecordPayload,
 ): Labware {
+  // A hydrated definition is authoritative. Routing it through a legacy
+  // rendering type would silently substitute the first vendor's geometry.
+  const definitionLabware = labwareDefinitionRecordToEditorLabware(record, record.recordId)
+  if (definitionLabware) return { ...definitionLabware, labwareId: record.recordId }
   const editorType = pickEditorLabwareType(record)
   // Delegate geometry/wells/etc. to the existing factory, then overwrite
   // name + a few metadata fields from the record.

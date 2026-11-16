@@ -69,7 +69,7 @@ describe('clarificationsFromUnresolvedFacts — engine ambiguous-noun candidates
       { label: 'Non-string ref', ref: 42 } as never,
     ];
     const [card] = clarificationsFromUnresolvedFacts([ambiguousFact(candidates)]);
-    expect(card.options).toEqual([{ id: 'lbw-seed-plate-96-flat', label: 'Has a real ref' }]);
+    expect(card.options).toEqual([{ id: 'lbw-seed-plate-96-flat', label: 'Has a real ref', ref: { kind: 'record', id: 'lbw-seed-plate-96-flat' } }]);
   });
 
   it('a fact with no candidates keeps options: [] and the domain menuProvider (byte-identical)', () => {

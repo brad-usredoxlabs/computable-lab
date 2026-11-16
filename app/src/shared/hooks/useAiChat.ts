@@ -182,7 +182,7 @@ async function resolveLabwareAdditionPayload(addition: AiLabwareAddition): Promi
   if (definitionPayload) return definitionPayload
   try {
     const record = await apiClient.getRecord(addition.recordId)
-    if (record?.payload) return record.payload as unknown as LabwareRecordPayload
+    if (record?.payload) return { ...record.payload, recordId: addition.recordId } as unknown as LabwareRecordPayload
   } catch {
     // Seed/local labware ids are valid editor labware refs even when they are
     // not backed by /api/records.
@@ -451,6 +451,8 @@ export interface DeckPreviewLike {
 export interface AiProposalDraft {
   events: PlateEvent[]
   labwareAdditions: AiLabwareAddition[]
+  /** Store payloads for the identities selected by the compiler. */
+  labwareRecords?: Record<string, LabwareRecordPayload>
   /**
    * Resolved placement offers (REVISE-GHOST-1 fix3 shape): labware hints the
    * pipeline bound against real inventory records. Ghosted as placements of
@@ -1984,9 +1986,18 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
               // deck (event editor) receives the event-bearing proposal here
               // and mounts it as ghosts on the editor state (the port of
               // AiTabPanel's buildPreviewFromDraft seam, AiTabPanel.tsx:608-669).
+              const labwareRecords: Record<string, LabwareRecordPayload> = {}
+              if (onProposalDraftedRef.current) {
+                const offers = [...(result.labwareAdditions ?? []), ...(result.resolvedLabwares ?? [])]
+                await Promise.all([...new Set(offers.map((offer) => offer.recordId))].map(async (recordId) => {
+                  labwareRecords[recordId] = await resolveLabwareAdditionPayload({ recordId })
+                }))
+              }
+              if (controller.signal.aborted) return
               onProposalDraftedRef.current?.({
                 events: normalizedPreviewEvents,
                 labwareAdditions: result.labwareAdditions ?? [],
+                ...(Object.keys(labwareRecords).length > 0 ? { labwareRecords } : {}),
                 ...(result.resolvedLabwares ? { resolvedLabwares: result.resolvedLabwares } : {}),
                 ...(result.recordCreations?.length ? { recordCreations: result.recordCreations } : {}),
                 prompt,

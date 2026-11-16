@@ -81,6 +81,7 @@ export interface BuildPreviewArgs {
   variant: PlatformVariantManifest | null | undefined
   events: PlateEvent[]
   labwareAdditions: AiLabwareAddition[]
+  labwareRecords?: Record<string, LabwareRecordPayload>
   labwareRequirements: AiLabwareRequirement[]
   /** Hints the compile resolved against REAL inventory records — offered as
    *  PLACEMENTS of the existing records (never authored; see the resolved arm
@@ -253,6 +254,7 @@ export function buildPreviewFromDraft({
   variant,
   events,
   labwareAdditions,
+  labwareRecords = {},
   labwareRequirements,
   resolvedLabwares = [],
   equipmentRequirements = [],
@@ -292,7 +294,7 @@ export function buildPreviewFromDraft({
     ...labwareAdditions.map((addition) => ({
       label: addition.recordId,
       deckSlot: addition.deckSlot,
-      labware: labwareRecordToEditorLabware(labwarePayloadForAddition(addition)),
+      labware: labwareRecordToEditorLabware(labwareRecords[addition.recordId] ?? labwarePayloadForAddition(addition)),
     })),
     // The RESOLVED arm: a hint bound against a REAL inventory record is a
     // PLACEMENT of the record the lab already owns, never a re-creation
@@ -307,7 +309,7 @@ export function buildPreviewFromDraft({
       label: resolved.recordId,
       deckSlot: resolved.deckSlot,
       labware: labwareRecordToEditorLabware({
-        ...labwarePayloadForAddition(resolved),
+        ...(labwareRecords[resolved.recordId] ?? labwarePayloadForAddition(resolved)),
         ...(resolved.title ? { name: resolved.title } : {}),
       }),
     })),

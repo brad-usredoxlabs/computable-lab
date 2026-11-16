@@ -149,10 +149,11 @@ export async function mintPlacedLabwareInstances(opts: {
   previewLabwares: Record<string, Labware>
   materialized: Array<MaterializedDefinitionCreation>
   createRecord?: (schemaId: string, payload: Record<string, unknown>) => Promise<unknown>
-}): Promise<{ instanceIds: string[]; warnings: string[]; skipped: string[] }> {
+}): Promise<{ instanceIds: string[]; instanceBindings: Record<string, string>; warnings: string[]; skipped: string[] }> {
   const { previewLabwares, materialized } = opts
   const createRecord = opts.createRecord ?? apiClient.createRecord
   const instanceIds: string[] = []
+  const instanceBindings: Record<string, string> = {}
   const warnings: string[] = []
   const skipped: string[] = []
 
@@ -178,7 +179,8 @@ export async function mintPlacedLabwareInstances(opts: {
       labwareId: definitionId,
     })
     instanceIds.push(recordId)
+    instanceBindings[key] = recordId
   }
 
-  return { instanceIds, warnings, skipped }
+  return { instanceIds, instanceBindings, warnings, skipped }
 }

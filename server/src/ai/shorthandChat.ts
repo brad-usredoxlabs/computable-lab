@@ -819,13 +819,15 @@ function factReadings(fact: ScientistIntentUnresolvedFact): readonly Composition
  * resolutionEngine.optionRef.test.ts:7). No candidates => the empty set,
  * so the unknown-noun card keeps `options: []` byte-identically.
  */
-function factCandidateOptions(fact: ScientistIntentUnresolvedFact): Array<{ id: string; label: string }> {
+function factCandidateOptions(fact: ScientistIntentUnresolvedFact): Array<{ id: string; label: string; ref: { kind: 'record'; id: string } }> {
   const candidates = fact.candidates;
   if (candidates === undefined || candidates.length === 0) return [];
-  const options: Array<{ id: string; label: string }> = [];
+  const options: Array<{ id: string; label: string; ref: { kind: 'record'; id: string } }> = [];
   for (const candidate of candidates) {
     if (typeof candidate.ref === 'string' && candidate.ref.length > 0) {
-      options.push({ id: candidate.ref, label: candidate.label });
+      // The card returns option.ref as answer.ref. optionId alone identifies
+      // a button; the answer fold consumes this explicit record identity.
+      options.push({ id: candidate.ref, label: candidate.label, ref: { kind: 'record', id: candidate.ref } });
     }
   }
   return options;
@@ -1458,9 +1460,15 @@ export function foldAnswersIntoShorthand(
   // generic `id` read — never a mint, never invented): an answer that carries
   // no record ref records no binding.
   const bindings: AcceptedShorthandBinding[] = [];
-  const refIdOf = (answer: AgentClarificationAnswer): string | null => {
+  const refIdOf = (answer: AgentClarificationAnswer, fact: ScientistIntentUnresolvedFact): string | null => {
     const id = (answer.ref as { id?: unknown } | undefined)?.id;
-    return typeof id === 'string' && id.trim().length > 0 ? id.trim() : null;
+    if (typeof id === 'string' && id.trim().length > 0) return id.trim();
+    // Saved cards predating the ref carrier only return optionId. Recover
+    // identity from the held compiler fact, never from an arbitrary button
+    // id or its display label. The orchestrator still verifies store presence.
+    const candidate = fact.candidates?.find((entry) =>
+      typeof entry.ref === 'string' && entry.ref.length > 0 && entry.ref === answer.optionId);
+    return candidate?.ref ?? null;
   };
   for (const answer of answers) {
     const requestId = answer.requestId ?? '';
@@ -1597,7 +1605,7 @@ export function foldAnswersIntoShorthand(
     }
     answered.add(fact);
     answeredSlots.push({ actionIndex: loc.actionIndex, argument: loc.argument, label });
-    const refId = refIdOf(answer);
+    const refId = refIdOf(answer, fact);
     if (refId) {
       // REVISE-GHOST-1 / L2-NOUN-RESOLUTION-POLICY-1 A1: store the ref as a
       // local CURIE. The bindingsToAnsweredSlots mapper calls recordIdFromCurie

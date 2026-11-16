@@ -165,6 +165,24 @@ function makeDeclarationPrecedence(vocab: ScientistIntentVocabulary | undefined)
     applies: (contract: ScientistIntentArgContract) => contract.kind === 'resolvable',
     gather: async (req, ctx) => {
       const outcome = withDomainFilter(req, await gatherFrom(req, ctx, ['spine']));
+      // A declared generic default is an identity choice for an exact slot
+      // and label, not a ranking heuristic. It must still exist among the
+      // eligible local candidates; qualified requests never lose qualifiers.
+      const normalize = (label: string): string => label.trim().toLowerCase().replace(/\s+/g, ' ');
+      const defaults = (vocab?.policies().ambiguity.defaultBindings ?? []).filter((rule) =>
+        rule.verb === req.verb && rule.argument === req.argument
+        && rule.labels.some((label) => normalize(label) === normalize(req.label)));
+      const defaultIds = new Set(defaults.map((rule) => `local:${rule.recordId}`));
+      if (defaultIds.size === 1) {
+        const candidates = outcome.candidates.filter((candidate) => candidate.tier <= 1 && defaultIds.has(candidate.curie));
+        if (candidates.length === 1) {
+          return {
+            candidates,
+            failures: outcome.failures,
+            traces: [...outcome.traces, `declaration-precedence: declared default ${candidates[0]!.curie} for ${req.verb}.${req.argument}`],
+          };
+        }
+      }
       // Narrow the band: sort by score DESC, curie ASC (matches resolutionEngine sortCandidates)
       const sorted = [...outcome.candidates].sort((a, b) => b.score - a.score || a.curie.localeCompare(b.curie));
       if (sorted.length > 1) {

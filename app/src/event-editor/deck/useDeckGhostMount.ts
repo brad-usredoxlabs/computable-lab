@@ -71,6 +71,7 @@ export function useDeckGhostMount(): DeckGhostMount {
       variant,
       events: draft.events,
       labwareAdditions: draft.labwareAdditions,
+      labwareRecords: draft.labwareRecords,
       labwareRequirements: [],
       resolvedLabwares: draft.resolvedLabwares,
       equipmentRequirements: [],

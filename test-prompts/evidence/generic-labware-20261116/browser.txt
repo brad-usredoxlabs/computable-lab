@@ -1,0 +1,167 @@
+AFTER APPLY Computable Lab
+Projects
+Runs
+Claims
+Lab
+Ingestion
+Chat
+Registry
++ Create
+B
+brad
+▾
+⚙
+←
+→
+R
+2026-11-16 Run
+×
++
+Run · Design
+Run RUN-2026-11-16-run-ejst
+Protocol Planning
+Design
+Execute
+Results
+2026-11-16 Run
+↩
+↪
+🔒
+Liquid Handling · Manual · Single SBS Plate
+▾
+Tool
+Single-Channel Pipette
+4-Channel Fixed Pipette
+6-Channel Fixed Pipette
+8-Channel Fixed Pipette
+12-Channel Pipette
+4-Channel Adjustable Pipette
+6-Channel Adjustable Pipette
+tip
+empty
+Graph EVG-mwiub3...
+Saved ad4a45d
+Protocol
+Search
+Details
+2026-11-16 RUN
+No protocol attached
+
+Preview any protocol below — clicking one only shows its steps. 'Attach to run' commits it to this run.
+
+PROJECT PROTOCOLS
+2026-09-06 Run template
+LPR-2026-09-06-run-template-d69ed684 · Local
+Attach to run
+LAB PROTOCOLS
+Biological Material Transfer (plate N per well, top-up to final volume)
+prt-seed-biological-transfer · Universal
+Attach to run
+INGESTED PDFS
+acme-hepes-formulation.pdf
+VPDF-FBBF4BB34399 · Vendor PDF
+Open
+MANUAL
+PLATE
+Click to choose labware
+SINGLE SBS PLATE
+plate1
+⟲
+×
+WORKING FOCUS
+Run workspace: RUN-2026-11-16-run-ejst — 2026-11-16 Run
+No threads yet
+New thread (this tab)
+New thread
++ Add source
+Open a viewer in Find, or add a vendor PDF, to attach more context.
+AI Chat
+
+Ask for an edit, a draft or a navigation. Review proposed actions before applying them.
+
+Message
+Send
+URL http://127.0.0.1:5393/runs/RUN-2026-11-16-run-ejst?ws=run%3ARUN-2026-11-16-run-ejst&wsa=run%3ARUN-2026-11-16-run-ejst
+Computable Lab
+Projects
+Runs
+Claims
+Lab
+Ingestion
+Chat
+Registry
++ Create
+B
+brad
+▾
+⚙
+←
+→
+R
+2026-11-16 Run
+×
++
+Run · Design
+Run RUN-2026-11-16-run-ejst
+Protocol Planning
+Design
+Execute
+Results
+2026-11-16 Run
+↩
+↪
+🔒
+Liquid Handling · Manual · Single SBS Plate
+▾
+Tool
+Single-Channel Pipette
+4-Channel Fixed Pipette
+6-Channel Fixed Pipette
+8-Channel Fixed Pipette
+12-Channel Pipette
+4-Channel Adjustable Pipette
+6-Channel Adjustable Pipette
+tip
+empty
+Graph EVG-mwiub3...
+Saved
+Protocol
+Search
+Details
+2026-11-16 RUN
+No protocol attached
+
+Preview any protocol below — clicking one only shows its steps. 'Attach to run' commits it to this run.
+
+PROJECT PROTOCOLS
+2026-09-06 Run template
+LPR-2026-09-06-run-template-d69ed684 · Local
+Attach to run
+LAB PROTOCOLS
+Biological Material Transfer (plate N per well, top-up to final volume)
+prt-seed-biological-transfer · Universal
+Attach to run
+INGESTED PDFS
+acme-hepes-formulation.pdf
+VPDF-FBBF4BB34399 · Vendor PDF
+Open
+MANUAL
+PLATE
+Click to choose labware
+SINGLE SBS PLATE
+plate1
+⟲
+×
+WORKING FOCUS
+Run workspace: RUN-2026-11-16-run-ejst — 2026-11-16 Run
+No threads yet
+New thread (this tab)
+New thread
++ Add source
+Open a viewer in Find, or add a vendor PDF, to attach more context.
+AI Chat
+
+Ask for an edit, a draft or a navigation. Review proposed actions before applying them.
+
+Message
+Send

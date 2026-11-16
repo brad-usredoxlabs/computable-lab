@@ -309,9 +309,10 @@ describe('u3ghostfix D1 pin (a) — a proposed-creation accept still mints, as o
 
     // Identity is the record id: the persisted vessel names the definition.
     const persistedArgs = vi.mocked(persistAcceptedEventGraph).mock.calls[0][0] as {
-      labwares: Record<string, { recordId?: string; proposedRecord?: boolean }>
+      labwares: Record<string, { recordId?: string; instanceRecordId?: string; proposedRecord?: boolean }>
     }
     expect(persistedArgs.labwares[key].recordId).toBe('LBW-96-WELL-PLATE')
+    expect(persistedArgs.labwares[key].instanceRecordId).toBe(ok.instanceIds![0])
     expect(persistedArgs.labwares[key].proposedRecord).toBeUndefined()
   })
 

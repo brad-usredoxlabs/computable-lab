@@ -1,0 +1,231 @@
+
+ RUN  v1.6.1 /tmp/cl-generic-baseline/server
+
+ ❯ src/ai/shorthandChat.genericPlacement.test.ts  (4 tests | 3 failed) 139ms
+   ❯ src/ai/shorthandChat.genericPlacement.test.ts > generic placement through the real compiler and chat answer contract > uses the declared generic definition without asking the user to choose a vendor
+     → expected [ { label: '96-well plate', …(3) } ] to deeply equal []
+   ❯ src/ai/shorthandChat.genericPlacement.test.ts > generic placement through the real compiler and chat answer contract > carries the selected definition into fold compilation (legacy saved card: false)
+     → expected undefined to match object { id: 'test-imaging-definition' }
+   ❯ src/ai/shorthandChat.genericPlacement.test.ts > generic placement through the real compiler and chat answer contract > carries the selected definition into fold compilation (legacy saved card: true)
+     → expected undefined to match object { id: 'test-imaging-definition' }
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/ai/shorthandChat.genericPlacement.test.ts > generic placement through the real compiler and chat answer contract > uses the declared generic definition without asking the user to choose a vendor
+AssertionError: expected [ { label: '96-well plate', …(3) } ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   Object {
++     "actionLocation": Object {
++       "action": "create_container",
++       "actionIndex": 0,
++       "argument": "labware",
++     },
++     "candidates": Array [
++       Object {
++         "confidence": 1,
++         "eligibility": Object {
++           "bind": "pass",
++           "display": "pass",
++           "policyIds": Object {
++             "bind": "bind-unconstrained-identity",
++             "display": "display-tier-legal",
++             "suppress": "suppress-unconstrained-presence",
++           },
++           "suppress": "pass",
++         },
++         "label": "Generic 96-well plate legacy",
++         "ref": "LBW-legacy-generic",
++         "referentLevel": "concept",
++         "tier": 1,
++       },
++       Object {
++         "confidence": 0.9500000000000001,
++         "eligibility": Object {
++           "bind": "pass",
++           "display": "pass",
++           "policyIds": Object {
++             "bind": "bind-unconstrained-identity",
++             "display": "display-tier-legal",
++             "suppress": "suppress-unconstrained-presence",
++           },
++           "suppress": "pass",
++         },
++         "label": "96-well plate",
++         "referentLevel": "concept",
++         "tier": 2,
++       },
++       Object {
++         "confidence": 0.8,
++         "eligibility": Object {
++           "bind": "pass",
++           "display": "pass",
++           "policyIds": Object {
++             "bind": "bind-unconstrained-identity",
++             "display": "display-tier-legal",
++             "suppress": "suppress-unconstrained-presence",
++           },
++           "suppress": "pass",
++         },
++         "label": "vacuum manifold",
++         "referentLevel": "concept",
++         "tier": 2,
++       },
++       Object {
++         "confidence": 0.8,
++         "eligibility": Object {
++           "bind": "pass",
++           "display": "pass",
++           "policyIds": Object {
++             "bind": "bind-unconstrained-identity",
++             "display": "display-tier-legal",
++             "suppress": "suppress-unconstrained-presence",
++           },
++           "suppress": "pass",
++         },
++         "label": "PCR plate",
++         "referentLevel": "concept",
++         "tier": 2,
++       },
++       Object {
++         "confidence": 0.8,
++         "eligibility": Object {
++           "bind": "pass",
++           "display": "pass",
++           "policyIds": Object {
++             "bind": "bind-unconstrained-identity",
++             "display": "display-tier-legal",
++             "suppress": "suppress-unconstrained-presence",
++           },
++           "suppress": "pass",
++         },
++         "label": "assay plate",
++         "referentLevel": "concept",
++         "tier": 2,
++       },
++       Object {
++         "confidence": 0.8,
++         "eligibility": Object {
++           "bind": "pass",
++           "display": "pass",
++           "policyIds": Object {
++             "bind": "bind-unconstrained-identity",
++             "display": "display-tier-legal",
++             "suppress": "suppress-unconstrained-presence",
++           },
++           "suppress": "pass",
++         },
++         "label": "filter plate",
++         "referentLevel": "concept",
++         "tier": 2,
++       },
++       Object {
++         "confidence": 0.8,
++         "eligibility": Object {
++           "bind": "pass",
++           "display": "pass",
++           "policyIds": Object {
++             "bind": "bind-unconstrained-identity",
++             "display": "display-tier-legal",
++             "suppress": "suppress-unconstrained-presence",
++           },
++           "suppress": "pass",
++         },
++         "label": "deep-well plate",
++         "referentLevel": "concept",
++         "tier": 2,
++       },
++       Object {
++         "confidence": 0.8,
++         "eligibility": Object {
++           "bind": "pass",
++           "display": "pass",
++           "policyIds": Object {
++             "bind": "bind-unconstrained-identity",
++             "display": "display-tier-legal",
++             "suppress": "suppress-unconstrained-presence",
++           },
++           "suppress": "pass",
++         },
++         "label": "96-position aluminum block",
++         "referentLevel": "concept",
++         "tier": 2,
++       },
++       Object {
++         "confidence": 0.8,
++         "eligibility": Object {
++           "bind": "pass",
++           "display": "pass",
++           "policyIds": Object {
++             "bind": "bind-unconstrained-identity",
++             "display": "display-tier-legal",
++             "suppress": "suppress-unconstrained-presence",
++           },
++           "suppress": "pass",
++         },
++         "label": "PCR plate seal",
++         "referentLevel": "concept",
++         "tier": 2,
++       },
++       Object {
++         "confidence": 0.8,
++         "eligibility": Object {
++           "bind": "pass",
++           "display": "pass",
++           "policyIds": Object {
++             "bind": "bind-unconstrained-identity",
++             "display": "display-tier-legal",
++             "suppress": "suppress-unconstrained-presence",
++           },
++           "suppress": "pass",
++         },
++         "label": "vacuum manifold filter plate",
++         "referentLevel": "concept",
++         "tier": 2,
++       },
++     ],
++     "label": "96-well plate",
++     "reason": "ambiguous-noun",
++   },
++ ]
+
+ ❯ src/ai/shorthandChat.genericPlacement.test.ts:35:36
+     33|   it('uses the declared generic definition without asking the user to …
+     34|     const result = await compileShorthandDeterministically(parseShorth…
+     35|     expect(result?.clarifications).toEqual([]);
+       |                                    ^
+     36|     expect(result?.terminalArtifacts.events).toHaveLength(1);
+     37|     expect(result?.terminalArtifacts.resolvedLabwares).toEqual([expect…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/ai/shorthandChat.genericPlacement.test.ts > generic placement through the real compiler and chat answer contract > carries the selected definition into fold compilation (legacy saved card: false)
+ FAIL  src/ai/shorthandChat.genericPlacement.test.ts > generic placement through the real compiler and chat answer contract > carries the selected definition into fold compilation (legacy saved card: true)
+AssertionError: expected undefined to match object { id: 'test-imaging-definition' }
+
+- Expected:
+Object {
+  "id": "test-imaging-definition",
+}
+
++ Received:
+undefined
+
+ ❯ src/ai/shorthandChat.genericPlacement.test.ts:61:24
+     59|       ...(!legacy && option.ref ? { ref: option.ref } : {}),
+     60|     };
+     61|     expect(option.ref).toMatchObject({ id: chosenDefinition.recordId }…
+       |                        ^
+     62|     const request = {
+     63|       prompt: 'Use Imaging 96-well plate for labware.',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 1 passed (4)
+   Start at  00:35:26
+   Duration  1.64s (transform 843ms, setup 0ms, collect 1.35s, tests 139ms, environment 0ms, prepare 43ms)

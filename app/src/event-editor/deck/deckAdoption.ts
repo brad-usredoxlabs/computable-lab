@@ -192,6 +192,13 @@ export async function adoptStagedPreview(
   //     write, with nothing added to the accepted graph.
   if (minted.skipped.length > 0) return refuseUnplaceableLabware(minted.skipped)
 
+  // Keep the durable placement -> instance -> definition chain in the graph
+  // and in the preview the editor commits. Previously the instance IDs only
+  // appeared in this function's return value and were lost on reload.
+  for (const [key, instanceRecordId] of Object.entries(minted.instanceBindings)) {
+    preview.previewLabwares[key] = { ...preview.previewLabwares[key]!, instanceRecordId }
+  }
+
   // 3. Ontology mint under the signed-off decisions.
   const materialized = await materializeAcceptedOntologyBindings(
     preview.ontologyBindings,

@@ -451,6 +451,21 @@ properties:
             description: >-
               Same-label collapse policy; ordered survivor ids, each pass fail-safe; ABSENT means
               no collapse. The closed enums are the never-guess wall (no fuzzy predicate can declare).
+          defaultBindings:
+            type: array
+            description: >-
+              Explicit defaults for unqualified labels in a particular action slot.
+              Only an eligible, existing local candidate with this recordId may bind.
+              Labels match exactly, ignoring case and repeated whitespace.
+            items:
+              type: object
+              additionalProperties: false
+              required: [verb, argument, labels, recordId]
+              properties:
+                verb: { type: string, minLength: 1 }
+                argument: { type: string, minLength: 1 }
+                labels: { type: array, minItems: 1, uniqueItems: true, items: { type: string, minLength: 1 } }
+                recordId: { type: string, minLength: 1 }
           candidatePrecedence:
             type: array
             description: >-
