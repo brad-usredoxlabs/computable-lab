@@ -211,6 +211,56 @@ describe('L2-P1-PLACE-AND-MINT-1 u3wellfix — the committed arm resolves the SA
     expect(index.has('lbw-def-generic-96-well-plate')).toBe(true)
   })
 
+  // L2-P1-PLACE-AND-MINT-1 u4wellfix D1/D3 (advc-c2): the leg above pins the
+  // capture-time value with preview = null, which cannot witness a render-time
+  // re-resolution. This leg does: a LATER preview is live and places the same
+  // definition (a different labwareId, sourceRecordId === the captured
+  // recordId key). The committed key must ride the capture-time resolution —
+  // one fact, one resolution point — and the old event's wells must NOT
+  // migrate onto the later tile.
+  it('a committed zero-match binding keeps the captured key when a LATER preview places the same definition live (u4wellfix D1 — no re-route on a later rebuild)', () => {
+    // Zero-match capture (no previewLabwares at capture): the binding rides as
+    // the recordId key itself (never guess).
+    const preview: EventEditorPreview = {
+      previewLabwares: {},
+      previewPlacements: [],
+      previewEvents: [addMaterial],
+      resolvedLabwares: [definitionOffer],
+    } as unknown as EventEditorPreview
+    const committed = commit(eventEditorReducer(eventEditorInitialState, { type: 'set_preview', preview }))
+    // The LATER turn's preview: the same definition placed live under a
+    // different labwareId (a re-keyed placement identity), with no events of
+    // its own — the probe isolates the committed arm.
+    const laterPreview: EventEditorPreview = {
+      previewLabwares: {
+        'lbw-placed-later-turn': {
+          labwareId: 'lbw-placed-later-turn',
+          recordId: 'lbw-def-generic-96-well-plate',
+          sourceRecordId: 'lbw-def-generic-96-well-plate',
+          labwareType: 'plate_96',
+          name: 'Generic 96-Well Plate',
+        },
+      },
+      previewPlacements: [],
+      previewEvents: [],
+      resolvedLabwares: [],
+    } as unknown as EventEditorPreview
+    const index = buildEventWellIndex(
+      committed.events,
+      laterPreview,
+      committed.committedOfferByEvent ?? {},
+      [],
+      committed.committedOfferAmbiguousByEvent ?? {},
+    )
+    // THE D1 PROBE: the OLD event's wells stay under the CAPTURED key — a
+    // later rebuild must not re-route earlier events (uifix2-fix1 D1
+    // contract). Pre-fix they migrate: the committed key reads empty and the
+    // wells appear under 'lbw-placed-later-turn' (the reviewer's P5
+    // measurement, reproduced by this RED).
+    expect([...(index.get('lbw-def-generic-96-well-plate') ?? [])].sort()).toEqual(['A1', 'A2', 'B1'])
+    expect(index.has('lbw-placed-later-turn')).toBe(false)
+  })
+
   it('a committed VESSEL offer keeps the recordId binding (identity map — byte-identical)', () => {
     const preview: EventEditorPreview = {
       previewLabwares: {
