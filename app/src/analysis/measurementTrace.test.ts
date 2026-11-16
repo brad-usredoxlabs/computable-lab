@@ -64,9 +64,13 @@ describe('traceModel.traceFromMeasurement (u1persist app reader)', () => {
   })
 
   it('a record whose trace is not a well-formed { values: number[], samplingIntervalSeconds: number } is a NAMED error (no guessed grid)', () => {
+    // Intentionally malformed records (the rejection path) — the cast is the
+    // point: these inputs do NOT satisfy the well-formed trace type.
     const missingInterval = recordOf({
       recordId: 'MSR-000044',
-      payload: { parserInfo: { parserId: 'aia_andi_cdf', trace: { values: VALUES } } },
+      payload: {
+        parserInfo: { parserId: 'aia_andi_cdf', trace: { values: VALUES } },
+      } as MeasurementRecordShape['payload'],
     })
     expect(traceFromMeasurement(missingInterval, { runId: 'RUN-000123' })).toMatchObject({ ok: false, code: 'NO_TRACE' })
     const emptyValues = recordOf({
