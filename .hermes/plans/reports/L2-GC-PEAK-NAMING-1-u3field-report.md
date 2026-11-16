@@ -82,3 +82,5 @@ readonly display fields to the form spec. NO picker, NO writable control.
 ## Remaining blockers / next
 None for this unit. AC2 belongs to the milestone browser gate; the lane stack reload (YAML
 changed) is the orchestrator's action before live verification.
+
+L2-GC-PEAK-NAMING-1-u3field-l2t2661.txt UNIT L2-GC-PEAK-NAMING-1-u3field-l2t2661.txt DONE 7132fd3c3cc42c67021951baf3dbed19e5e474be
