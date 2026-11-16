@@ -25,6 +25,7 @@ import { ArtifactBlobStore, type ArtifactBlobStoreRecorder } from '../ingestion/
 import { StorageService } from '../storage/StorageService.js';
 import { StorageError, type StorageProvider } from '../storage/types.js';
 import { MeasurementParserValidationService } from './MeasurementParserValidationService.js';
+import { isMeasurementDevicePath, resolveRawFile } from './rawFileResolver.js';
 import { MeasurementService } from './MeasurementService.js';
 import { setupTestWorkspace } from '../test/setupApp.js';
 
@@ -109,7 +110,9 @@ describe('device-stored raw binary readback (L2-GC-AIA-READBACK-1)', () => {
       [
         'server:',
         '  port: 3001',
-        "  logLevel: 'silent'",
+        // NB: 'silent' is not an accepted config logLevel — it would make
+        // loadConfig throw, silently falling back to the SHARED default store.
+        "  logLevel: 'error'",
         `  dataDir: '${resolve(testDir, 'data')}'`,
         `  workspaceDir: '${resolve(testDir, 'workspaces')}'`,
         'repositories:',
@@ -200,6 +203,25 @@ describe('device-stored raw binary readback (L2-GC-AIA-READBACK-1)', () => {
     await expect(service.validate({ parserId: 'aia_andi_cdf', path: 'secrets/SIGNAL01.cdf' })).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
+  });
+
+  it('prefers the git worktree when both stores hold the same path', async () => {
+    const bothPath = 'measurements/both/gitwins.csv';
+    blobs.set(bothPath, Buffer.from('device bytes'));
+    const withGit = {
+      ...ctx,
+      repoAdapter: { getFile: async () => ({ path: bothPath, content: 'well,channelId,metric,value\nA1,FITC,RFU,1', sha: 'x', size: 1 }) },
+    } as unknown as AppContext;
+    const resolved = await resolveRawFile(withGit, bothPath);
+    expect(resolved).toEqual({ content: 'well,channelId,metric,value\nA1,FITC,RFU,1', source: 'git' });
+  });
+
+  it('guards the device arm to upload-shaped paths', () => {
+    expect(isMeasurementDevicePath(storedPath)).toBe(true);
+    expect(isMeasurementDevicePath('measurements/a/b.cdf')).toBe(true);
+    for (const bad of ['secrets/a.cdf', '/measurements/a/b.cdf', 'measurements/../a.cdf', 'measurements//a.cdf', 'records/inbox/gemini.csv', '']) {
+      expect(isMeasurementDevicePath(bad)).toBe(false);
+    }
   });
 
   it('preserves NOT_FOUND when the context has no storage service', async () => {
