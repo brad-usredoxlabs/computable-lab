@@ -102,3 +102,5 @@ the moment the marker is appended, i.e. the commit that first CONTAINS this repo
 precedent L2-DOC-INTAKE-1 u2fix6: report body 0938f20a, marker appended in the follow-up
 commit and citing 0938f20a). A self-referential SHA is impossible in git — a commit's
 hash cannot contain itself — so the marker cites the real report-body commit.
+
+L2-P1-R16D1-RELOAD-1 UNIT unit DONE 812a84b4792e23e7f4693cca35995bdccc7db8b9
