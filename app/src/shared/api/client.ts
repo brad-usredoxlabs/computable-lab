@@ -3594,6 +3594,7 @@ export const apiClient = {
     entryRef?: { kind: 'record'; id: string; type: string }
     sampleRef?: { kind: 'record'; id: string; type: string; label?: string }
     materialRef?: { kind: 'record'; id: string; type: string; label?: string }
+    sourceRunRef?: { kind: 'record'; id: string; type: string; label?: string }
   }): Promise<{ packageRecordId: string; packagePayload: Record<string, unknown>; entryRecordId: string }> {
     try {
       return await request<{ packageRecordId: string; packagePayload: Record<string, unknown>; entryRecordId: string }>(

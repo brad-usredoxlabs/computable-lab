@@ -439,6 +439,15 @@ export function GcSectionChrome({
                     ) : attachOpen.has(e.recordId) ? (
                       <GcAttachPanel
                         entryId={e.recordId}
+                        {...(e.payload.runRef
+                          ? {
+                              sourceRunRef: {
+                                kind: 'record' as const,
+                                id: e.payload.runRef.id,
+                                type: 'run',
+                              },
+                            }
+                          : {})}
                         onActionStart={() => setNote(null)}
                         onAttached={() => {
                           setAttachOpen((prev) => {

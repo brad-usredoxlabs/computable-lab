@@ -34,10 +34,16 @@ interface StorageDevice {
 
 export function GcAttachPanel({
   entryId,
+  sourceRunRef,
   onAttached,
   onActionStart,
 }: {
   entryId: string
+  /** D4 (u1passrun): the entry's OWN run provenance, passed through to the
+   *  package register body (`sourceRunRef` — the run is the record of
+   *  biological truth). Omitted when the entry has no runRef: a missing
+   *  identity is never conjured. */
+  sourceRunRef?: { kind: 'record'; id: string; type: string }
   /** Called with the minted ACQP recordId after a successful register (the
    *  section refetches the entry to show the new ref in the table). */
   onAttached: (packageRecordId: string) => void
@@ -131,6 +137,7 @@ export function GcAttachPanel({
         deviceId,
         directoryKey,
         entryRef: { kind: 'record', id: entryId, type: 'instrument-sequence-entry' },
+        ...(sourceRunRef ? { sourceRunRef } : {}),
       })
       onAttached(res.packageRecordId)
       setDirectoryKey('')
