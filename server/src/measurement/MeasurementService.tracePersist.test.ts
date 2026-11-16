@@ -152,8 +152,10 @@ describe('u1persist: the parser-declared trace persists on the measurement recor
     expect(summary).toMatchObject({
       channelId: 'chromatogram',
       points: POINTS,
-      samplingIntervalSeconds: SAMPLING_INTERVAL,
     });
+    // The SAME single trace source: the echoed interval is the parser's OWN
+    // value, byte-identical (the CDF float32 transcribed — never recomputed).
+    expect(summary.samplingIntervalSeconds).toBe(raw.samplingIntervalSeconds);
     // Exactly ONE summary object with ONE sampling interval — no second copy
     // of the interval anywhere else in the validate output.
     expect(result['traceSummary']).toBeUndefined();
