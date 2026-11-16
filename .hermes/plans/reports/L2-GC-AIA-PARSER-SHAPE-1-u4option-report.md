@@ -75,3 +75,14 @@ Not fixed here — out of scope, no server/dependency changes permitted.)
 None for this unit. Live-DOM verification (AC1) and the .cdf ingest leg (AC2) belong to the
 milestone browser gate; the lane stack must be reloaded by the orchestrator before live verification
 (no YAML changed here, so no reload strictly required for this seam).
+
+## Evidence checker (as actually run; brief command corrected)
+The brief passed `--report /home/brad/.hermes/cl/lanes/2/reports/...` (absolute). The checker
+(`cl-unit-evidence-check.py:47,58,76`) requires the report path RELATIVE to the worktree — it joins
+`worktree + --report` and `git ls-tree`s that exact string, so the absolute form yields a false EV-4
+defect ("marker names the wrong commit"). Run as:
+`python3 ~/.hermes/cl/scripts/cl-unit-evidence-check.py --worktree <wt> --base 7253c2537d51da36a533b8610bc6bf2f38855574 --unit L2-GC-AIA-PARSER-SHAPE-1-u4option --report .hermes/plans/reports/L2-GC-AIA-PARSER-SHAPE-1-u4option-report.md --allow 'app/src/graph/hooks/useResultsMode.ts,app/src/graph/hooks/useResultsMode.gc.test.tsx,marker/'`
+Result: exit 0 — "UNIT EVIDENCE: clean — marker 5e52e8b9abfe contains .hermes/plans/reports/L2-GC-AIA-PARSER-SHAPE-1-u4option-report.md".
+The external copy at /home/brad/.hermes/cl/lanes/2/reports/ is the launcher-facing mirror of this file.
+
+L2-GC-AIA-PARSER-SHAPE-1 UNIT L2-GC-AIA-PARSER-SHAPE-1-u4option DONE 5e52e8b9abfe53456ddcebf68cfa5ad7204b9b51
