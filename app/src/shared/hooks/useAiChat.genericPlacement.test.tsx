@@ -38,7 +38,12 @@ describe('chat result to run deck preview', () => {
     await act(async () => { await result.current.sendPrompt('Place a 96-well plate on the deck.') })
     expect(onProposalDrafted).toHaveBeenCalledTimes(1)
     const preview = onProposalDrafted.mock.results[0]!.value.preview
-    const labware = preview.previewLabwares[definition.recordId]
+    // u2 (L2-P1-PLACE-AND-MINT-1): the resolved DEFINITION offer places under
+    // its own placement identity — the definition record id names the
+    // geometry (sourceRecordId), never the placement's key.
+    const placement = preview.previewPlacements[0]!
+    expect(placement.labwareId).not.toBe(definition.recordId)
+    const labware = preview.previewLabwares[placement.labwareId]
     expect(labware?.definitionId).toBe(definition.id)
     expect(labware?.sourceRecordId).toBe(definition.recordId)
     expect(labware?.geometry.maxVolume_uL).toBe(350)
