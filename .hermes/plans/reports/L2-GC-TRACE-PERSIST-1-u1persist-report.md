@@ -111,4 +111,4 @@ Final (all on final commit):
   remains with the independent browser reviewer; this unit proved the record
   shape + consumer mapping.
 
-L2-GC-AIA-CDF-PARSER-1-u1trace UNIT u1persist DONE __REPORT_SHA__
+L2-GC-AIA-CDF-PARSER-1-u1trace UNIT u1persist DONE 7cd674ceb8fa09f273a6c2b9c48ecc0be6555885
