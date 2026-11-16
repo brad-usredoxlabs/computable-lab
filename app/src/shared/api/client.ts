@@ -2365,6 +2365,25 @@ export const apiClient = {
   },
 
   /**
+   * Display name of a labware definition bound by its id — resolved from the
+   * labware-definition RECORD STORE (the single authority for a
+   * registry-bound definition; the static LABWARE_DEFINITIONS map does not
+   * carry registry ids like generic/96_well_plate@v1, and a stored definition
+   * name is never invented client-side). An UNRESOLVABLE id resolves to the
+   * id itself — the caller shows the id verbatim, never a fabricated label
+   * (gate r17 D2 residual / L2-P1-RETURN-LEG-1 u4 AC4).
+   */
+  async getLabwareDefinitionDisplay(definitionId: string): Promise<string> {
+    const { records } = await this.listRecordsByKind('labware-definition', 200)
+    const found = records.find((record) => {
+      const payload = record.payload as Record<string, unknown> | undefined
+      return payload?.id === definitionId
+    })
+    const displayName = found ? found.payload.display_name : undefined
+    return typeof displayName === 'string' && displayName.length > 0 ? displayName : definitionId
+  },
+
+  /**
    * Find an existing vendor-product record matching vendor + catalog number.
    * Vendor comparison is case-insensitive and trimmed; catalog number must
    * match exactly after trimming. Used to keep the vendor-product write

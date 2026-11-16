@@ -322,6 +322,30 @@ export function HarnessChatPane({ onReviewProposal }: HarnessChatPaneProps) {
     return wells && wells.length > 0 ? [...wells].sort() : []
   }, [editor?.state.selection?.wells])
 
+  // L2-P1-RETURN-LEG-1 u4 (LEG C): the cold-reload resume affordance. After a
+  // cold reload (F5) that rehydrated a settled deck-adopt transcript, ONE
+  // click puts the person's original sentence back into the composer —
+  // nothing re-applied, deck unchanged. The affordance is DERIVED from the
+  // rehydrated transcript (`chat.messages` — the hook's single source; no new
+  // store): it appears in the SETTLED state (the rehydrated thread is not
+  // streaming AND a completed deck-adopt sits in the transcript — a system
+  // note that names what was Accepted), and clicking it stages the LAST user
+  // message VERBATIM into the composer. NOTHING auto-sends: the click only
+  // fills the composer (setPrompt); the person reviews and presses Send.
+  const lastUserMessage = useMemo(() => {
+    if (!chat) return null
+    for (let i = chat.messages.length - 1; i >= 0; i--) {
+      const message = chat.messages[i]
+      if (message.role === 'user' && message.content.trim().length > 0) return message.content
+    }
+    return null
+  }, [chat])
+  const hasCompletedAdopt = useMemo(
+    () => chat !== null && chat.messages.some((m) => m.role === 'system' && m.content.startsWith('Accepted ')),
+    [chat],
+  )
+  const showResume = chat !== null && !chat.isStreaming && hasCompletedAdopt && lastUserMessage !== null
+
   if (!chat) {
     return (
       <aside className="harness-chat-pane" data-testid="harness-chat-pane">
@@ -422,6 +446,22 @@ export function HarnessChatPane({ onReviewProposal }: HarnessChatPaneProps) {
             />
           )}
         </div>
+      ) : null}
+      {/* L2-P1-RETURN-LEG-1 u4 (LEG C): ONE control in the settled
+          cold-reloaded state — rehydrated transcript with a completed
+          deck-adopt. Click = the last user message VERBATIM into the
+          composer (setPrompt); nothing auto-sent, the person reviews and
+          presses Send. Absent while a turn is streaming or when the
+          transcript has no completed adopt (never dead chrome). */}
+      {showResume && lastUserMessage ? (
+        <button
+          type="button"
+          className="harness-chat-pane__resume"
+          data-testid="resume-instruction"
+          onClick={() => setPrompt(lastUserMessage)}
+        >
+          Resume instruction
+        </button>
       ) : null}
       <ChatLog
         messages={chat.messages}
