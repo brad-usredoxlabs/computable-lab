@@ -22,7 +22,7 @@
  * loudly rather than rendering a partial door list that silently disagrees
  * with the document in the store.
  */
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
@@ -48,10 +48,33 @@ export interface JourneyDeclarationRef {
   doors: JourneyDeclarationDoor[];
 }
 
-/** The declarations directory, resolved from THIS module (the shipped data, never cwd). */
-export const JOURNEY_DECLARATIONS_DIR = fileURLToPath(
-  new URL('../../../../config/journey/declarations', import.meta.url),
-);
+/** The declarations directory, resolved from THIS module (the shipped data, never a guess).
+ *
+ * Under the server the module URL is a file: URL. Under the app's vitest SSR
+ * runner the same module is imported through vite (an http/jsdom URL), so the
+ * module-relative URL cannot be converted. There the directory is found by
+ * walking up from the runner's cwd to `config/journey/declarations` (the
+ * repo root — vitest runs from `app/`). The directory is DATA, not policy:
+ * both resolutions land on the one shipped folder. */
+export const JOURNEY_DECLARATIONS_DIR = resolveDeclarationsDir();
+
+function resolveDeclarationsDir(): string {
+  try {
+    const fromModule = fileURLToPath(new URL('../../../../config/journey/declarations', import.meta.url));
+    if (existsSync(fromModule)) return fromModule;
+  } catch {
+    // non-file module URL (vite/jsdom) — fall through to the cwd walk
+  }
+  let dir = process.cwd();
+  for (let depth = 0; depth < 6; depth += 1) {
+    const candidate = join(dir, 'config', 'journey', 'declarations');
+    if (existsSync(candidate)) return candidate;
+    const parent = join(dir, '..');
+    if (parent === dir) break;
+    dir = parent;
+  }
+  throw new Error('journey declarations directory not found from module URL or cwd');
+}
 
 interface RawDoor {
   alternative_id?: unknown;
@@ -178,6 +201,15 @@ export function isMaterialNounContract(declared: { domain?: string | readonly st
   if (domain === undefined) return false;
   const tags = typeof domain === 'string' ? [domain] : domain;
   return tags.some((tag) => tag.toLowerCase() === MATERIAL_ARG_DOMAIN_TAG);
+}
+
+/**
+ * The one server-owned sentence naming an unbound material noun (the card
+ * renders these words verbatim; the client never composes its own absence
+ * sentence — the same rule the labware absence card follows).
+ */
+export function notALocalTermReason(label: string): string {
+  return `${label} is not a local term in this lab.`;
 }
 
 /**

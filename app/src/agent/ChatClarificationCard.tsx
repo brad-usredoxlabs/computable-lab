@@ -37,6 +37,7 @@ import { ParameterAnswerInput } from '../event-editor/right-pane/ai/ParameterAns
 // Submit, no change to `allAnswered`.
 import { ClarifyAssumedChip } from './ClarifyAssumedChip'
 import { ClarifyWellTargetSlot } from './ClarifyWellTargetSlot'
+import { journeyDoorHref, journeyDoorLabel } from './journeyDoorHref'
 
 export interface ChatClarificationCardProps {
   /** The unresolved facts for ONE sentence (the message), in wire order. */
@@ -214,13 +215,46 @@ export function ChatClarificationCard({
             {absence && options.length === 0 ? (
               <div className="chat-clarification-card__absent">
                 <p className="chat-clarification-card__absent-reason">{absence.reason}</p>
-                <a
-                  className="chat-clarification-card__absent-create"
-                  data-testid="chat-clarification-absent-create"
-                  href={`/lab/labware/new?prefillName=${encodeURIComponent(absence.mention)}`}
-                >
-                  Create this record
-                </a>
+                {/* L2-NOUN-CREATION-JOURNEY-1 (unit u1journey): an unbound
+                    MATERIAL noun is created through the DECLARED journey —
+                    ONE door per `journey.doors[]` alternative, read from
+                    config/journey/declarations/noun-create.yaml. The card
+                    holds no door list: rename an alternative_id in the
+                    declaration and this row changes (pinned by the server
+                    test). A labware miss (no journey) keeps the single
+                    existing create anchor byte-identically. The door is an
+                    ANCHOR, never a write: it carries the noun as a CANDIDATE
+                    plus the declaration's surface/door/journey/checkpoint in
+                    the URL, and the target surface's own governed accept is
+                    the only writer. */}
+                {request.journey !== undefined && request.journey.doors.length > 0 ? (
+                  <ul
+                    className="chat-clarification-card__journey-doors"
+                    data-testid="chat-clarification-journey-doors"
+                  >
+                    {request.journey.doors.map((door) => (
+                      <li key={door.id}>
+                        <a
+                          className="chat-clarification-card__journey-door"
+                          data-testid={`chat-clarification-door-${door.id}`}
+                          data-surface={door.surface}
+                          href={journeyDoorHref({ ...door, candidateLabel: door.candidateLabel || request.journey!.candidateLabel }, request.journey!)}
+                          title={door.summary}
+                        >
+                          {journeyDoorLabel(door.id)}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <a
+                    className="chat-clarification-card__absent-create"
+                    data-testid="chat-clarification-absent-create"
+                    href={`/lab/labware/new?prefillName=${encodeURIComponent(absence.mention)}`}
+                  >
+                    Create this record
+                  </a>
+                )}
               </div>
             ) : controlKind === 'quantity' && request.clarifyControl ? (
               <ClarifyAssumedChip

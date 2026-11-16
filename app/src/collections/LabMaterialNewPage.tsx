@@ -8,7 +8,7 @@
  * then vendor product — the concept ≠ vendor-product hierarchy stays there,
  * CLAUDE.md rule 8). onSave navigates back to /lab/materials.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppShell } from '../shared/shell'
 import { useMaterialSearch } from '../event-editor/material/useMaterialSearch'
@@ -20,12 +20,32 @@ export function LabMaterialNewPage() {
   const { query, setQuery, ontologyResults, loadingOntology, error, searchOntology } = useMaterialSearch()
   // Set ONLY by an explicit row click — no autopick of the first result.
   const [ontologyRef, setOntologyRef] = useState<OntologyRef | null>(null)
+  /**
+   * L2-NOUN-CREATION-JOURNEY-1 (unit u1journey): the noun the chat card carried
+   * here as a CANDIDATE (?prefillName=). Read ONCE from the URL at first render
+   * (lazy initialiser, same discipline as LabLabwareNewPage's u1nounprefill), so
+   * a reload of the door URL still shows the person's own noun — it is never
+   * minted, never auto-resolved, and no first search result is autopicked.
+   */
+  const [prefillName] = useState(
+    () => new URLSearchParams(window.location.search).get('prefillName')?.trim() ?? '',
+  )
+  useEffect(() => {
+    if (prefillName !== '') setQuery(prefillName)
+    // seed ONCE at mount; the person owns the field afterwards
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <AppShell brand="Add a material">
       <div style={{ padding: '1rem' }} data-testid="lab-material-new-page">
         <h2>Add a material</h2>
         <p>Search the ontologies for the material, then pick the exact term to record its vendor products.</p>
+        {prefillName !== '' && (
+          <p data-testid="lab-material-journey-candidate" style={{ margin: '0 0 0.5rem' }}>
+            Creating <strong>{prefillName}</strong> — your words, not yet a record. Pick the exact term below.
+          </p>
+        )}
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           <input
             data-testid="lab-material-search-input"
