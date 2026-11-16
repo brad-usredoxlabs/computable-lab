@@ -197,7 +197,20 @@ export function buildEventWellIndex(
     return null
   }
 
-  const add = (event: PlateEvent, offer: string | typeof OFFER_BINDING_AMBIGUOUS | null) => {
+  const add = (
+    event: PlateEvent,
+    offer: string | typeof OFFER_BINDING_AMBIGUOUS | null,
+    /** L2-P1-PLACE-AND-MINT-1 u4wellfix [D1]: the arm's resolution POINT —
+     *  the committed arm passes the identity function (its value is ALREADY
+     *  a placement key: resolved at CAPTURE time by
+     *  committedOfferCapturesForPreview — one fact, ONE resolution point;
+     *  re-resolving it against the CURRENT preview was a second authority
+     *  over the same truth, and a later preview placing the same definition
+     *  re-routed the earlier batch's wells onto the later tile). The staged
+     *  arm resolves against its own preview (the preview IS its batch — the
+     *  only arm with a live labware map at render). */
+    resolveOffer: (offerRecordId: string) => string,
+  ) => {
     // The offer's recordId for attribution — the AMBIGUOUS marker means
     // "no guess": the event attributes to NOTHING (it still self-attributes
     // above when it carries an explicit labware reference).
@@ -264,7 +277,12 @@ export function buildEventWellIndex(
     // vessel offers are the identity map (placement key === recordId), so
     // their behavior is unchanged.
     if (unique.length === 0 && offerRecordId !== null && all.length > 0) {
-      const placementKey = resolvePlacementIdentity(offerRecordId, preview?.previewLabwares ?? {})
+      // L2-P1-PLACE-AND-MINT-1 u4wellfix [D1]: resolve ONCE per arm — the
+      // committed arm's key rides its CAPTURE-time resolution (the identity
+      // resolver: one fact, one key, one resolution POINT); the staged arm
+      // resolves against its OWN preview labware map (the preview IS its
+      // batch). Never a second authority over the same truth.
+      const placementKey = resolveOffer(offerRecordId)
       let set = byLabware.get(placementKey)
       if (!set) {
         set = new Set()
@@ -310,7 +328,15 @@ export function buildEventWellIndex(
     }
   }
 
-  for (const event of committedEvents) add(event, committedOfferOf(event.eventId))
-  for (const event of preview?.previewEvents ?? []) add(event, stagedOffer)
+  // L2-P1-PLACE-AND-MINT-1 u4wellfix [D1]: the arms differ in WHERE their
+  // offer key was decided — the committed arm's value is ALREADY the
+  // placement key (resolved at CAPTURE time, it rides per-batch) and passes
+  // THROUGH untouched; only the staged arm resolves at render, against its
+  // OWN preview's labware map (the preview IS its batch).
+  const stagedPlacementResolver = (offerRecordId: string): string =>
+    resolvePlacementIdentity(offerRecordId, preview?.previewLabwares ?? {})
+  for (const event of committedEvents)
+    add(event, committedOfferOf(event.eventId), (key) => key)
+  for (const event of preview?.previewEvents ?? []) add(event, stagedOffer, stagedPlacementResolver)
   return byLabware
 }
