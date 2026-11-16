@@ -98,3 +98,5 @@ tsc: baseline (base 628002926, worktree materialized with server/node_modules ->
   no "200 µL". Note the row's NAME now carries the geometry summary ("Generic 96-Well Plate ·
   8 × 12 · 350 µL max") — the record's own title plus what its bound definition declares.
 - No YAML/schema changes; no lane-stack reload needed.
+
+L2-P1-R16D2-VIEWLABEL-1 UNIT L2-P1-R16D2-VIEWLABEL-1 DONE 05335c023691cd5202113f455a8ceba920072f55
