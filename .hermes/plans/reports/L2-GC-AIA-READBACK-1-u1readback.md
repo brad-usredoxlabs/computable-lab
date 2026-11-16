@@ -170,3 +170,8 @@ Both symlinks are gitignored; `git status` is clean at exit (default HOME hook n
   never called on it, so no data-reference record can be minted from a read path.
 
 status: DONE
+
+RED commit:  d2d57781f771fbd052f8b7335cba72c97328af26
+GREEN commit: 914dece036dd11627ec92f0881f6e2cef93b7a66
+report commit: 58d28ce8509bc655cbe887ab4ff9d24cea75079c
+L2-GC-AIA-PARSER-SHAPE-1 UNIT u1readback DONE 58d28ce8509bc655cbe887ab4ff9d24cea75079c
