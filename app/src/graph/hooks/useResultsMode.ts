@@ -18,6 +18,7 @@ const PARSER_OPTIONS = [
   { value: 'abi7500_csv', label: 'ABI 7500 CSV' },
   { value: 'agilent6890', label: 'Agilent 6890 GC-FID' },
   { value: 'metrohm761_csv_stub', label: 'Metrohm 761 CSV' },
+  { value: 'aia_andi_cdf', label: 'AIA/ANDI CDF (NetCDF)' },
 ] as const
 
 /** What the parser actually read, read back off the created measurement record (never synthesized client-side). */
