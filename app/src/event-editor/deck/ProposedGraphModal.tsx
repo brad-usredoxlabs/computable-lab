@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { EventEditorPreview } from '../EventEditorContext'
 import { labwareGeometrySummary } from '../../types/labware'
+import { apiClient } from '../../shared/api/client'
 import type { DraftOntologyBinding } from '../../types/ai'
 import type { TermDecision } from './acceptedOntologyBindings'
 import { useResolveOntology } from '../../editor/hooks/useResolveOntology'
@@ -197,6 +198,52 @@ export function ProposedGraphModal({
   const pendingCount = decisionNeeded.filter((b) => !termDecisions[b.curie]).length
   const resolvedCount = decisionNeeded.length - pendingCount
 
+  // L2-P1-RETURN-LEG-1 u4 (gate r17 D2 residual): the View changes row must
+  // NAME the definition each placed entry binds — the bound definition's own
+  // display name, resolved from the labware-definition RECORD STORE (the
+  // single authority; the static map does not carry registry-bound ids, and a
+  // name is never invented client-side). Unresolvable definitionId -> the id
+  // itself is shown, never a fabricated label. The ghost's own `name` stays
+  // the entry's title; the definition name is an ADDITIONAL derived field,
+  // held per labwareId (derived ONLY from the entry's definitionId — never a
+  // second store).
+  const [definitionLabels, setDefinitionLabels] = useState<Record<string, string>>({})
+  const labwaresByKey = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const [labwareId, entry] of Object.entries(preview.previewLabwares)) {
+      const definitionId = (entry as { definitionId?: unknown }).definitionId
+      if (typeof definitionId === 'string' && definitionId.length > 0) map.set(labwareId, definitionId)
+    }
+    return map
+  }, [preview.previewLabwares])
+  const labwaresKey = Array.from(labwaresByKey.entries()).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).join(' ')
+  useEffect(() => {
+    const wanted = labwaresByKey
+    if (wanted.size === 0) return
+    let cancelled = false
+    const entries: Array<[string, string]> = []
+    let pending = 0
+    wanted.forEach((definitionId, labwareId) => {
+      pending++
+      void apiClient.getLabwareDefinitionDisplay(definitionId).then((display) => {
+        if (cancelled) return
+        entries.push([labwareId, display])
+        pending--
+        if (pending === 0) {
+          setDefinitionLabels((prev) => {
+            const next = { ...prev }
+            for (const [labwareId, display] of entries) next[labwareId] = display
+            return next
+          })
+        }
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [labwaresKey])
+
   return (
     <div className="ee-dialog__scrim" role="dialog" aria-modal="true" onClick={onClose}>
       <div className="ee-dialog proposed-graph" onClick={(e) => e.stopPropagation()}>
@@ -379,18 +426,25 @@ export function ProposedGraphModal({
                   const lw = preview.previewLabwares[p.labwareId]
                   const where =
                     p.location.kind === 'slot' ? `slot ${p.location.slotId}` : 'lawn'
+                  // L2-P1-RETURN-LEG-1 u4: NAME the bound definition (AC1).
+                  // The row's title IS the definition's own display name,
+                  // resolved async from the record store (definitionLabels is
+                  // populated per labwareId); while it is pending the row
+                  // keeps the geometry as its title — a name that is not yet
+                  // known is never shown invented, and an unresolvable id
+                  // falls back to the id itself (the store's resolver, AC4).
+                  // The true geometry rides in the detail line (never baked
+                  // from a static type table), and the ghost's own title
+                  // stays visible inside it (its title, not the definition's
+                  // name).
+                  const definitionLabel = lw ? definitionLabels[p.labwareId] : undefined
                   return (
                     <li key={p.placementId} className="proposed-graph__lw">
-                      {/* Name what Accept will actually commit: the record's own
-                          title and the geometry its bound definition carries.
-                          LABWARE_TYPE_LABELS bakes static capacities (e.g.
-                          plate_96 → "200 µL") that may not match the bound
-                          definition (gate r16 D2) — a value the record does not
-                          carry is left out, never invented. */}
                       <span className="proposed-graph__lw-name">
-                        {lw ? labwareGeometrySummary(lw) : p.labwareId}
+                        {lw ? (definitionLabel ?? labwareGeometrySummary(lw)) : p.labwareId}
                       </span>
                       <span className="proposed-graph__muted">
+                        {lw ? labwareGeometrySummary(lw) : p.labwareId} ·{' '}
                         {lw ? 'labware' : 'unknown type'} · {where} · {p.orientation}
                       </span>
                     </li>

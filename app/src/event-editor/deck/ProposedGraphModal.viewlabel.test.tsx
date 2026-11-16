@@ -4,7 +4,6 @@ import type { EventEditorPreview } from '../EventEditorContext'
 import type { PlateEvent } from '../../types/events'
 import type { Labware } from '../../types/labware'
 import type { RecordEnvelope } from '../../types/kernel'
-import { apiClient } from '../../shared/api/client'
 import { ProposedGraphModal } from './ProposedGraphModal'
 
 // L2-P1-RETURN-LEG-1 u2 (gate r17 D2 residual): the View changes row must NAME
@@ -21,13 +20,27 @@ import { ProposedGraphModal } from './ProposedGraphModal'
 // the definition). This fixture pins the production shape instead, so the
 // assertion can only pass when the row resolves the bound definition's own
 // display name.
+const mocked = vi.hoisted(() => ({
+  listRecordsByKind: vi.fn(),
+}))
+
 vi.mock('../../shared/api/client', () => ({
   apiClient: {
-    listRecordsByKind: vi.fn(),
+    listRecordsByKind: mocked.listRecordsByKind,
+    // The seam contract the modal calls (client.ts getLabwareDefinitionDisplay):
+    // id -> the labware-definition record's display_name, or the id itself
+    // when it does not resolve (never a fabricated name). Delegates to
+    // listRecordsByKind — the ONE authority the assertions below pin.
+    getLabwareDefinitionDisplay: vi.fn(async (definitionId: string) => {
+      const { records } = await mocked.listRecordsByKind('labware-definition', 200)
+      const found = records.find((r: { payload?: Record<string, unknown> }) => r.payload?.id === definitionId)
+      const displayName = found ? found.payload.display_name : undefined
+      return typeof displayName === 'string' && displayName.length > 0 ? displayName : definitionId
+    }),
   },
 }))
 
-const listRecordsByKindMock = vi.mocked(apiClient.listRecordsByKind)
+const listRecordsByKindMock = vi.mocked(mocked.listRecordsByKind)
 
 /**
  * The definition record the readback proves exists
