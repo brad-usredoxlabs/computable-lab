@@ -904,23 +904,27 @@ export default function RecordRegistryPage() {
           )}
         </div>
         {/* RecordSearchCombobox */}
-        <div className="registry-list__search">
-          <RecordSearchCombobox
-            kinds={activeTabConfig.kinds as unknown as string[]}
-            schemaId={activeTabSchemaId}
-            placeholder={`Search ${activeTabConfig.label.toLowerCase()}...`}
-            onSelect={(record) => {
-              if (record.isNew) {
-                // EDITOR-9 fix-2: pass the combobox's precompile payload
-                // through so the create base carries kind/id (see
-                // handleCreateRecord).
-                handleCreateRecord(record.schemaId, record.payload);
-              } else {
-                handleSelectRecord({ recordId: record.recordId, payload: record.payload });
-              }
-            }}
-          />
-        </div>
+        {/* u5searchfix D1: a registrySource tab declares no kinds, so the combobox
+            would be dead chrome — CompoundClassPanel is its content. */}
+        {activeTabConfig.kinds.length > 0 && (
+          <div className="registry-list__search">
+            <RecordSearchCombobox
+              kinds={activeTabConfig.kinds as unknown as string[]}
+              schemaId={activeTabSchemaId}
+              placeholder={`Search ${activeTabConfig.label.toLowerCase()}...`}
+              onSelect={(record) => {
+                if (record.isNew) {
+                  // EDITOR-9 fix-2: pass the combobox's precompile payload
+                  // through so the create base carries kind/id (see
+                  // handleCreateRecord).
+                  handleCreateRecord(record.schemaId, record.payload);
+                } else {
+                  handleSelectRecord({ recordId: record.recordId, payload: record.payload });
+                }
+              }}
+            />
+          </div>
+        )}
         {/* Record List - Compact (QMS7-6: renders visibleRecords — the
             render-time archived filter, see above). INSTR-COLLAPSE-2 C5: on
             the Equipment tab the measurement-capable pill narrows the SAME
