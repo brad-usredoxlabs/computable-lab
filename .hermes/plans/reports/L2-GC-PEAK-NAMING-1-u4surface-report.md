@@ -132,3 +132,4 @@ Acceptance mapping:
 - tsc drift (10 app / 6 server errors, all in untouched files, present without
   this unit's changes) — owner: orchestrator/environment; does not block this
   unit (0 errors in unit files, verified both with and without the unit's diff).
+L2-GC-PEAK-NAMING-1 UNIT unit DONE 17b507133cf7d7ae93af4aa901593df40d653700
