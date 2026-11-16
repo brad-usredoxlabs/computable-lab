@@ -1265,11 +1265,17 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
           }
         }
         if (thread.messages.length > 0) {
+          // L2-P1-R16D1-RELOAD-1 u1: the applied-result record is persisted as
+          // a `system` message and must ride the hydration filter back so a
+          // cold reload shows what was already applied (gate r16 D1 high).
+          // `tool` is still dropped — it has no ChatMessage role and no
+          // rendering surface here (the read-side complement of the sync
+          // persistence above; same single authority, no second one).
           const hydrated: ChatMessage[] = thread.messages
-            .filter((m) => m.role === 'user' || m.role === 'assistant')
+            .filter((m) => m.role === 'user' || m.role === 'assistant' || m.role === 'system')
             .map((m, idx) => ({
               id: `persisted-${idx}-${m.createdAt}`,
-              role: m.role as 'user' | 'assistant',
+              role: m.role as ChatMessage['role'],
               content: m.content,
               ...(m.metadata?.sequenceProposal ? { sequenceProposal: m.metadata.sequenceProposal as Record<string, unknown> } : {}),
               ...(typeof m.metadata?.sequenceProposalRequest === 'string' ? { sequenceProposalRequest: m.metadata.sequenceProposalRequest } : {}),
@@ -1367,7 +1373,15 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
     )
     if (unsynced.length === 0) return
     for (const m of unsynced) {
-      if (m.role === 'system') continue
+      // L2-P1-R16D1-RELOAD-1 u1: system messages are NO LONGER skipped. The
+      // applied-result record ("Accepted N event… commit <sha>") is pushed as
+      // a `system` message (the adoption arm) and MUST persist so a cold
+      // reload shows what was already applied (gate r16 D1 high). The server
+      // thread-messages endpoint accepts role `system` (ThreadRole includes
+      // it; the store `append` has no role whitelist) — the single authority
+      // for message persistence, no second authority added. Idempotency is
+      // preserved by persistedIdsRef below (each id posts exactly once), so
+      // two sync passes never duplicate a system message.
       persistedIdsRef.current.add(m.id)
       // Phase 5: persist the full message shape so promoted `conversation`
       // records carry preview events, labware additions, clarifications,
