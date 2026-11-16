@@ -3,6 +3,7 @@ import { ParserRegistry } from './parsers/ParserRegistry.js';
 import { evaluateDeclaredCapabilityGate } from '../capabilities/DeclaredCapabilityGate.js';
 import { basename } from 'node:path';
 import { resolveRawFile } from './rawFileResolver.js';
+import { deriveReadEventRef } from './deriveReadEventRef.js';
 
 const MEASUREMENT_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/measurement.schema.yaml';
 
@@ -147,13 +148,25 @@ export class MeasurementService {
 
     const recordId = await this.nextRecordId();
     const parsedAt = new Date().toISOString();
+    // u2pubgate: the read-event provenance pointer comes from the stored
+    // event-graph's data when the request names none (ONE helper, reused by
+    // the RunSheetHandlers mint; events by event_type only). Purely
+    // additive: no read event in the graph -> absent, exactly as today.
+    const derivedReadEventRef =
+      typeof input.readEventRef === 'string' && input.readEventRef.length > 0
+        ? undefined
+        : eventGraphRef
+          ? await deriveReadEventRef(this.ctx.store, eventGraphRef)
+          : undefined;
+    const readEventRef =
+      typeof input.readEventRef === 'string' && input.readEventRef.length > 0 ? input.readEventRef : derivedReadEventRef;
     const payload: MeasurementPayload = {
       kind: 'measurement',
       recordId,
       title: `Measurement ${recordId}`,
       assayType: parsed.assayType,
       ...(eventGraphRef ? { eventGraphRef } : {}),
-      ...(typeof input.readEventRef === 'string' ? { readEventRef: input.readEventRef } : {}),
+      ...(readEventRef ? { readEventRef } : {}),
       ...(equipmentRef ? { equipmentRef } : {}),
       ...(labwareInstanceRef ? { labwareInstanceRef } : {}),
       ...(measurementContextRef ? { measurementContextRef } : {}),

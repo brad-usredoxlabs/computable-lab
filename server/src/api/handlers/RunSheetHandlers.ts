@@ -56,6 +56,7 @@ import {
 } from '../../storage/acquisitionPackage.js';
 import { StorageError } from '../../storage/types.js';
 import type { AccessAction } from '../../security/AccessControlService.js';
+import { deriveReadEventRef } from '../../measurement/deriveReadEventRef.js';
 
 /** The register body: the GC-4 RegisterAcquisitionPackageInput + the
  *  GC-12-added `entryRef` (the instrument-sequence-entry the package
@@ -288,12 +289,18 @@ export function createRunSheetHandlers(ctx: AppContext): RunSheetHandlers {
       if (eventGraphId && !entryId) {
         const mTail = result.packageRecordId.slice('ACQP-'.length);
         const measurementRecordId = `MSR-${mTail || String(Date.now())}`;
+        // u2pubgate: the SAME derivation MeasurementService.ingest uses —
+        // read out of the stored event-graph (events by event_type only).
+        // Purely additive: no read event -> pointer absent, exactly as
+        // before (never a hardcoded fallback).
+        const mReadEventRef = await deriveReadEventRef(ctx.store, body.eventGraphRef);
         const mPayload: Record<string, unknown> = {
           kind: 'measurement',
           recordId: measurementRecordId,
           title: body.title ?? `Acquisition package ${result.packageRecordId} (${directoryKey})`,
           assayType: body.assayType,
           eventGraphRef: body.eventGraphRef,
+          ...(mReadEventRef ? { readEventRef: mReadEventRef } : {}),
           ...(body.materialRef ? { materialRef: body.materialRef } : {}),
           ...(body.equipmentRef ? { equipmentRef: body.equipmentRef } : {}),
         };
