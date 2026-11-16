@@ -722,3 +722,96 @@ export function buildCompareViewSpecPayload(entries: CompareTraceEntry[], viewId
     bindings,
   }
 }
+
+// ---------------------------------------------------------------------------
+// 7. traceFromMeasurement — the u1persist (D3) reader: a MEASUREMENT record's
+//    persisted parserInfo.trace -> the Trace shape the GC render path consumes
+// ---------------------------------------------------------------------------
+
+/** The measurement RECORD envelope shape (data-only; server-persisted). */
+export interface MeasurementRecordShape {
+  recordId?: string
+  payload?: {
+    title?: string
+    parserInfo?: {
+      parserId?: string
+      parserVersion?: string
+      parsedAt?: string
+      units?: { time?: string; intensity?: string }
+      metadata?: Record<string, string>
+      /** L2-GC-TRACE-PERSIST-1 (D3): the parser-declared ordinate series —
+       *  the single persisted trace truth (absent when the parser declares
+       *  no trace: never an empty array, never undefined). */
+      trace?: {
+        values: number[]
+        samplingIntervalSeconds: number
+      }
+    }
+  }
+}
+
+/** A named refusal when the record carries no well-formed trace (named error,
+ *  never a silent blank or an invented grid). */
+export interface TraceFromMeasurementError {
+  ok: false
+  code: 'NO_TRACE'
+  message: string
+}
+
+/**
+ * Map a measurement record's `parserInfo.trace` into the Trace shape the
+ * chromatogram render path consumes (D3, L2-GC-TRACE-PERSIST-1).
+ *
+ * The record IS the trace truth: values arrive VERBATIM (file order) and the
+ * axis is the uniform sampling grid the record declared (point i sits at
+ * i * samplingIntervalSeconds) — this reader never re-parses a raw file,
+ * never resamples, and never carries a second copy of the interval. Units
+ * come from the record's declared parserInfo.units (omitted when the record
+ * declares none — this module contains ZERO unit literals). A record without
+ * a well-formed parserInfo.trace is a NAMED `NO_TRACE` refusal (the render
+ * path shows the reason; it does not invent a blank chromatogram).
+ */
+export function traceFromMeasurement(
+  record: MeasurementRecordShape,
+  run: { runId: string },
+): { ok: true; trace: Trace } | TraceFromMeasurementError {
+  const recordId = record.recordId ?? ''
+  const parserInfo = record.payload?.parserInfo
+  const declared = parserInfo?.trace
+  const values = declared?.values
+  const interval = declared?.samplingIntervalSeconds
+  const wellFormed =
+    typeof declared === 'object' &&
+    declared !== null &&
+    Array.isArray(values) &&
+    values.length > 0 &&
+    values.every((v) => typeof v === 'number' && Number.isFinite(v)) &&
+    typeof interval === 'number' &&
+    Number.isFinite(interval) &&
+    interval > 0
+  if (!wellFormed) {
+    return {
+      ok: false,
+      code: 'NO_TRACE',
+      message: `measurement ${recordId} carries no well-formed parserInfo.trace — nothing to render (no grid is invented)`,
+    }
+  }
+  // Uniform grid, point i at i * interval: the record's declared sampling,
+  // the only arithmetic this reader performs (an axis, not new data).
+  const axis: number[] = new Array(values.length)
+  for (let i = 0; i < values.length; i++) axis[i] = i * interval
+  const units = parserInfo?.units
+  return {
+    ok: true,
+    trace: {
+      recordId,
+      runId: run.runId,
+      runTitle: typeof record.payload?.title === 'string' && record.payload.title.length > 0 ? record.payload.title : recordId,
+      artifactName: recordId,
+      axis,
+      values: [...values],
+      ...(units && typeof units.time === 'string' && units.time.length > 0 ? { xUnit: units.time } : {}),
+      ...(units && typeof units.intensity === 'string' && units.intensity.length > 0 ? { yUnit: units.intensity } : {}),
+    },
+  }
+}
