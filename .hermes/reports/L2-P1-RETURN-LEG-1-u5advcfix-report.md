@@ -80,6 +80,13 @@ F4 (minor, resume gate): new leg "absent with no completed 'Accepted ' system me
    sorted sets) vs measured baselines.
 
 ## Known pre-existing (NOT this unit's)
+- INFRA NOTE for the next unit on this lane: the launcher's marker scanner worktree globs
+  (`.hermes/plans/**`, root `*report*`, `deliverables/**`) do NOT cover `.hermes/reports/` —
+  a report committed ONLY at the brief's assigned path is not found there (verified 2026-11-16
+  with cl_marker_scan.find_marker → 'missing'). The scanner's lane-directory fallback DOES read
+  `~/.hermes/cl/lanes/2/reports/*.md`, so this report was ALSO copied there
+  (L2-P1-RETURN-LEG-1-u5advcfix-report.md) and the scan returns strict 'found'. Both copies
+  carry the same marker line; the worktree copy is the committed record of this unit.
 - 17 failing tests in 9 files (DeckSurfaceChat deckLayout/threadScope, LabwareGlyph, LawnSurface
   equipment/moveAcross, useAiChat card1fix5/threadscope) — identical set at base and final.
 - 13 tsc lines in SchemaRecordForm.tsx / RefCombobox.ontologyref.test.tsx — pre-existing at base.
