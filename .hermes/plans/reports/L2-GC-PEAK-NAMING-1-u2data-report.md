@@ -95,3 +95,5 @@ Touched only the two owned paths. `fame-medium-chain.yaml`, `records/**`, `schem
 Orchestrator must reload the lane stack before any live verification (YAML change).
 Remaining blocker: none for this leg. Parent L2-GC-PEAK-NAMING-1 remains open — other legs
 (u1 KEYS, u3 mapping/UI) are outside this unit; acceptance of the parent is not claimed here.
+
+L2-GC-PEAK-NAMING-1-u2data UNIT L2-GC-PEAK-NAMING-1-u2data DONE b80f3c0eb2a100ab4638ab7503dc6aa35647d377
