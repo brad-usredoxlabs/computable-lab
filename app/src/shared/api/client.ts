@@ -5511,6 +5511,23 @@ export const apiClient = {
   },
 
   /**
+   * List the compound-class registry (GET /compound-classes).
+   * L2-GC-PEAK-NAMING-1 (u4surface): the /registry "Compounds" tab's data
+   * source. Each candidate's compoundId is a controlled ontology id resolved
+   * per-candidate through getOntologyTerm above.
+   */
+  async getCompoundClasses(): Promise<{
+    classes: Array<{
+      id: string
+      name: string
+      description?: string
+      candidates: Array<{ compoundId: string; name: string; notes?: string }>
+    }>
+  }> {
+    return request('/compound-classes')
+  },
+
+  /**
    * Get a verb-action mapping by verb name.
    * Calls GET /verb-action-map/lookup?verb=<encoded>
    */

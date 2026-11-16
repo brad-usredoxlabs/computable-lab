@@ -90,6 +90,7 @@ import type { HealthResponse } from './types.js';
 import { fileURLToPath } from 'node:url';
 import { AGENT_ALLOWED_TOOLS } from '../ai/index.js';
 import { loadCapabilityCatalogueDir } from '../compiler/journey/capabilityCatalogue.js';
+import { getCompoundClassRegistry } from '../registry/CompoundClassRegistry.js';
 import { compileJourneyStructure } from '../compiler/journey/journeyCompiler.js';
 import { compileJourneyEnvelope, type ResolvedInputVersion } from '../compiler/journey/journeyEnvelope.js';
 import { guardJourneyDispatch, loadPolicySetsDir, refuseUnavailableCapability, RULE_DISPATCH_POLICY_UNAVAILABLE } from '../compiler/journey/journeyDispatch.js';
@@ -1444,6 +1445,32 @@ export function registerRoutes(
   if (ontologyTermHandlers) {
     fastify.get('/ontology-terms/lookup', ontologyTermHandlers.getOntologyTerm.bind(ontologyTermHandlers));
   }
+
+  // ============================================================================
+  // Compound Class Registry Routes (L2-GC-PEAK-NAMING-1, u4surface)
+  // ============================================================================
+  // Read-only served surface for the compound-class registry (schema/
+  // registry/compound-classes): the consuming side is the /registry "Compounds"
+  // tab, whose candidates resolve labels through GET /ontology-terms/lookup.
+  // The registry loader is stateless per process; list() re-reads from its
+  // in-memory cache (the /Compounds tab's reload requirement is a re-render of
+  // this stateless read — no persistence). Shape copied from the inline-route
+  // precedent above (GET /journey/capabilities): 200 WITH a named diagnostic on
+  // failure, never a 500 and never a silently empty list.
+  fastify.get('/compound-classes', async () => {
+    try {
+      return { classes: getCompoundClassRegistry().list() };
+    } catch (error) {
+      // Absent/unreadable registry directory: an empty list WITH a named
+      // diagnostic (same contract as /journey/capabilities).
+      return {
+        classes: [],
+        diagnostics: [
+          `compound-class registry: ${error instanceof Error ? error.message : String(error)}`,
+        ],
+      };
+    }
+  });
 
   // ============================================================================
   // Verb Action Map Routes (optional - requires verbActionMapHandlers)
