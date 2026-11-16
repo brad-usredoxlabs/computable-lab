@@ -54,13 +54,38 @@ export const OFFER_BINDING_AMBIGUOUS = Symbol('offer-binding-ambiguous')
 
 type OfferBindingValue = string | null | typeof OFFER_BINDING_AMBIGUOUS
 
+/** L2-P1-PLACE-AND-MINT-1 u3wellfix [D1]: resolve a batch's offer recordId to
+ *  the PLACEMENT identity of the vessel it places — the ONE key the deck tile
+ *  reads (`eventWellIndex.get(placement.labwareId)`). draftPreview stamps
+ *  `sourceRecordId === the offer recordId` on every preview labware: the
+ *  definition branch RE-KEYS labwareId to its own placement identity (u2) and
+ *  the vessel branch keeps labwareId === recordId (the identity map). So the
+ *  UNIQUE previewLabwares entry whose sourceRecordId is the offer recordId IS
+ *  the offered vessel, and its key is the placement identity. Exactly one
+ *  match -> that entry's key; zero or more than one -> the recordId itself
+ *  (the pre-u3wellfix key) — never guess: one fact, one key, never two
+ *  authorities. Both arms of the well index use this ONE resolution (the
+ *  staged arm here; the committed arm via committedOfferCapturesForPreview at
+ *  capture time), so the attribution key and the tile key cannot drift. */
+export function resolvePlacementIdentity(
+  offerRecordId: string,
+  previewLabwares: Record<string, { sourceRecordId?: string }>,
+): string {
+  const matches = Object.entries(previewLabwares)
+    .filter(([, labware]) => labware.sourceRecordId === offerRecordId)
+    .map(([labwareId]) => labwareId)
+  return matches.length === 1 ? matches[0]! : offerRecordId
+}
+
 /** labwareId → the set of WellIds touched by at least one committed or
  *  preview event on that labware (empty set is never stored).
  *
  *  L2-SUITE-A-uifix2 A: the resolved-labware OFFER (the AiResolvedLabware list
  *  that rides the turn's draft payload and is consumed client-side by the
- *  preview path — draftPreview.ts's resolved arm keys the editor labware by
- *  recordId) is the client-side attribution source for COMMITTED events that
+ *  preview path — draftPreview.ts's resolved arm keys a VESSEL offer's editor
+ *  labware by recordId and a DEFINITION offer's by its own placement identity,
+ *  with sourceRecordId carrying the offer recordId in both — L2-P1-PLACE-AND-
+ *  MINT-1 u2) is the client-side attribution source for COMMITTED events that
  *  carry wells but NO explicit labware reference (the compiled add_material:
  *  `details.wells` but no `labwareId` at event or details level). NO server
  *  record-shape change.
@@ -225,15 +250,25 @@ export function buildEventWellIndex(
     // (the compiled add_material: details.wells with no labwareId at event or
     // details level) attributes to the turn's single-vessel offer — the vessel
     // the pipeline bound it against (resolvedLabwares rides the SAME turn's
-    // draft payload; the preview path already consumes it to key the editor
-    // labware by recordId). Multiple offers => ambiguous target => attribute
-    // to nothing (never guess). An event WITH an explicit reference self-
+    // draft payload; the preview path already consumes it to place the ghost).
+    // Multiple offers => ambiguous target => attribute to nothing (never guess).
+    // An event WITH an explicit reference self-
     // attributed above and is never re-routed here (unique is non-empty).
+    // L2-P1-PLACE-AND-MINT-1 u3wellfix [D1]: the wells land under the
+    // PLACEMENT identity of the offered vessel (resolvePlacementIdentity —
+    // the SAME key the deck tile reads), never under the offer's recordId:
+    // a definition offer re-keyed its editor labware to its own placement
+    // identity (u2), so the recordId key left the tile's wells unmarked
+    // (96 UNMARKED wells where the base marked them). Zero-or-many matches
+    // keep the recordId key (the pre-u3wellfix behavior, byte-for-byte);
+    // vessel offers are the identity map (placement key === recordId), so
+    // their behavior is unchanged.
     if (unique.length === 0 && offerRecordId !== null && all.length > 0) {
-      let set = byLabware.get(offerRecordId)
+      const placementKey = resolvePlacementIdentity(offerRecordId, preview?.previewLabwares ?? {})
+      let set = byLabware.get(placementKey)
       if (!set) {
         set = new Set()
-        byLabware.set(offerRecordId, set)
+        byLabware.set(placementKey, set)
       }
       for (const well of all) set.add(well)
     } else if (
