@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { EventEditorPreview } from '../EventEditorContext'
-import { LABWARE_TYPE_LABELS } from '../../types/labware'
+import { labwareGeometrySummary } from '../../types/labware'
 import type { DraftOntologyBinding } from '../../types/ai'
 import type { TermDecision } from './acceptedOntologyBindings'
 import { useResolveOntology } from '../../editor/hooks/useResolveOntology'
@@ -381,10 +381,17 @@ export function ProposedGraphModal({
                     p.location.kind === 'slot' ? `slot ${p.location.slotId}` : 'lawn'
                   return (
                     <li key={p.placementId} className="proposed-graph__lw">
-                      <span className="proposed-graph__lw-name">{lw?.name ?? p.labwareId}</span>
+                      {/* Name what Accept will actually commit: the record's own
+                          title and the geometry its bound definition carries.
+                          LABWARE_TYPE_LABELS bakes static capacities (e.g.
+                          plate_96 → "200 µL") that may not match the bound
+                          definition (gate r16 D2) — a value the record does not
+                          carry is left out, never invented. */}
+                      <span className="proposed-graph__lw-name">
+                        {lw ? labwareGeometrySummary(lw) : p.labwareId}
+                      </span>
                       <span className="proposed-graph__muted">
-                        {lw ? LABWARE_TYPE_LABELS[lw.labwareType] : 'unknown type'} · {where} ·{' '}
-                        {p.orientation}
+                        {lw ? 'labware' : 'unknown type'} · {where} · {p.orientation}
                       </span>
                     </li>
                   )
