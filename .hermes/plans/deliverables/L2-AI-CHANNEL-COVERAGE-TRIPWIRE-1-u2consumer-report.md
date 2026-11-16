@@ -1,7 +1,7 @@
 # L2-AI-CHANNEL-COVERAGE-TRIPWIRE-1 — u2consumer report
 
 Unit: u2consumer (1 of 1). Worktree cl-wt/L2-AI-CHANNEL-TRIPWIRE-u2-lane2, branch
-cl/lane2-ai-channel-tripwire-u2, base 6d918893e85c2b2a75cceb594f7ddeedea569fda.
+cl/lane2-ai-channel-tripwire-u2-l2t2690, base 6d918893e85c2b2a75cceb594f7ddeedea569fda.
 Decision: .hermes/plans/decisions/AI-DELIVERABLE-CHANNELS-ARE-DATA-l2-20261114.md
 (scenario: prompt-1 — the silent-drop class that made prompt-1's record
 proposal invisible).
@@ -23,8 +23,8 @@ assistStream.ts, AiAgentResult in app/src/types/ai.ts, all *.drift.test.ts.
 The emptiness rule now derives from the declaration:
 - At boot the module loads ai-deliverable-channels.yaml via
   loadDefaultAiDeliverableChannels (schema dir candidates: repo ../schema from
-  the module, process.cwd()/../schema — the same convention as the existing
-  agentInstructionsPathAtBoot helper).
+  the module via fileURLToPath(import.meta.url), plus a
+  process.cwd()/../schema fallback for other launch layouts).
 - assertServerChannelsTreated() runs assertChannelTreated over EVERY declared
   channel at boot — the boot-time loud gate (TEST D).
 - derivedServerGuardChannels(): the checked-channel set DERIVED from the
@@ -41,23 +41,25 @@ The emptiness rule now derives from the declaration:
   inside that slice). That pin is out of this unit's owned scope and is green.
   The drift-pin comment at the helper was updated: the list IS the declaration
   (one list), and the helper's terms are the per-channel accessors over it.
-- Behavior is bit-identical to trunk: 47/47 across the four suites that
-  exercise the helper (degenerateRetry 16, finalAnswerEmpty 10,
-  clarificationLoop 10, freeformLegs 11 — see below), wall tests unchanged.
+- Behavior is bit-identical to trunk: across the four suites that exercise
+  the helper (degenerateRetry 7, finalAnswerEmpty 9, clarificationLoop 12,
+  freeformLegs 30 green + the 3 pre-existing failures — see below), wall
+  tests unchanged.
 
 ## Verification (measured, exact commands, final tree)
 Server:
 - npx vitest run src/aiChannels 2>&1 | tail -n 5
-  -> Test Files  2 passed (2); Tests  20 passed (20)
-     (channels.test.ts 8 — u1declare — + tripwire 12; brief baseline was 8)
+  -> Test Files  2 passed (2); Tests  22 passed (22)
+     (channels.test.ts 8 — u1declare — + tripwire 14; brief baseline was 8)
 - The helper's existing tests (there is no dedicated draftArgDiagnostics.test
   file on trunk — grep of the whole repo; "draftProducedNothingOnServer" has 27
   matches, 0 in a *.test.ts named draftArgDiagnostics):
   npx vitest run src/ai/AgentOrchestrator.degenerateRetry.test.ts
     src/ai/AgentOrchestrator.finalAnswerEmpty.test.ts
     src/ai/clarificationLoop.test.ts
-  -> Test Files  3 passed (3); Tests  36 passed (36) — unchanged from the
-     pre-derivation run.
+  -> Test Files  3 passed (3); Tests  28 passed (28) — unchanged from the
+     pre-derivation run (degenerateRetry 7, finalAnswerEmpty 9,
+     clarificationLoop 12).
 - npx tsc --noEmit 2>&1 | grep -c "error TS" -> 6 (the pre-existing
   AIHandlers.ts / AiIngestion.ts / ExtractProtocol.ts / sequenceRoutes.ts
   errors; measured 6 at base with the same command before any edit; my files
@@ -102,7 +104,7 @@ the declaration; per-channel flip tests) all pass.
 1. bd1fcad59 — tripwire test file alone (RED evidence: A/B green against the
    real declaration with deliberate RED proofs captured and reverted inside
    the same run; C/D red pre-derivation).
-2. 6f43c851d — draftArgDiagnostics.ts data-derivation (+ tripwire C/D fix:
+2. d387d375f — draftArgDiagnostics.ts data-derivation (+ tripwire C/D fix:
    C now checks the derived set against the DECLARATION and the client
    predicate source, not itself).
 3. (no product commit needed — see "Not touched" above; useAiChat.ts wall
@@ -111,7 +113,7 @@ the declaration; per-channel flip tests) all pass.
 4. this report.
 
 ## Markers
-- Code commit: 6f43c851d8b1633289189c8a10b6d46e5a1e473f (checkpoint 2 — data
+- Code commit: d387d375f95cce5b0b71ddfc3ab3c279d0f49770 (checkpoint 2 — data
   derivation + tripwire fix).
 - Report commit (containing this report): 5c1e9ae529b171983c95f680cfaa54275fa43c4f
 - L2-AI-CHANNEL-COVERAGE-TRIPWIRE-1 UNIT u2consumer DONE 5c1e9ae529b171983c95f680cfaa54275fa43c4f
