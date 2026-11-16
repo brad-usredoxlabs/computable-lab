@@ -7,7 +7,7 @@
 - commits (this unit):
   - b5e8082e7 `u2bind RED: aia ingest end-to-end test`
   - 2bcef899c `u2bind fix: git arm of rawFileResolver keeps binary raw files byte-exact`
-  - report commit: <filled after commit>
+  - report commit: 4fa1f2d626c93cb11efc9f728aa65802b5b8876c
   - marker commit: appends the DONE line below; its message carries `L2-GC-AIA-CDF-PARSER-1 u2bind DONE <report-sha>`
 
 ## What this unit does
@@ -248,4 +248,4 @@ The fresh lane worktree had no `node_modules` and no `server/schema` /
 
 ## DONE marker
 
-L2-GC-AIA-CDF-PARSER-1-u2bind UNIT unit DONE <sha-filled-by-marker-commit>
+L2-GC-AIA-CDF-PARSER-1-u2bind UNIT unit DONE 4fa1f2d626c93cb11efc9f728aa65802b5b8876c
