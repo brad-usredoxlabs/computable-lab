@@ -52,6 +52,15 @@ vi.mock('../api/client', () => ({
     getRecord: mocked.getRecord,
     getPromptTemplate: vi.fn().mockResolvedValue({ error: 'not found' }),
     listRecordsByKind: mocked.listRecordsByKind,
+    // The seam contract the hook calls (client.ts getLabwareDefinitionDisplay):
+    // id -> the labware-definition record's display_name, or the id itself
+    // when it does not resolve (never a fabricated name).
+    getLabwareDefinitionDisplay: vi.fn(async (definitionId: string) => {
+      const { records } = await mocked.listRecordsByKind('labware-definition', 200)
+      const found = records.find((r: { payload?: Record<string, unknown> }) => r.payload?.id === definitionId)
+      const displayName = found ? found.payload.display_name : undefined
+      return typeof displayName === 'string' && displayName.length > 0 ? displayName : definitionId
+    }),
   },
 }))
 

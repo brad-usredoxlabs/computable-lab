@@ -2542,22 +2542,65 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
         const adoptedEvents = adoption.eventCount ?? 0
         const adoptedLabware = adoption.labwareCount ?? 0
         const adoptedPlacements = adoption.placementCount ?? 0
+        // L2-P1-RETURN-LEG-1 u4 (LEG B): the applied note NAMES the definition
+        // the placed labware used. The staged labwares are in hand at this
+        // same call site (stagedExtras.previewLabwares) — each entry's
+        // definitionId names the definition its committed entry binds. The
+        // display name is resolved from the labware-definition RECORD STORE
+        // (the single authority — the same read the deck's View-changes row
+        // uses; the static map does not carry registry-bound ids, and a name
+        // is never invented). Names are de-duped (many entries may bind one
+        // definition); the counts wording is kept. A definition whose id does
+        // not resolve is NAMED BY ITS ID — never dropped, never fabricated.
+        // Resolution runs AFTER the adopter returned, so the applied note
+        // names the definition without delaying the adopt.
+        const stagedLabwares = (stagedExtras?.previewLabwares as Record<string, unknown> | undefined) ?? {}
+        const adoptedDefinitionNames = [...new Set(
+          Object.values(stagedLabwares)
+            .map((entry) => {
+              const definitionId = (entry as { definitionId?: unknown })?.definitionId
+              return typeof definitionId === 'string' && definitionId.length > 0 ? definitionId : undefined
+            })
+            .filter((id): id is string => id !== undefined),
+        )]
         const adoptedCommitSha =
           typeof adoption.commitSha === 'string' && adoption.commitSha.length > 0
             ? adoption.commitSha
             : undefined
-        const adoptedSummary = [
-          `Accepted ${adoptedEvents} event${adoptedEvents === 1 ? '' : 's'}`,
-          adoptedLabware > 0 ? `plus ${adoptedLabware} new labware${adoptedLabware === 1 ? '' : 's'}` : null,
-          adoptedPlacements > 0 ? `plus ${adoptedPlacements} placement${adoptedPlacements === 1 ? '' : 's'}` : null,
-          adoptedCommitSha ? `commit ${adoptedCommitSha}` : null,
-        ]
-          .filter(Boolean)
-          .join(' ')
-        setMessages((prev) => [
-          ...prev,
-          { id: generateMessageId(), role: 'system', content: adoptedSummary, timestamp: Date.now() },
-        ])
+        const buildAdoptedSummary = (definitionLabels: Record<string, string>) => {
+          const definitionNames = adoptedDefinitionNames
+            .map((id) => definitionLabels[id] ?? id)
+            .filter((name, index, all) => all.indexOf(name) === index)
+          return [
+            `Accepted ${adoptedEvents} event${adoptedEvents === 1 ? '' : 's'}`,
+            adoptedLabware > 0 ? `plus ${adoptedLabware} new labware${adoptedLabware === 1 ? '' : 's'}` : null,
+            definitionNames.length > 0 ? `using ${definitionNames.join(', ')}` : null,
+            adoptedPlacements > 0 ? `plus ${adoptedPlacements} placement${adoptedPlacements === 1 ? '' : 's'}` : null,
+            adoptedCommitSha ? `commit ${adoptedCommitSha}` : null,
+          ]
+            .filter(Boolean)
+            .join(' ')
+        }
+        if (adoptedDefinitionNames.length > 0) {
+          let labels: Record<string, string> = {}
+          try {
+            const resolutions = await Promise.all(
+              adoptedDefinitionNames.map(async (id) => [id, await apiClient.getLabwareDefinitionDisplay(id)] as const),
+            )
+            for (const [id, display] of resolutions) labels[id] = display
+          } catch {
+            labels = {} // the note names the ids verbatim — never dropped
+          }
+          setMessages((prev) => [
+            ...prev,
+            { id: generateMessageId(), role: 'system', content: buildAdoptedSummary(labels), timestamp: Date.now() },
+          ])
+        } else {
+          setMessages((prev) => [
+            ...prev,
+            { id: generateMessageId(), role: 'system', content: buildAdoptedSummary({}), timestamp: Date.now() },
+          ])
+        }
         return
       }
       if (adoption) {
