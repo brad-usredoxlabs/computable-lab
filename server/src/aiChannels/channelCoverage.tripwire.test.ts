@@ -1,23 +1,22 @@
 /**
  * AI-deliverable-channels COVERAGE TRIPWIRE (L2-AI-CHANNEL-COVERAGE-TRIPWIRE-1,
- * u2consumer). Decision AI-DELIVERABLE-CHANNELS-ARE-DATA rules 4 and 5: the
- * emptiness rule derives from the declaration, and a tripwire enforces
- * coverage — deleting a render arm or a naming string must FAIL a test,
- * never ship as silence (the silent-drop class: prompt-1's record proposal
- * invisible under "No events generated").
+ * u2consumer). Decision AI-DELIVERABLE-CHANNELS-ARE-DATA rules 3, 4 and 5:
+ * every declared channel has a treatment, the emptiness rule derives from the
+ * declaration, and a tripwire enforces coverage — deleting a render arm or a
+ * naming string must FAIL a test, never ship as silence (the silent-drop
+ * class: prompt-1's record proposal invisible under "No events generated").
  *
  * Four legs:
  *   TEST A  — every declared channel has a treatment AND a handler this test
  *             can find (declaration + a per-treatment source probe; the map
  *             lives HERE, keeping the registry pure data).
  *   TEST B  — REVERSE coverage: every channel-shaped field of the client
- *             AssistDraftResult and the server deliverable fields maps to a
- *             declared channel id. A new field with no declaration fails.
- *   TEST C  — EMPTINESS DERIVATION: draftProducedNothingOnServer's checked
- *             set equals the declaration-derived 7, and each channel in the
- *             set flips the helper to "produced something".
- *   TEST D  — WIRING: assertChannelTreated is on the live consumer path
- *             (imported + called by the server wall-construction module).
+ *             result types maps to a declared channel id. A new field with no
+ *             declaration fails (documented allow-list for non-channel fields).
+ *   TEST C  — EMPTINESS DERIVATION: the server checked set equals the
+ *             declaration-derived set; each counted channel flips the helper.
+ *   TEST D  — WIRING: assertChannelTreated on the live consumer path
+ *             (the server boot gate in draftArgDiagnostics, always imported).
  *
  * Source probing is readFileSync + substring: a probe string that ceases to
  * exist in the named source file is a deleted arm — the test fails loudly.
@@ -40,18 +39,15 @@ const draftDiagnosticsSrc = src('server/src/ai/draftArgDiagnostics.ts');
 const draftEmptinessSrc = src('app/src/event-editor/right-pane/ai/draftEmptiness.ts');
 
 /**
- * TEST A — handler location per declared channel. The handler is the REAL
- * source location that presents (answer/card) or NAMES (wall) the channel.
- * Per-treatment probes:
- *   answer  — the events/prose render arms in the live hook;
- *   card    — the clarification render arm (ChatLog) + the typed-requests arm;
- *   wall    — the runtime string in useAiChat.ts that NAMES the channel on
- *             the honest wall (a wall channel whose naming string does not
- *             exist in source FAILS — the silent-drop class made impossible);
- *   sequenceProposal — the sequenceProposal hand-off arm;
- *   protocolEdit     — the protocol-edit diff arm (ChangesPanel).
- * A per-channel entry overrides the treatment probe when one source probe
- * cannot cover the channel alone.
+ * TEST A — handler location per declared channel: the REAL source location
+ * that presents (answer/card) or NAMES (wall) the channel.
+ *   answer — the events/prose render arms in the live hook (treatment probes);
+ *   card   — the clarification render arm (ChatLog) + the typed-requests arm;
+ *   wall   — the runtime string in useAiChat.ts that NAMES the channel on the
+ *            honest wall (a wall channel whose naming string does not exist in
+ *            source FAILS — the silent-drop class made impossible);
+ *   sequenceProposal — the hand-off arm; protocolEdit — the diff arm
+ *            (ChangesPanel). A per-channel entry overrides the treatment probe.
  */
 const HANDLER_MAP: Record<string, string | { file: string; needle: string }> = {
   events: 'app/src/shared/hooks/useAiChat.ts',
@@ -101,7 +97,7 @@ const TREATMENT_PROBES: Record<string, Array<{ file: string; needle: string }>> 
     { file: 'app/src/shared/hooks/useAiChat.ts', needle: 'legacyClarificationFromRequests' },
   ],
   wall: [
-    { file: 'app/src/shared/hooks/useAiChat.ts', needle: "const unmountable = [" },
+    { file: 'app/src/shared/hooks/useAiChat.ts', needle: 'const unmountable = [' },
   ],
 };
 
@@ -134,8 +130,7 @@ describe('TEST A — coverage: every declared channel has a treatment and a find
       const text = src(file);
       const needle = location.needle;
       if (channel.treatment === 'wall') {
-        // A wall channel is honest only while it is NAMED: the runtime
-        // string that names it must exist in source (the silent-drop class).
+        // A wall channel is honest only while it is NAMED in source.
         expect(needle, `wall channel "${channel.id}" needs a naming-string probe`).toBeTruthy();
         expect(text.includes(needle!), `wall channel "${channel.id}" is no longer named in ${file}`).toBe(true);
       } else if (needle) {
@@ -152,19 +147,17 @@ describe('TEST A — coverage: every declared channel has a treatment and a find
 });
 
 /**
- * TEST B — REVERSE coverage: every channel-shaped field of the CLIENT result
- * types the live hook consumes maps to a declared channel id. The allow-lists
- * are DOCUMENTED: fields that are not deliverable channels are named here, so
- * a silent addition is impossible. A new field without a declaration fails.
- *
- * The client-receivable types:
- *   AssistDraftResult (app/src/event-editor/right-pane/ai/assistStream.ts)
- *     — "the slice of the backend's AgentResult the chat panel can render";
- *   AiAgentResult (app/src/types/ai.ts) — the done-payload type of the LIVE
- *     wall consumer useAiChat.ts (its `result` is AiAgentResult; this is
- *     where instrumentApplianceJobs lives).
+ * TEST B — REVERSE coverage: every channel-shaped field of the client result
+ * types the live hook consumes maps to a declared channel id; the allow-lists
+ * are DOCUMENTED (non-channel fields named here, so a silent addition is
+ * impossible). A new field without a declaration fails.
+ *   AssistDraftResult (assistStream.ts) — "the slice of the backend's
+ *     AgentResult the chat panel can render";
+ *   AiAgentResult (types/ai.ts) — the done-payload type of the LIVE wall
+ *     consumer useAiChat.ts (where instrumentApplianceJobs lives; declared
+ *     mapping -> instrumentJob);
  *   clarificationRequests rides BOTH and is declared under `clarification`
- *   (one channel, two field names — the typed + legacy arms of ChatLog).
+ *     (one channel, two field names — the typed + legacy arms of ChatLog).
  */
 const FIELD_TO_CHANNEL: Record<string, string> = {
   // channel id === field name:
@@ -185,7 +178,7 @@ const FIELD_TO_CHANNEL: Record<string, string> = {
 /** Documented allow-list — NOT deliverable channels. */
 const ASSIST_DRAFT_RESULT_NON_CHANNEL_FIELDS = [
   'success', // turn status, not a deliverable
-  'shorthand', // scientist-intent YAML, rendered read-only (not a draft channel)
+  'shorthand', // scientist-intent YAML, rendered read-only
   'termManifest', // term-classification rows for the term panel
   'notes', // diagnostic lines for the model
   'resolvedLabwares', // placement OFFERS (draft support, not a deliverable)
@@ -202,8 +195,8 @@ const AI_AGENT_RESULT_NON_CHANNEL_FIELDS = [
 ];
 /**
  * Server deliverable fields of a done draft result (documented — the fields
- * AgentOrchestrator stamps on the done payload). Kept as a constant because
- * the server result type (server/src/ai/types.ts AgentResult) also carries
+ * AgentOrchestrator stamps on the done payload). A constant because the
+ * server result type (server/src/ai/types.ts AgentResult) also carries
  * transport-only fields that would blur the channel question.
  */
 const SERVER_DELIVERABLE_FIELDS = Object.freeze({
@@ -219,84 +212,53 @@ const SERVER_DELIVERABLE_FIELDS = Object.freeze({
 } satisfies Record<string, string>);
 
 /**
- * Top-level field names of a TS interface, straight from source.
- * Comment-aware (JSDoc / // blocks are skipped whole) and string-aware;
- * nested object types sit at brace depth ≥ 2 and are never captured.
+ * Top-level field names of a TS interface, straight from source —
+ * line-based, comment-aware (block comments may span lines; // and block
+ * comments are stripped before scanning) and string-aware (quoted text
+ * blanked so a `:` in a literal never parses as a member). A field is
+ * recorded at brace depth 1, so nested object types are never captured.
+ * Equivalent to the original char-loop parser (verified byte-identical
+ * field lists on AssistDraftResult and AiAgentResult).
  */
 function interfaceFieldNames(source: string, iface: string): string[] {
   const start = source.indexOf(`export interface ${iface}`);
   expect(start, `interface ${iface} not found`).toBeGreaterThanOrEqual(0);
-  const end = endOfInterfaceBody(source, start);
-  const blockComments = findBlockComments(source);
   const fields: string[] = [];
   let depth = 0;
-  let inString: string | null = null;
-  let lineStart = start;
-  for (let i = start; i < end; i++) {
-    const ch = source[i];
-    if (blockComments.some((c) => i >= c.start && i <= c.end)) continue;
-    if (inString) {
-      if (ch === '\\') i++;
-      else if (ch === inString) inString = null;
-      continue;
+  let inBlock = false;
+  let opened = false;
+  for (const raw of source.slice(start).split('\n')) {
+    let line = raw;
+    let i = 0;
+    // strip comments (a block comment may continue onto the next line):
+    while (i < line.length) {
+      if (inBlock) {
+        const j = line.indexOf('*/', i);
+        if (j < 0) i = line.length;
+        else { inBlock = false; i = j + 2; }
+      } else {
+        const code = line.slice(i);
+        const sc = code.indexOf('//');
+        const bc = code.indexOf('/*');
+        if (sc >= 0 && (bc < 0 || sc < bc)) { line = code.slice(0, sc); i = line.length; }
+        else if (bc >= 0) {
+          const j = code.indexOf('*/', bc + 2);
+          if (j < 0) { inBlock = true; line = code.slice(0, bc); i = line.length; }
+          else i = bc + j + 3;
+        } else break;
+      }
     }
-    if (ch === "'" || ch === '"' || ch === '`') { inString = ch; continue; }
-    if (ch === '/' && source[i + 1] === '/') {
-      const nl = source.indexOf('\n', i);
-      i = nl < 0 ? end : nl;
-      continue;
+    const code = line.replace(/'[^']*'|"[^"]*"|`[^`]*`/g, ' ');
+    if (depth === 1) {
+      const m = code.trim().match(/^([A-Za-z_$][\w$]*)(\?)?:/);
+      if (m && !fields.includes(m[1])) fields.push(m[1]);
     }
-    if (ch === '{') { depth++; continue; }
-    if (ch === '}') { depth--; continue; }
-    if (ch === '\n') { lineStart = i + 1; continue; }
-    if (depth !== 1 || ch !== ':') continue;
-    // the slice ends AT the colon (exclusive): name is `identifier` + optional `?`
-    const m = source.slice(lineStart, i).trimStart().match(/^([A-Za-z_$][\w$]*)\??$/);
-    if (m) fields.push(m[1]);
+    for (const ch of code) { if (ch === '{') depth++; else if (ch === '}') depth--; }
+    if (depth > 0) opened = true;
+    if (opened && depth === 0) break;
   }
+  expect(opened, `interface ${iface} body never closed`).toBe(true);
   return fields;
-}
-
-/** First closing brace at depth 0 after `start` (string- and comment-aware). */
-function endOfInterfaceBody(source: string, start: number): number {
-  const blockComments = findBlockComments(source);
-  let depth = 0;
-  let inString: string | null = null;
-  for (let i = start; i < source.length; i++) {
-    if (blockComments.some((c) => i >= c.start && i <= c.end)) continue;
-    const ch = source[i];
-    if (inString) {
-      if (ch === '\\') i++;
-      else if (ch === inString) inString = null;
-      continue;
-    }
-    if (ch === "'" || ch === '"' || ch === '`') { inString = ch; continue; }
-    if (ch === '//') {
-      const nl = source.indexOf('\n', i);
-      if (nl < 0) break;
-      i = nl;
-      continue;
-    }
-    if (ch === '{') depth++;
-    else if (ch === '}') {
-      depth--;
-      if (depth === 0) return i;
-    }
-  }
-  throw new Error('interface body never closed');
-}
-
-/** All /* … *\/ ranges (start = '/', end = last '/'). */
-function findBlockComments(source: string): Array<{ start: number; end: number }> {
-  const ranges: Array<{ start: number; end: number }> = [];
-  let i = 0;
-  while ((i = source.indexOf('/*', i)) !== -1) {
-    const j = source.indexOf('*/', i + 2);
-    if (j < 0) break;
-    ranges.push({ start: i, end: j + 1 });
-    i = j + 2;
-  }
-  return ranges;
 }
 
 /** The channel-shaped fields each client type carries (stale-entry guard). */
@@ -373,8 +335,7 @@ describe('TEST B — reverse coverage: every channel-shaped field is declared', 
  * (counted ∪ not-counted-by-ruling, read from the module's SOURCE) must
  * EXACTLY cover the loaded declaration — the declaration is the one list.
  * Every counted channel flips the helper. The app's RULING-3 drift pin
- * (draftEmptiness.drift.test.ts) holds the reverse direction: per-term
- * predicate regexes on the server body + the client-superset members.
+ * (draftEmptiness.drift.test.ts) holds the reverse direction.
  */
 const GUARD_COUNTED_SRC_RE = /const GUARD_COUNTED: readonly string\[\] = Object\.freeze\(\[([\s\S]*?)\]\)/;
 const GUARD_NOT_COUNTED_SRC_RE = /const GUARD_NOT_COUNTED_BY_RULING: ReadonlySet<string> = new Set\(\[([\s\S]*?)\]\)/;
@@ -402,9 +363,9 @@ describe('TEST C — emptiness derivation: the helper agrees with the declaratio
     const declared = new Set(channels.map((c) => c.id));
     const derived = new Set(derivedServerGuardChannels());
     const { counted, notCounted } = partitionFromSource();
-    // the module's derived set IS its counted partition (derived at boot from the loaded channels):
+    // the module's derived set IS its counted partition (derived at boot):
     expect(derived).toEqual(counted);
-    // counted + not-counted-by-ruling EXACTLY covers the loaded declaration (no gap, no overlap):
+    // counted + not-counted-by-ruling EXACTLY covers the loaded declaration:
     expect(new Set([...counted, ...notCounted].sort())).toEqual(new Set([...declared].sort()));
     for (const id of counted) {
       expect(notCounted.has(id), `channel "${id}" is counted twice (partition overlap)`).toBe(false);
@@ -447,10 +408,10 @@ describe('TEST C — emptiness derivation: the helper agrees with the declaratio
  * TEST D — WIRING: the named-failure primitive is on the live consumer path.
  * A module the server ALWAYS loads (draftArgDiagnostics, imported by
  * AgentOrchestrator at :48) runs the boot-time channel gate: it loads the
- * declaration and calls assertChannelTreated for EVERY declared channel —
- * a declared channel with no treatment makes the process fail loudly at
- * boot, never silently (decision rule 3; the emptiness rule also DERIVES
- * from the same loaded declaration — decision rule 4).
+ * declaration and calls assertChannelTreated for EVERY declared channel — a
+ * declared channel with no treatment makes the process fail loudly at boot,
+ * never silently (decision rule 3; the emptiness rule derives from the same
+ * loaded declaration — decision rule 4).
  */
 describe('TEST D — wiring: assertChannelTreated is on the live consumer path', () => {
   it('assertChannelTreated is the named-failure primitive (throws naming the id)', () => {
