@@ -65,3 +65,5 @@ started.
   changed).
 - Browser reviewer: open a GC run page entry's attach panel, register a .D, read the minted
   ACQP payload's sourceRunRef.
+
+L2-RUN-ATTACH-CAPABILITY-1 UNIT u1passrun DONE f7872ab35197e7a5429654079c02fd926fbf9c90
