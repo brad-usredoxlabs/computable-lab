@@ -52,6 +52,7 @@ describe('fame-medium-chain resolvability against fame-local ontology terms', ()
         if (obj.kind === 'ontology-term' && typeof obj.id === 'string') {
           termIds.add(obj.id);
         }
+        for (const value of Object.values(obj)) collect(value);
       }
     };
     collect(termsFile);
