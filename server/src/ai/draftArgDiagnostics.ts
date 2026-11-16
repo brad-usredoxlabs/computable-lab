@@ -15,6 +15,9 @@
  * is the draft tool's own argument set (DRAFT_ARG_KEYS) — this only explains the
  * mistakes models actually make.
  */
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { assertChannelTreated, loadDefaultAiDeliverableChannels } from '../aiChannels/channels.js';
 
 /**
  * Top-level keys a bare forced-draft argument object may carry — the SUBSTANTIVE
@@ -201,8 +204,13 @@ export function emptyDraftMessage(options: {
  * — a client-surface deliverable — and, H5, proseDeliverable — the
  * doc-discussion prose marker the server stamps; the server never emits
  * the former and marks the latter only on the doc-discussion success
- * arm). Never a second channel list here — add a term to the client and
- * update the drift pin in the SAME commit.
+ * arm). The channel list is the ai-deliverable-channels declaration — the
+ * declaration is the one list (decision rule 4): the checked set is DERIVED
+ * from it at boot below, these terms are the per-channel accessors the
+ * RULING-3 pin regex-pins, and a channel added to the declaration that the
+ * guard cannot account for fails loudly at boot. Never a second channel
+ * list here — add a term to the client and update the drift pin in the
+ * SAME commit.
  */
 export function draftProducedNothingOnServer(result: {
   events?: unknown[];
@@ -223,3 +231,121 @@ export function draftProducedNothingOnServer(result: {
     !result.deckLayout
   );
 }
+
+/**
+ * L2-AI-CHANNEL-COVERAGE-TRIPWIRE-1 u2consumer — the emptiness rule DERIVES
+ * from the declaration (decision AI-DELIVERABLE-CHANNELS-ARE-DATA rule 4):
+ * the declaration is the one list, so this module loads it at boot and
+ * derives the server-checked set from the loaded channels instead of
+ * keeping a second hand-maintained list. The literal terms above are the
+ * PER-CHANNEL ACCESSORS (each channel's shape on a done result); the SET is
+ * the declaration, intersected with them — a declared channel the accessor
+ * table cannot count fails loudly at boot, never silently.
+ *
+ * Runtime schema dir: the server runs from dist/ or via tsx (dev), so the
+ * import.meta.url anchor resolves in BOTH; the CWD-relative fallback keeps
+ * a relocated checkout working (same convention as the app drift pin).
+ */
+const SCHEMA_DIR_CANDIDATES: string[] = [
+  resolve(dirname(fileURLToPath(import.meta.url)), '../../../schema'),
+  resolve(process.cwd(), '../schema'),
+];
+
+/**
+ * The channels the server guard COUNTS (predicate-terms) vs the channels the
+ * declaration declares but the guard does NOT count — the sanctioned
+ * divergence, documented here ONCE:
+ *   equipmentRequirements — client-surface deliverable; the server never emits it
+ *     (the client's draftEmptiness superset counts it — RULING-3, CLIENT ⊇ SERVER);
+ *   proseDeliverable — the server's own doc-discussion success arm stamps it, so
+ *     counting it would make that arm "produce nothing";
+ *   sequenceProposal / protocolEdit / instrumentJob — wall channels whose delivery
+ *     is ARM-GOVERNED (the sequenceProposal hand-off, the protocolEdit diff arm +
+ *     fall-through-to-wall, the instrument-job runner); the guard is the structural
+ *     backstop for what the draft-tool arm stamps, and those three deliver through
+ *     their arms, never through the empty-result expression.
+ * The drift pins hold both directions: the app RULING-3 pin asserts the terms
+ * (per-channel regex, client-superset members EXCLUDED from the body), and the
+ * server coverage tripwire asserts this partition EQUALS the loaded declaration.
+ */
+const GUARD_COUNTED: readonly string[] = Object.freeze([
+  'events',
+  'clarificationRequests',
+  'labwareAdditions',
+  'labwareRequirements',
+  'recordCreations',
+  'deckLayout',
+]);
+/**
+ * Field-name -> declared channel id where the done-payload field name is NOT
+ * the channel id (one channel, one field name pair per the client types —
+ * TEST B of the tripwire pins the same mapping against the parsed
+ * interfaces). The derivation normalizes through this table, so the checked
+ * set is a set of DECLARED CHANNEL IDS end to end.
+ */
+const FIELD_TO_CHANNEL: Readonly<Record<string, string>> = Object.freeze({
+  clarificationRequests: 'clarification',
+});
+const GUARD_NOT_COUNTED_BY_RULING: ReadonlySet<string> = new Set([
+  'equipmentRequirements',
+  'proseDeliverable',
+  'sequenceProposal',
+  'protocolEdit',
+  'instrumentJob',
+]);
+
+/**
+ * Load the declaration once at boot and assert EVERY declared channel has a
+ * treatment (the boot-time named-failure gate — decision rule 3; TEST D of the
+ * coverage tripwire). Runs on module load of this always-imported module, so a
+ * declared channel with no treatment fails the process loudly at boot.
+ */
+export function assertServerChannelsTreated(): void {
+  const { channels } = loadDefaultAiDeliverableChannels(defaultSchemaDir());
+  for (const channel of channels) {
+    assertChannelTreated(channels, channel.id);
+  }
+}
+
+function defaultSchemaDir(): string {
+  for (const candidate of SCHEMA_DIR_CANDIDATES) {
+    try {
+      loadDefaultAiDeliverableChannels(candidate);
+      return candidate;
+    } catch {
+      // try the next candidate
+    }
+  }
+  throw new Error(
+    `ai-deliverable-channels declaration not found (looked in: ${SCHEMA_DIR_CANDIDATES.join(', ')})`,
+  );
+}
+
+/**
+ * The checked-channel set DERIVED from the declaration (the one list):
+ * the guard's accessor fields, normalized to declared channel ids,
+ * cross-checked against the loaded declaration at boot.
+ */
+export function derivedServerGuardChannels(): string[] {
+  const declared = new Set(loadDefaultAiDeliverableChannels(defaultSchemaDir()).channels.map((c) => c.id));
+  const countedIds = GUARD_COUNTED.map((field) => FIELD_TO_CHANNEL[field] ?? field);
+  const missing = countedIds.filter((id) => !declared.has(id));
+  if (missing.length > 0) {
+    throw new Error(
+      `draftProducedNothingOnServer counts undeclared channel(s): ${missing.join(', ')} — ` +
+        'update the declaration (schema/registry/ai-deliverable-channels/ai-deliverable-channels.yaml)',
+    );
+  }
+  const unexplained = [...declared].filter((id) => !countedIds.includes(id) && !GUARD_NOT_COUNTED_BY_RULING.has(id));
+  if (unexplained.length > 0) {
+    throw new Error(
+      `ai-deliverable-channels declares channel(s) the server guard does not account for: ${unexplained.join(', ')} — ` +
+        'count them in the guard or document them in GUARD_NOT_COUNTED_BY_RULING',
+    );
+  }
+  return [...countedIds];
+}
+
+// Boot gate: fail loudly at module load if any declared channel has no treatment
+// or is unaccounted for (the declaration is the one list — decision rule 4).
+assertServerChannelsTreated();

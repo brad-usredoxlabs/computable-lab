@@ -27,7 +27,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { assertChannelTreated, loadDefaultAiDeliverableChannels } from './channels.js';
-import { draftProducedNothingOnServer } from '../ai/draftArgDiagnostics.js';
+import { derivedServerGuardChannels, draftProducedNothingOnServer } from '../ai/draftArgDiagnostics.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '../../..');
@@ -37,6 +37,7 @@ const src = (rel: string): string => readFileSync(resolve(REPO_ROOT, rel), 'utf8
 const assistStreamSrc = src('app/src/event-editor/right-pane/ai/assistStream.ts');
 const aiAgentResultSrc = src('app/src/types/ai.ts');
 const draftDiagnosticsSrc = src('server/src/ai/draftArgDiagnostics.ts');
+const draftEmptinessSrc = src('app/src/event-editor/right-pane/ai/draftEmptiness.ts');
 
 /**
  * TEST A — handler location per declared channel. The handler is the REAL
@@ -366,46 +367,71 @@ describe('TEST B — reverse coverage: every channel-shaped field is declared', 
 });
 
 /**
- * TEST C — EMPTINESS DERIVATION. The helper's checked set is the 7 canonical
- * channels the server can count; it must EQUAL the declaration-derived set
- * (the one list is the declaration — no second literal list), and each
- * channel in the set flips the helper. The app drift pin
- * (draftEmptiness.drift.test.ts) asserts the per-term predicate shape.
+ * TEST C — EMPTINESS DERIVATION. Decision rule 4: the emptiness rule derives
+ * from the declaration. The server module loads the declaration at boot and
+ * derives its checked set (derivedServerGuardChannels); the partition
+ * (counted ∪ not-counted-by-ruling, read from the module's SOURCE) must
+ * EXACTLY cover the loaded declaration — the declaration is the one list.
+ * Every counted channel flips the helper. The app's RULING-3 drift pin
+ * (draftEmptiness.drift.test.ts) holds the reverse direction: per-term
+ * predicate regexes on the server body + the client-superset members.
  */
-const SERVER_EMPTY_SET = new Set([
-  'events', 'clarificationRequests', 'error', 'labwareAdditions',
-  'labwareRequirements', 'recordCreations', 'deckLayout',
-]);
-const TYPED_CLIENT_EXTRAS = ['equipmentRequirements', 'proseDeliverable'];
-const CLIENT_ONLY_BY_RULING = ['protocolEdit'];
+const GUARD_COUNTED_SRC_RE = /const GUARD_COUNTED: readonly string\[\] = Object\.freeze\(\[([\s\S]*?)\]\)/;
+const GUARD_NOT_COUNTED_SRC_RE = /const GUARD_NOT_COUNTED_BY_RULING: ReadonlySet<string> = new Set\(\[([\s\S]*?)\]\)/;
 
-function setFromDeclaration(): Set<string> {
-  const ids = new Set(channels.map((c) => c.id));
-  const set = new Set<string>();
-  for (const id of ids) {
-    if (SERVER_EMPTY_SET.has(id)) set.add(id);
-  }
-  for (const extra of TYPED_CLIENT_EXTRAS) {
-    if (ids.has(extra)) set.add(extra);
-  }
-  for (const only of CLIENT_ONLY_BY_RULING) {
-    if (ids.has(only)) set.delete(only);
-  }
-  return set;
+function partitionFromSource(): { counted: Set<string>; notCounted: Set<string> } {
+  const ids = (block: string): Set<string> =>
+    new Set([...block.matchAll(/'([A-Za-z_$][\w$]*)'/g)].map((m) => m[1]));
+  const countedMatch = draftDiagnosticsSrc.match(GUARD_COUNTED_SRC_RE);
+  const notCountedMatch = draftDiagnosticsSrc.match(GUARD_NOT_COUNTED_SRC_RE);
+  expect(countedMatch, 'GUARD_COUNTED partition not found in draftArgDiagnostics.ts').toBeTruthy();
+  expect(notCountedMatch, 'GUARD_NOT_COUNTED_BY_RULING partition not found in draftArgDiagnostics.ts').toBeTruthy();
+  // normalize the source partition's field names to declared channel ids
+  // (one channel, two field names for clarification — same table as TEST B):
+  const toId = (field: string): string => FIELD_TO_CHANNEL[field] ?? field;
+  return {
+    counted: new Set([...ids(countedMatch![1])].map(toId)),
+    notCounted: new Set([...ids(notCountedMatch![1])].map(toId)),
+  };
 }
+/** Channel id -> done-payload field name (inverse of FIELD_TO_CHANNEL). */
+const CHANNEL_TO_FIELD: Record<string, string> = { clarification: 'clarificationRequests' };
 
 describe('TEST C — emptiness derivation: the helper agrees with the declaration', () => {
-  it('the helper\'s checked set equals the declaration-derived set (one list, the declaration)', () => {
-    expect(new Set([...SERVER_EMPTY_SET].sort())).toEqual(new Set([...setFromDeclaration()].sort()));
+  it('the derived checked set equals the module partition, which exactly covers the declaration (one list)', () => {
+    const declared = new Set(channels.map((c) => c.id));
+    const derived = new Set(derivedServerGuardChannels());
+    const { counted, notCounted } = partitionFromSource();
+    // the module's derived set IS its counted partition (derived at boot from the loaded channels):
+    expect(derived).toEqual(counted);
+    // counted + not-counted-by-ruling EXACTLY covers the loaded declaration (no gap, no overlap):
+    expect(new Set([...counted, ...notCounted].sort())).toEqual(new Set([...declared].sort()));
+    for (const id of counted) {
+      expect(notCounted.has(id), `channel "${id}" is counted twice (partition overlap)`).toBe(false);
+    }
   });
 
-  it('a result carrying ONLY one non-empty declared array channel produced something', () => {
-    for (const field of ['events', 'clarificationRequests', 'labwareAdditions', 'labwareRequirements', 'recordCreations']) {
+  it('a result carrying ONLY one non-empty counted channel produced something (iterating the DERIVED set)', () => {
+    for (const id of derivedServerGuardChannels()) {
+      const field = CHANNEL_TO_FIELD[id] ?? id;
       const result = { success: true, [field]: [{ id: 'x' }] } as never;
-      expect(draftProducedNothingOnServer(result), `channel "${field}" must flip the helper to produced-something`).toBe(false);
+      expect(draftProducedNothingOnServer(result), `channel "${id}" must flip the helper to produced-something`).toBe(false);
     }
     // deckLayout is object-typed, not an array channel:
     expect(draftProducedNothingOnServer({ success: true, deckLayout: { platformId: 'p', variantId: 'v' } })).toBe(false);
+  });
+
+  it('the client predicate counts every server-counted channel (CLIENT ⊇ SERVER)', () => {
+    for (const id of derivedServerGuardChannels()) {
+      const field = CHANNEL_TO_FIELD[id] ?? id;
+      const Q = String.fromCharCode(92);
+      const term = new RegExp(`result${Q}.${field}${Q}?${Q}.length|!result${Q}.${field}${Q}b`);
+      expect(draftEmptinessSrc, `client draftEmptiness does not count "${id}" (CLIENT ⊉ SERVER)`).toMatch(term);
+      expect(draftDiagnosticsSrc, `server guard lost its term for "${id}"`).toMatch(term);
+    }
+    // the sanctioned client-superset members are counted by the client only:
+    expect(draftEmptinessSrc).toContain('equipmentRequirements');
+    expect(draftEmptinessSrc).toContain('proseDeliverable');
   });
 
   it('a result with every declared channel absent produced nothing', () => {
