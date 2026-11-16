@@ -33,6 +33,19 @@ export class MeasurementParserValidationService {
       },
       data: parsed.data,
       preview: parsed.data.slice(0, 12),
+      // D3 (L2-GC-TRACE-PERSIST-1): echo the trace SUMMARY so validate output
+      // matches ingest (the same single trace source — no re-parse, and NO
+      // copy of the sampling interval: exactly one such field in the output).
+      // Omitted entirely when the parser declares no trace.
+      ...(parsed.trace !== undefined
+        ? {
+            trace: {
+              channelId: parsed.trace.channelId,
+              points: parsed.trace.values.length,
+              samplingIntervalSeconds: parsed.trace.samplingIntervalSeconds,
+            },
+          }
+        : {}),
     };
   }
 }

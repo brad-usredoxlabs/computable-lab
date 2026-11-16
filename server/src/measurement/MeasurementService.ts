@@ -43,6 +43,12 @@ type MeasurementPayload = {
     parsedAt: string;
     units?: { time: string; intensity: string };
     metadata?: Record<string, string>;
+    // D3 (L2-GC-TRACE-PERSIST-1): the parser-declared ordinate series — the
+    // single persisted trace truth. Omitted when the parser declares none.
+    trace?: {
+      values: number[];
+      samplingIntervalSeconds: number;
+    };
   };
 };
 
@@ -180,6 +186,18 @@ export class MeasurementService {
         ...(parsed.units !== undefined ? { units: parsed.units } : {}),
         ...(parsed.metadata !== undefined && Object.keys(parsed.metadata).length > 0
           ? { metadata: parsed.metadata }
+          : {}),
+        // D3: the parser's OWN ordinate series rides the same way — the
+        // single persisted trace truth for the render path (the app maps it
+        // in traceModel; no re-parse at render, no second copy of the
+        // sampling interval). Omitted entirely when the parser declares none.
+        ...(parsed.trace !== undefined
+          ? {
+              trace: {
+                values: parsed.trace.values,
+                samplingIntervalSeconds: parsed.trace.samplingIntervalSeconds,
+              },
+            }
           : {}),
       },
     };
