@@ -45,6 +45,10 @@ export interface JourneyDeclarationRef {
   revision: number;
   /** `return_contract.checkpoint_ref` — where the origin prompt resumes. */
   checkpointRef: string;
+  /** `return_contract.permitted_result_types` — the ONLY results a completion may declare. */
+  permittedResultTypes: string[];
+  /** `return_contract.require_explicit_resume` — a person must confirm the return. */
+  requireExplicitResume: boolean;
   doors: JourneyDeclarationDoor[];
 }
 
@@ -144,15 +148,24 @@ export function doorsFromJourneyDocument(doc: unknown): JourneyDeclarationDoor[]
 /** Project the whole declared journey a clarification needs (id, revision, checkpoint, doors). */
 export function journeyRefFromDocument(doc: unknown): JourneyDeclarationRef {
   const journal = (doc ?? {}) as RawJourneyDocument;
-  const returnContract = (journal.return_contract ?? {}) as { checkpoint_ref?: unknown };
+  const returnContract = (journal.return_contract ?? {}) as {
+    checkpoint_ref?: unknown;
+    permitted_result_types?: unknown;
+    require_explicit_resume?: unknown;
+  };
   const checkpointRef = typeof returnContract.checkpoint_ref === 'string' ? returnContract.checkpoint_ref : '';
   if (!checkpointRef) {
     throw new Error(`journey declaration ${String(journal.journey_id)}: return_contract.checkpoint_ref is required`);
   }
+  const permittedResultTypes = Array.isArray(returnContract.permitted_result_types)
+    ? returnContract.permitted_result_types.filter((value): value is string => typeof value === 'string')
+    : [];
   return {
     journeyId: typeof journal.journey_id === 'string' ? journal.journey_id : '',
     revision: typeof journal.revision === 'number' ? journal.revision : 0,
     checkpointRef,
+    permittedResultTypes,
+    requireExplicitResume: returnContract.require_explicit_resume === true,
     doors: doorsFromJourneyDocument(journal),
   };
 }
@@ -175,6 +188,17 @@ export function loadJourneyDeclaration(journeyId: string): JourneyDeclarationRef
     const value = journeyRefFromDocument(doc);
     declarationCache = { key: journeyId, value };
     return value;
+  }
+  return undefined;
+}
+
+/** The SHIPPED parsed document whose `journey_id` is `journeyId` (undefined when none declares it). */
+export function loadJourneyDocument(journeyId: string): unknown | undefined {
+  const files = readdirSync(JOURNEY_DECLARATIONS_DIR).filter((name) => name.endsWith('.yaml')).sort();
+  for (const file of files) {
+    const doc = parse(readFileSync(join(JOURNEY_DECLARATIONS_DIR, file), 'utf8')) as RawJourneyDocument;
+    if (doc?.journey_id !== journeyId) continue;
+    return doc;
   }
   return undefined;
 }
