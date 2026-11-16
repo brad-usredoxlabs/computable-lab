@@ -112,9 +112,9 @@ the declaration; per-channel flip tests) all pass.
 
 ## Markers
 - Code commit: 6f43c851d8b1633289189c8a10b6d46e5a1e473f (checkpoint 2 — data
-  derivation + tripwire fix). The DONE marker below cites the commit that
-  CONTAINS this report (filled in the follow-up commit per bedrock (d) step 4;
-  never from memory).
+  derivation + tripwire fix).
+- Report commit (containing this report): 5c1e9ae529b171983c95f680cfaa54275fa43c4f
+- L2-AI-CHANNEL-COVERAGE-TRIPWIRE-1 UNIT u2consumer DONE 5c1e9ae529b171983c95f680cfaa54275fa43c4f
 
 ## Budget
 files: 3 <= 5. Lines: 432 test + 92 diff (derivation) + this report — the
