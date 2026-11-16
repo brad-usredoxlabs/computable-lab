@@ -39,11 +39,10 @@ const preview: EventEditorPreview = {
     },
   ],
   previewEvents: [
-    {
-      eventId: 'e1',
-      event_type: 'create_container',
-      details: { slot: 'target', labwareType: '96-well-plate' },
-    } as PlateEvent,
+    // The row under test is the labware row; the event section is incidental
+    // (the gate's receipt event, create_container, is outside the PlateEvent
+    // union, so the existing tests' add_material shape stands in here).
+    { eventId: 'e1', event_type: 'add_material', details: {} } as PlateEvent,
   ],
 }
 

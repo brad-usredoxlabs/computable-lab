@@ -228,6 +228,25 @@ export const LABWARE_TYPE_LABELS: Record<LabwareType, string> = {
 }
 
 /**
+ * Display summary for a labware ROW (View changes, deck rows, …): the instance's
+ * own name plus the geometry it actually carries. Never a static capacity from
+ * LABWARE_TYPE_LABELS — those entries bake in capacities (e.g. plate_96 → "200 µL")
+ * that may not match the definition the vessel is bound to (gate r16 D2: a generic
+ * 96-well plate at 350 µL rendered as "200 µL"). A value the labware does not carry
+ * is left out, not invented.
+ */
+export function labwareGeometrySummary(lw: Pick<Labware, 'name' | 'addressing' | 'geometry'>): string {
+  const parts: string[] = [lw.name]
+  if (lw.addressing?.type === 'grid' && lw.addressing.rows && lw.addressing.columns) {
+    parts.push(`${lw.addressing.rows} × ${lw.addressing.columns}`)
+  }
+  if (typeof lw.geometry?.maxVolume_uL === 'number' && lw.geometry.maxVolume_uL > 0) {
+    parts.push(`${lw.geometry.maxVolume_uL} µL max`)
+  }
+  return parts.join(' · ')
+}
+
+/**
  * Labware type icons
  */
 export const LABWARE_TYPE_ICONS: Record<LabwareType, string> = {
