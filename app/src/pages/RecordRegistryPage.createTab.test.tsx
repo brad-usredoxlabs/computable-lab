@@ -471,6 +471,13 @@ describe('RecordRegistryPage — per-tab Create affordance (QMS7-5)', () => {
       expect(screen.getByTestId('registry-create-button')).toBeTruthy()
     })
     for (const tab of REGISTRY_TABS) {
+      // L2-GC-PEAK-NAMING-1 (u4surface): a tab that declares `registrySource`
+      // (the Compounds tab) lists a REGISTRY data source, not record kinds —
+      // the page renders NO Create affordance on it (hidden when kinds is
+      // empty; no dead button). This suite's contract is record-kind tabs
+      // only, so registry-source tabs are skipped here (their surface is the
+      // Compounds panel, pinned in CompoundClassPanel.test.tsx).
+      if (tab.kinds.length === 0) continue
       const kind = tab.kinds[0]
       // GC-16 (W2): a tab whose kind declares no `properties.id.pattern`
       // (the knowledge triplet) is NOT seedable by the registry's OQ-3 path —

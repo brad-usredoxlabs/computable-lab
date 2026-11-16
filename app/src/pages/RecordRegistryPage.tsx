@@ -5,6 +5,7 @@ import type { TapTabEditorHandle } from '../editor/taptab/types';
 import { serializeDocument } from '../editor/taptab/recordSerializer';
 import type { EditorProjectionResponse } from '../types/uiSpec';
 import { apiClient } from '../shared/api/client';
+import { CompoundClassPanel, type CompoundClass } from './CompoundClassPanel';
 import { RelatedRecordsCard } from '../components/registry/RelatedRecordsCard';
 import { RecordProvenanceCard } from '../components/registry/RecordProvenanceCard';
 import { DocumentControlBar } from '../components/registry/DocumentControlBar';
@@ -21,7 +22,22 @@ import './RecordRegistryPage.css';
 // Exported for the test suites: the tab/kinds DATA is the single source for
 // the tab strip, the combobox kinds, and the Create picker (no test-side
 // kind maps — the tests read the same data the page renders).
-export const REGISTRY_TABS = [
+//
+// L2-GC-PEAK-NAMING-1 (u4surface): a tab whose kinds are EMPTY but which
+// declares `registrySource` lists a REGISTRY data source (not record kinds).
+// The Compounds tab is the first such tab: its data comes from
+// GET /compound-classes (the compound-class registry) and it renders
+// <CompoundClassPanel/> in the list area. Empty kinds mean NO Create
+// affordance by construction (same as the retired instrument kind,
+// INSTR-COLLAPSE-2 C5) and NO record-list filter.
+export interface RegistryTab {
+  id: string
+  label: string
+  kinds: readonly string[]
+  registrySource?: string
+}
+
+export const REGISTRY_TABS: RegistryTab[] = [
   { id: 'people', label: 'People', kinds: ['person'] },
   { id: 'equipment', label: 'Equipment', kinds: ['equipment', 'equipment-class'] },
   { id: 'training', label: 'Training', kinds: ['training-material', 'training-record'] },
@@ -51,7 +67,13 @@ export const REGISTRY_TABS = [
   // picker; the kind -> schema $id resolution is the served registry (GET
   // /schemas + deriveSchemaNode), never a client-side map.
   { id: 'knowledge', label: 'Knowledge', kinds: ['assertion', 'claim', 'evidence'] },
-] as const;
+  // L2-GC-PEAK-NAMING-1 (u4surface): the compound-class REGISTRY is a
+  // registry data source, not record kinds — the tab declares its source
+  // (registrySource) instead of a kinds list. Every compound class and each
+  // candidate (compound id + resolved ontology label) renders through
+  // <CompoundClassPanel/>; no record kinds, no Create affordance.
+  { id: 'compounds', label: 'Compounds', kinds: [], registrySource: 'compound-classes' },
+]
 
 type TabId = (typeof REGISTRY_TABS)[number]['id'];
 
@@ -113,6 +135,10 @@ interface RecordData {
 export default function RecordRegistryPage() {
   const [activeTab, setActiveTab] = useState<TabId>('people');
   const [records, setRecords] = useState<RecordData[]>([]);
+  // L2-GC-PEAK-NAMING-1 (u4surface): the Compounds tab's REGISTRY data source
+  // (GET /compound-classes). null = not yet loaded for this tab. Stateless
+  // server read: a tab re-entry re-fetches (reload re-renders the list).
+  const [compoundClasses, setCompoundClasses] = useState<CompoundClass[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<RecordData | null>(null);
   const [editorMode, setEditorMode] = useState<'edit' | 'create'>('edit');
@@ -324,6 +350,16 @@ export default function RecordRegistryPage() {
     const seq = ++refreshSeqRef.current;
     setLoading(true);
     try {
+      // L2-GC-PEAK-NAMING-1 (u4surface): a registrySource tab lists a REGISTRY
+      // data source, not record kinds — no listRecordsByKind call (empty kinds
+      // would fetch nothing and render the record list's "No records found").
+      if (tab.registrySource === 'compound-classes') {
+        const { classes } = await apiClient.getCompoundClasses();
+        if (seq !== refreshSeqRef.current) return; // A newer refresh won the race.
+        setRecords([]);
+        setCompoundClasses(classes);
+        return;
+      }
       const promises = tab.kinds.map(kind => apiClient.listRecordsByKind(kind, 100));
       // INSTR-COLLAPSE-2 C5 (OQ-A(i)): the derived measurement-capable filter
       // reuses the THREE existing listRecordsByKind reads (equipment,
@@ -351,6 +387,7 @@ export default function RecordRegistryPage() {
     } catch {
       if (seq !== refreshSeqRef.current) return;
       setRecords([]);
+      setCompoundClasses(null);
       setCapabilityRecords([]);
       setVerbRecords([]);
     } finally {
@@ -789,17 +826,19 @@ export default function RecordRegistryPage() {
             a picker listing the tab's kinds data (ontology kind strings
             verbatim — no invented display vocab). */}
         <div className="registry-list__actions">
-          <button
-            data-testid="registry-create-button"
-            onClick={handleCreateFromTab}
-            // Create resolves kind -> schema $id from the schema registry;
-            // until GET /schemas resolves there is nothing to create against
-            // (same degradation as the combobox's activeTabSchemaId='').
-            disabled={schemaNodes.length === 0}
-            className="registry-btn registry-btn--primary"
-          >
-            Create
-          </button>
+          {activeTabConfig.kinds.length > 0 && (
+            <button
+              data-testid="registry-create-button"
+              onClick={handleCreateFromTab}
+              // Create resolves kind -> schema $id from the schema registry;
+              // until GET /schemas resolves there is nothing to create against
+              // (same degradation as the combobox's activeTabSchemaId='').
+              disabled={schemaNodes.length === 0}
+              className="registry-btn registry-btn--primary"
+            >
+              Create
+            </button>
+          )}
           {createKindPickerOpen && (
             <div data-testid="registry-create-kind-picker" className="registry-kind-picker">
               {activeTabConfig.kinds.map((kind) => (
@@ -889,7 +928,14 @@ export default function RecordRegistryPage() {
             RECORD(s) that qualify it (VERDICT-critical: the ECP record is
             visible, not just the machine). */}
         <div className="registry-list__scroll">
-          {loading ? (
+          {activeTab === 'compounds' ? (
+            // L2-GC-PEAK-NAMING-1 (u4surface): the Compounds tab renders the
+            // compound-class REGISTRY (GET /compound-classes) through the
+            // dedicated panel — the record list above it stays untouched
+            // (refreshRecords sets records=[] for this tab, so the record
+            // list's own branch never renders for it).
+            <CompoundClassPanel classes={compoundClasses} loading={loading} />
+          ) : loading ? (
             <div className="registry-list__empty">Loading...</div>
           ) : (measurementCapableOnly && activeTab === 'equipment' ? measurementCapableRows : visibleRecords).length === 0 ? (
             <div className="registry-list__empty">No records found</div>
