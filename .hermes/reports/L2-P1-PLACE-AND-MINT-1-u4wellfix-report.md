@@ -90,3 +90,5 @@ After the fix: 7/7, 6/6, and 17 errors with 0 in the two owned files (no new err
   matches the brief's stated baseline. I ran the real paths.
 - Receipt files kept outside git: /tmp/u4wellfix-red.txt, /tmp/u4wellfix-green.txt,
   /tmp/u4wellfix-tsc-baseline.txt, /tmp/u4wellfix-tsc-final.txt.
+
+L2-P1-PLACE-AND-MINT-1-u4wellfix-l2t2673.txt UNIT u4wellfix DONE cfdd438c2ad726f8cfeb7a9c953bd9a27c2eaac5
