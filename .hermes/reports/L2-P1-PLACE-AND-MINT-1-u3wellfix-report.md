@@ -175,4 +175,4 @@ wanted (no YAML changes here — pure TypeScript, no reload needed for the code 
 Optional follow-up (separate unit): the D2 deckAdoption persisted-entry leg, and the
 pre-existing threadScope parallel-load flake.
 
-L2-P1-PLACE-AND-MINT-1-u3wellfix UNIT L2-P1-PLACE-AND-MINT-1-u3wellfix DONE a7c11dec2e7d66d83de39198350cef724a6361c2
+L2-P1-PLACE-AND-MINT-1-u3wellfix UNIT L2-P1-PLACE-AND-MINT-1-u3wellfix DONE 4c8327d5f4f28a899d1a01316f0cc02a5dd0b38d
