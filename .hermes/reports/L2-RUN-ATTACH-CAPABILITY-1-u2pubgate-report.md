@@ -126,3 +126,7 @@ acceptance proofs.
 - No changes to any prohibited file (DeclaredCapabilityGate.ts,
   measurement.schema.yaml, useResultsMode.ts, app/**, seeds).
 - git status --porcelain after this report commit: empty.
+
+---
+
+L2-RUN-ATTACH-CAPABILITY-1-u2pubgate UNIT L2-RUN-ATTACH-CAPABILITY-1-u2pubgate DONE c3067d88c1ffaa3ba88bcd024a21c9fdb51a864c
