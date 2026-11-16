@@ -111,6 +111,8 @@ describe('useResultsMode — GC attach (L2-GC-UPLOAD-UI-1 attachbinary)', () => 
     const values = result.current.parserOptions.map((option) => option.value)
     expect(values).toContain('agilent6890')
     expect(values).not.toContain('agilent6890_csv_stub')
+    expect(values).toContain('aia_andi_cdf')
+    expect(result.current.parserOptions.find((option) => option.value === 'aia_andi_cdf')?.label).toBe('AIA/ANDI CDF (NetCDF)')
     expect(result.current.parserOptions.find((option) => option.value === 'agilent6890')?.label).toBe('Agilent 6890 GC-FID')
   })
 
