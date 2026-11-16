@@ -1,6 +1,7 @@
 import type { AppContext } from '../server.js';
 import { ParserRegistry } from './parsers/ParserRegistry.js';
 import { MeasurementServiceError } from './MeasurementService.js';
+import { resolveRawFile } from './rawFileResolver.js';
 
 export class MeasurementParserValidationService {
   private readonly ctx: AppContext;
@@ -13,7 +14,8 @@ export class MeasurementParserValidationService {
 
   async validate(input: { parserId: string; path: string }): Promise<Record<string, unknown>> {
     const parser = this.parsers.resolve(input.parserId);
-    const file = await this.ctx.repoAdapter.getFile(input.path);
+    // git worktree first, then the device blob store (safeSegment for uploads); one seam for both.
+    const file = await resolveRawFile(this.ctx, input.path);
     if (!file) {
       throw new MeasurementServiceError('NOT_FOUND', `Raw data file not found: ${input.path}`, 404);
     }

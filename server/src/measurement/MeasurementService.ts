@@ -2,6 +2,7 @@ import type { AppContext } from '../server.js';
 import { ParserRegistry } from './parsers/ParserRegistry.js';
 import { evaluateDeclaredCapabilityGate } from '../capabilities/DeclaredCapabilityGate.js';
 import { basename } from 'node:path';
+import { resolveRawFile } from './rawFileResolver.js';
 
 const MEASUREMENT_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/measurement.schema.yaml';
 
@@ -123,7 +124,8 @@ export class MeasurementService {
       throw new MeasurementServiceError('BAD_REQUEST', 'rawData.path is required', 400);
     }
 
-    const file = await this.ctx.repoAdapter.getFile(rawPath);
+    // Same seam as validate-parser: git worktree first, then the device blob store.
+    const file = await resolveRawFile(this.ctx, rawPath);
     if (!file) {
       throw new MeasurementServiceError('NOT_FOUND', `raw data file not found: ${rawPath}`, 404);
     }
