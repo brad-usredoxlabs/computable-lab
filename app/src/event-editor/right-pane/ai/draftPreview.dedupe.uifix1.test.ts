@@ -24,6 +24,13 @@
  * withheld. No new labware is authored either (the record already exists —
  * previewLabwares must not shadow the existing record with a renamed copy,
  * the "plate2" relabel the gate caught).
+ *
+ * u2 carve-out (L2-P1-PLACE-AND-MINT-1): a resolved DEFINITION offer
+ * (a record carrying topology+capacity — the record-level definition gate,
+ * NOT the ghost's definitionSource) mints a NEW placement identity — the
+ * record id names the GEOMETRY, not the placement — so this pin (a VESSEL
+ * offer) is the reuse rule's remaining scope; see draftPreview.ts
+ * isDefinitionRecordPayload.
  */
 import { describe, expect, it } from 'vitest'
 import { buildPreviewFromDraft } from './draftPreview'

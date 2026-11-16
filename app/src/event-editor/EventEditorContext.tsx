@@ -23,6 +23,7 @@ import type { AddMaterialDetails, PlateEvent } from '../types/events'
 import { generateEventId } from '../types/events'
 import type { Ref } from '../types/ref'
 import { groundMaterialRef } from './lib/groundMaterialRef'
+import { resolvePlacementIdentity } from './lib/eventWellIndex'
 import {
   applyPlateRailPatch,
   DEFAULT_PLATE_RAIL_DRAFT,
@@ -665,7 +666,14 @@ function normalizePreviewPlacementLocations(
  *  at commit time), so a later turn cannot re-route (or erase) them. */
 function committedOfferCapturesForPreview(
   events: PlateEvent[],
-  preview: { resolvedLabwares?: AiResolvedLabware[] },
+  preview: {
+    resolvedLabwares?: AiResolvedLabware[]
+    /** L2-P1-PLACE-AND-MINT-1 u3wellfix [D1/AC3]: the preview's labware map —
+     *  needed to resolve a single definition offer to the PLACEMENT identity
+     *  it places (the same resolvePlacementIdentity the staged arm uses), so
+     *  the committed binding and the tile key are ONE key. */
+    previewLabwares?: Record<string, Labware>
+  },
 ): { binding: Record<string, string>; ambiguous: Record<string, boolean> } {
   const ids = (preview.resolvedLabwares ?? [])
     .map((offer) => offer.recordId)
@@ -679,7 +687,22 @@ function committedOfferCapturesForPreview(
     // zero-offer case writes NOTHING (absent = no offer) and the
     // multi-offer case writes ONLY the marker — never a null sentinel, so
     // the two maps describe the same fact and cannot disagree.
-    if (!isAmbiguous && distinct.size === 1) binding[event.eventId] = ids[0] as string
+    if (!isAmbiguous && distinct.size === 1) {
+      // L2-P1-PLACE-AND-MINT-1 u3wellfix [D1/AC3]: the binding value is the
+      // PLACEMENT identity of the offered vessel when EXACTLY ONE
+      // previewLabwares entry carries its sourceRecordId (a definition offer
+      // re-keyed its labware to its own placement identity — u2), so the
+      // committed arm and the staged arm attribute to the SAME key the deck
+      // tile reads. Zero-or-many matches keep the recordId (the pre-u3wellfix
+      // value) — never guess. Vessel offers are the identity map
+      // (labwareId === recordId), so their bindings are byte-identical.
+      // The value rides per-batch — a later rebuild must not re-route
+      // earlier events (uifix2-fix1 D1 contract, kept).
+      binding[event.eventId] = resolvePlacementIdentity(
+        ids[0] as string,
+        preview.previewLabwares ?? {},
+      )
+    }
     if (isAmbiguous) ambiguous[event.eventId] = true
   }
   return { binding, ambiguous }
