@@ -9,13 +9,21 @@
  *
  * Both parser consumers (validate-parser and ingest) previously consulted only
  * arm 1, so a path returned by an upload dead-ended with NOT_FOUND (GC-BUNDLE r2
- * F4). This helper is that single seam — the order is git first (byte-identical
- * to the pre-fix behaviour), device second, and a device miss keeps the existing
- * NOT_FOUND at the call site.
+ * F4). This helper is that single seam — the order is git first, device second,
+ * and a device miss keeps the existing NOT_FOUND at the call site.
+ *
+ * L2-GC-AIA-CDF-PARSER-1 u2bind: the git arm's adapters decode as utf-8, which
+ * mangles binary raw files (a .cdf fixture lost its structure). The arm now
+ * verifies the utf-8 decode is byte-identical (the round-trip equals the raw
+ * bytes) and, when it is not, hands the parser the raw bytes latin1-mapped —
+ * the same byte-exact contract the device arm already used. Valid UTF-8 text
+ * files pass the check and keep exactly today's content.
  *
  * The device arm is guarded by the upload's own path shape so an arbitrary
  * caller-supplied path can never be pulled out of the device store.
  */
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { ArtifactBlobStore } from '../ingestion/ArtifactBlobStore.js';
 import type { AppContext } from '../server.js';
 
@@ -49,13 +57,44 @@ export function isMeasurementDevicePath(path: string): boolean {
 }
 
 /**
+ * Raw bytes of a file the git arm just resolved, read from the repository
+ * worktree — null when they cannot be read. The join matches the adapters'
+ * own resolvePath (same base via ctx.workspaceRoot, same path), so no new
+ * trust boundary opens: whatever the adapter could read, this reads too.
+ */
+async function readRawRepoBytes(ctx: AppContext, path: string): Promise<Buffer | null> {
+  try {
+    return await readFile(join(ctx.workspaceRoot, path));
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Resolve raw file text for `path`, or null when neither store holds it.
  * Null always preserves the caller's existing NOT_FOUND message.
  */
 export async function resolveRawFile(ctx: AppContext, path: string): Promise<ResolvedRawFile | null> {
-  // Arm 1 — git repository, unchanged from before this seam existed.
+  // Arm 1 — git repository.
   const file = await ctx.repoAdapter.getFile(path);
-  if (file) return { content: file.content, source: 'git' };
+  if (file) {
+    // The adapters decode as utf-8 — lossless ONLY for valid UTF-8 text.
+    // A binary .cdf is not: the decode replaces invalid bytes with U+FFFD,
+    // so aiaCdfParser refused the mangled structure (L2-GC-AIA-CDF-PARSER-1
+    // u2bind RED). The decode is byte-identical iff the utf-8 round-trip
+    // equals the raw bytes; when it is not, hand the parser the raw bytes
+    // latin1-mapped — the same byte-exact contract the device arm uses.
+    const bytes = await readRawRepoBytes(ctx, path);
+    if (bytes !== null) {
+      if (Buffer.from(file.content, 'utf-8').equals(bytes)) {
+        return { content: file.content, source: 'git' };
+      }
+      return { content: bytes.toString('latin1'), source: 'git' };
+    }
+    // The raw read failed although the adapter just read it (a race) —
+    // keep the adapter's content, exactly today's behaviour.
+    return { content: file.content, source: 'git' };
+  }
 
   // Arm 2 — device blob store. Absent storage keeps pure git behaviour.
   const storage = ctx.storageService;
