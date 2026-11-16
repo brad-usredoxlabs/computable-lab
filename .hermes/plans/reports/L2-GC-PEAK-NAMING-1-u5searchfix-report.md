@@ -119,4 +119,4 @@ tsc, in app/:
   no search box; People tab search still hits /api/search) — owner: browser
   reviewer. No YAML touched, so no lane-stack reload needed for this unit.
 
-L2-GC-PEAK-NAMING-1-u5searchfix-l2t2673.txt UNIT L2-GC-PEAK-NAMING-1-u5searchfix-l2t2673.txt DONE PLACEHOLDER_REPORT_SHA
+L2-GC-PEAK-NAMING-1-u5searchfix-l2t2673.txt UNIT L2-GC-PEAK-NAMING-1-u5searchfix-l2t2673.txt DONE 3ca1c46b63ec15b9d0a9729ac2fea55910e6c95c
