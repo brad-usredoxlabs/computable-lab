@@ -57,6 +57,16 @@ form:
     - path: "$.formulation.grade"
       widget: "text"
       label: "Grade"
+    - path: "$.formulation.composition"
+      widget: "array"
+      label: "Composition"
+      help: "Declared component materials; see the provenance note for completeness."
+      readonly: true
+    - path: "$.provenance.note"
+      widget: "text"
+      label: "Provenance Note"
+      help: "Why this declaration is partial or how it was sourced."
+      readonly: true
     - path: "$.handling.storage_temperature_C"
       widget: "number"
       label: "Storage Temp (C)"
