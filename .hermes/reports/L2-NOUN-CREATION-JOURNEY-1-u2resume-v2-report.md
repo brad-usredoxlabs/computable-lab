@@ -135,3 +135,5 @@ At the final commit:
 
 Unit is implementation-complete at the marker SHA below. Browser milestone
 gate (orchestrator-owned) remains open for the item.
+
+L2-NOUN-CREATION-JOURNEY-1-u2resume-v2 UNIT L2-NOUN-CREATION-JOURNEY-1-u2resume-v2 DONE 33b3999ce9646a3d3f60cff585f3a365ab9cb2a4
