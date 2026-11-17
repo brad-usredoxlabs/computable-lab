@@ -116,6 +116,17 @@ describe('useResultsMode — GC attach (L2-GC-UPLOAD-UI-1 attachbinary)', () => 
     expect(result.current.parserOptions.find((option) => option.value === 'agilent6890')?.label).toBe('Agilent 6890 GC-FID')
   })
 
+  it('(a2) states each parser expected units before upload — agilent6890 requires minutes', () => {
+    const { result } = renderHook(() =>
+      useResultsMode({ runId: 'RUN-000001', eventGraphId: 'EVTG-000001', events: [], selectedWells: [] }),
+    )
+    const agilent = result.current.parserOptions.find((option) => option.value === 'agilent6890')
+    expect(agilent?.expectedUnits).toBeDefined()
+    expect(agilent?.expectedUnits).toMatch(/min/)
+    expect(result.current.parserOptions.find((option) => option.value === 'aia_andi_cdf')?.expectedUnits).toMatch(/from file/)
+    expect(result.current.parserOptions.find((option) => option.value === 'generic_csv')?.expectedUnits).toBe('as stated in file')
+  })
+
   it('(b) exposes exactly the sha the server returned from the data-reference write (never a computed one)', async () => {
     const uploadSpy = vi
       .spyOn(apiClient, 'uploadRawMeasurementFile')

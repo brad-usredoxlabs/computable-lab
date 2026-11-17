@@ -1,0 +1,6 @@
+L2-GC-UPLOAD-UI-1-r1recon DONE marker — real commit SHAs from git
+(branch cl/lane2-gc-upload-ui-r1-0540, base cfc6d8347519da9c6299d1a9b8f9bcd2fe13c5bb):
+
+19fcc9d76d6c6532b8179a7ba9595cec022ae668 L2-GC-UPLOAD-UI-1 r1recon: verification-leg verdict report (a/c/d SATISFIED, b GAP with seam)
+
+L2-GC-UPLOAD-UI-1 UNIT L2-GC-UPLOAD-UI-1-r1recon DONE 19fcc9d76d6c6532b8179a7ba9595cec022ae668

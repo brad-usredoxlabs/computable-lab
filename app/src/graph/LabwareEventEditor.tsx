@@ -3912,7 +3912,7 @@ function LabwareEventEditorContent({
                     >
                       {resultsMode.parserOptions.map((parser) => (
                         <option key={parser.value} value={parser.value}>
-                          {parser.label}
+                          {parser.label} — {parser.expectedUnits}
                         </option>
                       ))}
                     </select>
