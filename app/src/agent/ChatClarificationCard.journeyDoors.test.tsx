@@ -14,11 +14,21 @@
  * The doors NAVIGATE (anchors carrying the noun as a CANDIDATE); they never
  * write — apiClient.createRecord stays at zero calls.
  */
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiClarificationRequest } from '../types/ai'
 import * as apiClientModule from '../shared/api/client'
 import { ChatClarificationCard } from './ChatClarificationCard'
+
+// c2 FIX 3: the card resolves a door's ROUTE from the declarative surface
+// registry (the authority), so the test supplies the two declared surfaces.
+vi.mock('../shared/surfaces/registry', () => ({
+  loadSurfaceRegistry: () =>
+    Promise.resolve([
+      { id: 'ingestion', label: 'Ingestion', path: '/ingestion', objectTypes: ['document'], selectableKinds: ['material'] },
+      { id: 'record-create', label: 'Record create', path: '/record/new/:nodeType', params: { nodeType: 'record' }, objectTypes: ['record'], selectableKinds: [] },
+    ]),
+}))
 
 const JOURNEY_MOD = '../../../server/src/compiler/journey/journeyDeclarationDoors.js'
 
@@ -96,9 +106,12 @@ describe('ChatClarificationCard — declared noun-create doors (unit u1journey)'
     renderCard([requestFor(journey, mod.notALocalTermReason(NOUN))])
 
     const door1 = screen.getByTestId('chat-clarification-door-add-from-vendor-or-ontology')
-    const href = door1.getAttribute('href') ?? ''
-    const url = new URL(href, 'http://localhost')
-    expect(url.pathname).toBe('/lab/materials/new')
+    // AC3: the route is the DECLARED surface's registry path (door 1 →
+    // `ingestion` → `/ingestion`), not a TypeScript literal — once loaded.
+    await waitFor(() => {
+      expect(new URL(door1.getAttribute('href') ?? '', 'http://localhost').pathname).toBe('/ingestion')
+    })
+    const url = new URL(door1.getAttribute('href') ?? '', 'http://localhost')
     expect(url.searchParams.get('prefillName')).toBe(NOUN)
     expect(url.searchParams.get('door')).toBe('add-from-vendor-or-ontology')
     expect(url.searchParams.get('journey')).toBe('journey-noun-create')

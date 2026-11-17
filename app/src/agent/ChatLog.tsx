@@ -33,7 +33,7 @@ import { ChatClarificationCard } from './ChatClarificationCard'
 // L2-NOUN-CREATION-JOURNEY-1 (u1journey c2 FIX 2): the single-fact absence
 // arm renders the DECLARED journey doors with the SAME href/label builders
 // the grouped card uses — one door vocabulary, never a second copy.
-import { journeyDoorHref, journeyDoorLabel } from './journeyDoorHref'
+import { journeyDoorHref, journeyDoorLabel, useJourneyDoorSurfaces } from './journeyDoorHref'
 import { ANSWER_KIND_WORD } from '../shared/taptab/slashMenu/tokens'
 import './ChatLog.css'
 
@@ -248,6 +248,16 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
   const followingRef = useRef(true)
   const viewportRef = useRef({ width: 0, height: 0 })
   const [following, setFollowing] = useState(true)
+  // The DECLARED surface registry — the authority for a journey door's route.
+  // Loaded only when a fact actually carries a declared journey door;
+  // undefined until loaded (the href builder falls back to the documented route).
+  const surfaceRegistry = useJourneyDoorSurfaces(
+    messages.some((message) =>
+      (message.clarificationRequests ?? []).some(
+        (request) => request.journey !== undefined && request.journey.doors.length > 0,
+      ),
+    ),
+  )
   const latestUserId = [...messages].reverse().find(message => message.role === 'user')?.id
   const previousUserId = useRef(latestUserId)
 
@@ -466,6 +476,7 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
                     href={journeyDoorHref(
                       { ...door, candidateLabel: door.candidateLabel || journey.candidateLabel },
                       journey,
+                      surfaceRegistry,
                     )}
                     title={door.summary}
                   >

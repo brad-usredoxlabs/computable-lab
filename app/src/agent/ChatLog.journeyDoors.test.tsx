@@ -9,10 +9,21 @@
  * of ChatClarificationCard — which cannot see the single arm at all. This test
  * renders ChatLog itself, with ONE request.
  */
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiClarificationRequest, ChatMessage } from '../types/ai'
 import { ChatLog } from './ChatLog'
+
+// The DECLARED surface registry (the authority for door routes) — stubbed at
+// the module the components load it from, with the two surfaces the
+// noun-create declaration names.
+vi.mock('../shared/surfaces/registry', () => ({
+  loadSurfaceRegistry: () =>
+    Promise.resolve([
+      { id: 'ingestion', label: 'Ingestion', path: '/ingestion', objectTypes: ['document'], selectableKinds: ['material'] },
+      { id: 'record-create', label: 'Record create', path: '/record/new/:nodeType', params: { nodeType: 'record' }, objectTypes: ['record'], selectableKinds: [] },
+    ]),
+}))
 
 vi.mock('pdfjs-dist', () => ({
   getDocument: vi.fn(() => ({ promise: Promise.resolve({ numPages: 0, fingerprints: [''], getPage: () => Promise.resolve(null), destroy: () => undefined }), destroy: () => undefined })),
@@ -62,6 +73,16 @@ describe('ChatLog — single-fact arm renders the DECLARED journey doors (AC2)',
     for (const door of journey.doors) {
       expect(screen.getByTestId(`chat-clarification-door-${door.id}`).tagName).toBe('A')
     }
+
+    // Each door lands on its DECLARED surface's REGISTRY path (AC3) once the
+    // registry has loaded (the href builder falls back until then).
+    const secondId = journey.doors[1].id
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('chat-clarification-door-add-from-vendor-or-ontology').getAttribute('href')?.startsWith('/ingestion?'),
+      ).toBe(true)
+    })
+    expect(screen.getByTestId(`chat-clarification-door-${secondId}`).getAttribute('href')?.startsWith('/record/new/material?')).toBe(true)
 
     // The labware create link is NOT offered for a material noun.
     expect(screen.queryByTestId('chat-clarification-absent-create')).toBeNull()

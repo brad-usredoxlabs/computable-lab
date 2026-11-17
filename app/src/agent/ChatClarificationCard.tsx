@@ -37,7 +37,7 @@ import { ParameterAnswerInput } from '../event-editor/right-pane/ai/ParameterAns
 // Submit, no change to `allAnswered`.
 import { ClarifyAssumedChip } from './ClarifyAssumedChip'
 import { ClarifyWellTargetSlot } from './ClarifyWellTargetSlot'
-import { journeyDoorHref, journeyDoorLabel } from './journeyDoorHref'
+import { journeyDoorHref, journeyDoorLabel, useJourneyDoorSurfaces } from './journeyDoorHref'
 
 export interface ChatClarificationCardProps {
   /** The unresolved facts for ONE sentence (the message), in wire order. */
@@ -103,6 +103,12 @@ export function ChatClarificationCard({
   // The one pick per slot, keyed by the request's OWN identity (the same
   // request.id the picker + the panel use). Never prefilled (never-guess).
   const [picks, setPicks] = useState<Record<string, AiClarificationAnswer>>({})
+  // The DECLARED surface registry (the authority for door routes), loaded only
+  // when this card actually renders a journey door. Undefined until loaded: the
+  // href builder falls back to the documented material route.
+  const surfaceRegistry = useJourneyDoorSurfaces(
+    requests.some((request) => request.journey !== undefined && request.journey.doors.length > 0),
+  )
 
   // The panel's turnKey staleness argument, verbatim: a new fold replaces the
   // card, so a fresh turnKey clears the prior fold's picks (never a stale
@@ -238,7 +244,11 @@ export function ChatClarificationCard({
                           className="chat-clarification-card__journey-door"
                           data-testid={`chat-clarification-door-${door.id}`}
                           data-surface={door.surface}
-                          href={journeyDoorHref({ ...door, candidateLabel: door.candidateLabel || request.journey!.candidateLabel }, request.journey!)}
+                          href={journeyDoorHref(
+                            { ...door, candidateLabel: door.candidateLabel || request.journey!.candidateLabel },
+                            request.journey!,
+                            surfaceRegistry,
+                          )}
                           title={door.summary}
                         >
                           {journeyDoorLabel(door.id)}
