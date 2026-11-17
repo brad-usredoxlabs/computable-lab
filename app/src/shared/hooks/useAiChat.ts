@@ -2325,13 +2325,43 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
                 !((result.labwareAdditions?.length ?? 0) > 0 ||
                   (result.instrumentApplianceJobs?.length ?? 0) > 0)
               if (noChannelDelivered) {
+                // L2-P1-EMPTY-TURN-CARD-1 u2fix (advc D2): resolve the
+                // unknown-noun entry against BOTH shipped unresolvedRefs
+                // shapes, never throwing. Reading order — flat FIRST,
+                // then nested, coalesced with `??`:
+                //   (a) flat: normalizeScientistIntent.ts pushes
+                //       { kind, label, reason } directly onto the array
+                //       (no `ref` field — server/src/ai/
+                //       normalizeScientistIntent.ts:1176-1180);
+                //   (b) nested: OntologyRefProposal (server/src/ai/
+                //       types.ts) carries `ref: { kind, id, namespace,
+                //       label, uri? }` — no `reason` field on `ref`.
+                // Every access is optional-chained and string-checked:
+                // a flat entry has no `ref` (nested reads yield
+                // undefined, not a TypeError) and a nested entry has no
+                // flat `reason` (flat reads yield undefined). An entry
+                // that is neither shape is skipped, not thrown on.
+                const refReason = (p: { ref?: { reason?: unknown } }) => {
+                  const entry = p as { reason?: unknown } & { ref?: { reason?: unknown } }
+                  const reason = entry.reason ?? entry.ref?.reason
+                  return typeof reason === 'string' ? reason : null
+                }
                 const unknownNoun = (result.unresolvedRefs ?? []).find(
-                  (p) => (p.ref as { reason?: unknown }).reason === 'unknown-noun',
+                  (p) => refReason(p as { ref?: { reason?: unknown } }) === 'unknown-noun',
                 )
                 const parts: string[] = []
                 if (relayedDraftUnstaged) parts.push('a record draft that did not mount')
                 if (unknownNoun) {
-                  const refLabel = (unknownNoun.ref as { label?: unknown }).label
+                  const entry = unknownNoun as unknown as {
+                    label?: unknown
+                    ref?: { label?: unknown }
+                  }
+                  const refLabel =
+                    typeof entry.label === 'string'
+                      ? entry.label
+                      : typeof entry.ref?.label === 'string'
+                        ? entry.ref.label
+                        : null
                   parts.push(
                     `an unresolved reference (${
                       typeof refLabel === 'string' && refLabel.length > 0 ? refLabel : 'unknown-noun'

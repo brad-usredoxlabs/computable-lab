@@ -46,11 +46,17 @@ async function drive(frames: Array<Record<string, unknown>>, relay?: (draft: Rec
 
 describe('useAiChat — L2-P1-EMPTY-TURN-CARD-1 u1: zero-events turn with no delivered channel', () => {
   it('relayed record-draft frame + zero-events done with nothing delivered: the honest wall fires and names the unknown-noun route', async () => {
+    // L2-P1-EMPTY-TURN-CARD-1 u2fix (advc D2): the fixture is the REAL
+    // shipped flat shape — normalizeScientistIntent.ts pushes
+    // `unresolvedRefs.push({ kind, label, reason })` (no `ref` field).
+    // The u1 fixture invented a nested { ref: { id, label, reason } }
+    // entry that ships nowhere; the current code TypeErrors on the real
+    // flat one (p.ref undefined — that RED was the D2 proof).
     const relay = vi.fn()
     const hook = await drive([
       { type: 'status', message: 'working' },
       { type: 'record_draft_proposal', recordDraft: DRAFT },
-      { type: 'done', result: { ...doneResult, unresolvedRefs: [{ ref: { id: 'unknown', label: 'Thermo Optical-Quality Imaging Plate', reason: 'unknown-noun' }, usedInEvents: [] }] } },
+      { type: 'done', result: { ...doneResult, unresolvedRefs: [{ kind: 'unresolved_symbol', label: 'Thermo Optical-Quality Imaging Plate', reason: 'unknown-noun' }] } },
     ], relay)
     expect(relay).toHaveBeenCalledTimes(1)
     // The turn did NOT settle with only the "No events generated." narration.
@@ -63,6 +69,31 @@ describe('useAiChat — L2-P1-EMPTY-TURN-CARD-1 u1: zero-events turn with no del
     expect(wall).toContain('unknown-noun')
     // … and points at a next step.
     expect(wall).toContain('create a local term')
+  })
+
+  it('u2fix D2: a nested OntologyRefProposal-shaped unresolvedRef (ref has NO reason) neither throws nor mints a fake unknown-noun', async () => {
+    // The OTHER real shipped shape: OntologyRefProposal (server/src/ai/
+    // types.ts) — ref: { kind: 'ontology', id, namespace, label, uri? }
+    // with NO reason field. The read must not throw on it, must not
+    // fabricate an unknown-noun (ref.reason is absent), and the wall
+    // still fires (nothing was delivered) naming the unmounted channel
+    // with the mount-recovery next step.
+    const relay = vi.fn()
+    const hook = await drive([
+      { type: 'status', message: 'working' },
+      { type: 'record_draft_proposal', recordDraft: DRAFT },
+      { type: 'done', result: { ...doneResult, unresolvedRefs: [{ ref: { kind: 'ontology', id: 'CHEBI:17438', namespace: 'chebi', label: 'DMSO' }, suggestedType: 'material', usedInEvents: [] }] } },
+    ], relay)
+    expect(relay).toHaveBeenCalledTimes(1)
+    const wall = hook.current.honestWall
+    expect(wall, 'the honest wall must fire when nothing was delivered').toBeTruthy()
+    expect(wall).toContain('Draft produced no events')
+    expect(wall).toContain('record draft that did not mount')
+    // No unknown-noun route (the nested ref carries no reason): the
+    // mount-recovery next step instead — and NO fabricated "unknown-noun"
+    // reference text from an entry that never said it.
+    expect(wall).not.toContain('unknown-noun')
+    expect(wall).toContain('the proposal channel could not be mounted')
   })
 
   it('control: a zero-events done with NO relay (no delivered channel) still fires the wall (pre-existing arm)', async () => {
