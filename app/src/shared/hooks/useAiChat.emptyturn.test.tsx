@@ -1,3 +1,18 @@
+/**
+ * L2-P1-EMPTY-TURN-CARD-1 u1 — a zero-events turn with NO delivered channel
+ * must surface the actionable honest wall, never settle with only the
+ * "No events generated." narration (gate PROMPT1-GATE-20261114T133918Z
+ * draw 1, thread d6af42ce: 125 s poll, cardCount 0, no wall).
+ *
+ * Defect: onRecordDraftProposal is registered by the universal stack
+ * (useSurfaceChat.ts:41), so a record_draft_proposal frame sets
+ * handledProposalFrame = true (useAiChat.ts, the relay block) — which skips
+ * BOTH emptiness gates, leaving the turn with narration only.
+ *
+ * RED at base: the relayed frame suppresses the wall (honestWall stays null).
+ * GREEN at tip: the wall fires, names the unmounted channel, and points at
+ * the next step (naming the unknown-noun route when the payload carries it).
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
 import { useAiChat } from './useAiChat'
@@ -14,26 +29,53 @@ vi.mock('../api/client', () => ({
 }))
 
 const aiContext: AiContext = { surface: 'event-editor', summary: 's', surfaceContext: {} }
+const DRAFT = { operation: 'compose-record', kind: 'labware' }
+const doneResult: Record<string, unknown> = { success: true, events: [], notes: [] }
 
 beforeEach(() => { vi.clearAllMocks() })
 
-describe('debug', () => {
-  it('relay + empty done: settles, wall state?', async () => {
+async function drive(frames: Array<Record<string, unknown>>, relay?: (draft: Record<string, unknown>) => void) {
+  vi.mocked(streamAssist).mockImplementation(async function* () {
+    for (const f of frames) yield f as never
+  })
+  const { result: hook } = renderHook(() => useAiChat({ aiContext, onRecordDraftProposal: relay }))
+  await act(async () => { hook.current.sendPrompt('place the unknown product on the deck') })
+  await waitFor(() => expect(hook.current.isStreaming).toBe(false), { timeout: 8000 })
+  return hook
+}
+
+describe('useAiChat — L2-P1-EMPTY-TURN-CARD-1 u1: zero-events turn with no delivered channel', () => {
+  it('relayed record-draft frame + zero-events done with nothing delivered: the honest wall fires and names the unknown-noun route', async () => {
     const relay = vi.fn()
-    vi.mocked(streamAssist).mockImplementation(async function* () {
-      yield { type: 'status', message: 'working' } as never
-      yield { type: 'record_draft_proposal', recordDraft: { operation: 'compose-record', kind: 'x' } } as never
-      yield { type: 'done', result: { success: true, events: [], notes: [] } } as never
-    })
-    const { result: hook } = renderHook(() => useAiChat({ aiContext, onRecordDraftProposal: relay }))
-    await act(async () => { hook.current.sendPrompt('place the unknown product') })
-    await waitFor(() => expect(hook.current.isStreaming).toBe(false), { timeout: 8000 })
-    // eslint-disable-next-line no-console
-    console.log('relay calls=', relay.mock.calls.length, 'isStreaming=', hook.current.isStreaming)
-    // eslint-disable-next-line no-console
-    console.log('honestWall=', JSON.stringify(hook.current.honestWall))
-    // eslint-disable-next-line no-console
-    console.log('msgs=', hook.current.messages.map((m) => `${m.role}:${String(m.content).slice(0, 60)}`))
-    expect(true).toBe(true)
-  }, 20000)
+    const hook = await drive([
+      { type: 'status', message: 'working' },
+      { type: 'record_draft_proposal', recordDraft: DRAFT },
+      { type: 'done', result: { ...doneResult, unresolvedRefs: [{ ref: { id: 'unknown', label: 'Thermo Optical-Quality Imaging Plate', reason: 'unknown-noun' }, usedInEvents: [] }] } },
+    ], relay)
+    expect(relay).toHaveBeenCalledTimes(1)
+    // The turn did NOT settle with only the "No events generated." narration.
+    const wall = hook.current.honestWall
+    expect(wall, 'the honest wall must fire when nothing was delivered').toBeTruthy()
+    expect(wall).toContain('Draft produced no events')
+    // It names the channel that could not mount …
+    expect(wall).toContain('record draft that did not mount')
+    // … names the unknown-noun route the payload carries …
+    expect(wall).toContain('unknown-noun')
+    // … and points at a next step.
+    expect(wall).toContain('create a local term')
+  })
+
+  it('control: a zero-events done with NO relay (no delivered channel) still fires the wall (pre-existing arm)', async () => {
+    const relay = vi.fn()
+    const hook = await drive([
+      { type: 'status', message: 'working' },
+      { type: 'done', result: doneResult },
+    ], relay)
+    expect(relay).not.toHaveBeenCalled()
+    await waitFor(() => expect(hook.current.honestWall).toBeTruthy())
+    expect(hook.current.honestWall).toContain('Draft produced no events')
+    // The narration tail still lands in the assistant message (unchanged).
+    const last = hook.current.messages[hook.current.messages.length - 1]
+    expect(String(last.content)).toContain('No events generated.')
+  })
 })
