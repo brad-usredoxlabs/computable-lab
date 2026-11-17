@@ -43,9 +43,11 @@ describe('ChatLog — single-fact arm renders the DECLARED journey doors (AC2)',
     const mod = await import(JOURNEY_MOD)
     const declared = mod.nounCreateJourneyForCandidate(NOUN)
     expect(declared).toBeDefined()
-    // A two-door projection of the SAME declared data (never a hand-written
-    // door list): the arm's shape is per-door, not per-count.
-    const journey = { ...declared, doors: declared.doors.slice(0, 2) }
+    // The UNSLICED declaration: every door the YAML declares, in declared
+    // order (c2 sliced this to 2, which hid the third declared door).
+    const journey = declared
+    expect(journey.doors.length).toBe(3)
+    expect(journey.createdType).toBe('material')
     const request = {
       id: 'fact-journey-1',
       kind: 'noun',
@@ -69,20 +71,27 @@ describe('ChatLog — single-fact arm renders the DECLARED journey doors (AC2)',
     expect(node.classList.contains('chat-log-clarification')).toBe(true)
 
     const doors = node.querySelectorAll('[data-testid^="chat-clarification-door-"]')
-    expect(doors).toHaveLength(2)
+    expect(doors).toHaveLength(declared.doors.length)
     for (const door of journey.doors) {
       expect(screen.getByTestId(`chat-clarification-door-${door.id}`).tagName).toBe('A')
     }
 
-    // Each door lands on its DECLARED surface's REGISTRY path (AC3) once the
-    // registry has loaded (the href builder falls back until then).
-    const secondId = journey.doors[1].id
+    // Each door lands on its DECLARED surface's REGISTRY path (AC3), with the
+    // created-type token taken from the DECLARED record_type — the journey
+    // carries it, not the door module.
     await waitFor(() => {
-      expect(
-        screen.getByTestId('chat-clarification-door-add-from-vendor-or-ontology').getAttribute('href')?.startsWith('/ingestion?'),
-      ).toBe(true)
+      for (const door of journey.doors) {
+        const href = screen.getByTestId(`chat-clarification-door-${door.id}`).getAttribute('href')
+        expect(href).not.toBeNull()
+        const expectedPath =
+          door.surface === 'record-create' ? `/record/new/${journey.createdType}` : `/${door.surface}`
+        expect(href!.startsWith(`${expectedPath}?`)).toBe(true)
+      }
     })
-    expect(screen.getByTestId(`chat-clarification-door-${secondId}`).getAttribute('href')?.startsWith('/record/new/material?')).toBe(true)
+    const ingestionHref = screen
+      .getByTestId('chat-clarification-door-add-from-vendor-or-ontology')
+      .getAttribute('href')
+    expect(ingestionHref).toContain('prefillName=DMEM')
 
     // The labware create link is NOT offered for a material noun.
     expect(screen.queryByTestId('chat-clarification-absent-create')).toBeNull()

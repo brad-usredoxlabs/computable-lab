@@ -467,23 +467,27 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
               keeps the single create anchor byte-identically. */}
           {journey !== undefined && journey.doors.length > 0 ? (
             <ul className="chat-clarification-card__journey-doors" data-testid="chat-clarification-journey-doors">
-              {journey.doors.map((door) => (
+              {journey.doors.map((door) => {
+                const href = journeyDoorHref(
+                  { ...door, candidateLabel: door.candidateLabel || journey.candidateLabel },
+                  journey,
+                  surfaceRegistry,
+                )
+                return (
                 <li key={door.id}>
                   <a
                     className="chat-clarification-card__journey-door"
                     data-testid={`chat-clarification-door-${door.id}`}
                     data-surface={door.surface}
-                    href={journeyDoorHref(
-                      { ...door, candidateLabel: door.candidateLabel || journey.candidateLabel },
-                      journey,
-                      surfaceRegistry,
-                    )}
-                    title={door.summary}
+                    {...(href !== null ? { href } : {})}
+                    aria-disabled={href === null ? true : undefined}
+                    title={href !== null ? door.summary : `${door.summary} (no declared route is available)`}
                   >
                     {journeyDoorLabel(door.id)}
                   </a>
                 </li>
-              ))}
+                )
+              })}
             </ul>
           ) : (
             <a

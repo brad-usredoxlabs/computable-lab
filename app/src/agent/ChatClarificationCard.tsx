@@ -238,23 +238,27 @@ export function ChatClarificationCard({
                     className="chat-clarification-card__journey-doors"
                     data-testid="chat-clarification-journey-doors"
                   >
-                    {request.journey.doors.map((door) => (
+                    {request.journey.doors.map((door) => {
+                      const href = journeyDoorHref(
+                        { ...door, candidateLabel: door.candidateLabel || request.journey!.candidateLabel },
+                        request.journey!,
+                        surfaceRegistry,
+                      )
+                      return (
                       <li key={door.id}>
                         <a
                           className="chat-clarification-card__journey-door"
                           data-testid={`chat-clarification-door-${door.id}`}
                           data-surface={door.surface}
-                          href={journeyDoorHref(
-                            { ...door, candidateLabel: door.candidateLabel || request.journey!.candidateLabel },
-                            request.journey!,
-                            surfaceRegistry,
-                          )}
-                          title={door.summary}
+                          {...(href !== null ? { href } : {})}
+                          aria-disabled={href === null ? true : undefined}
+                          title={href !== null ? door.summary : `${door.summary} (no declared route is available)`}
                         >
                           {journeyDoorLabel(door.id)}
                         </a>
                       </li>
-                    ))}
+                      )
+                    })}
                   </ul>
                 ) : (
                   <a
