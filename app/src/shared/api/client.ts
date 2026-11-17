@@ -3606,6 +3606,11 @@ export const apiClient = {
    * this is the client side of the same contract — fixing only one side is
    * the shipped drift this closes). NEITHER may be sent: the server refuses
    * with the named token MATERIAL_OR_ENTRY_REQUIRED.
+   * u1acqgraph (the door's run-scoped binding): `eventGraphRef` (the run's
+   * method event-graph record) + `assayType` (the measurement schema's
+   * assayType enum) — present for a run-scoped call (eventGraphRef present,
+   * entryRef absent). The handler MINTS the run's ONE measurement record and
+   * REQUIRES `assayType` for that path (ASSAY_TYPE_REQUIRED, never defaulted).
    */
   async registerAcquisitionPackage(body: {
     deviceId: string
@@ -3614,6 +3619,8 @@ export const apiClient = {
     sampleRef?: { kind: 'record'; id: string; type: string; label?: string }
     materialRef?: { kind: 'record'; id: string; type: string; label?: string }
     sourceRunRef?: { kind: 'record'; id: string; type: string; label?: string }
+    eventGraphRef?: { kind: 'record'; id: string; type: string }
+    assayType?: 'qpcr' | 'plate_reader' | 'microscopy' | 'gc_fid' | 'gc_ms' | 'flow' | 'other'
   }): Promise<{ packageRecordId: string; packagePayload: Record<string, unknown>; entryRecordId: string }> {
     try {
       return await request<{ packageRecordId: string; packagePayload: Record<string, unknown>; entryRecordId: string }>(
