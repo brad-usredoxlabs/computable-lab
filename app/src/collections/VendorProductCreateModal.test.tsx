@@ -62,13 +62,12 @@ function renderModal(defs: RecordEnvelope[] = DEFINITIONS) {
 }
 
 describe('VendorProductCreateModal', () => {
-  it('(a) submit builds the labware-kind payload with verbatim catalog number', async () => {
+  it('(a) submit builds a VENDOR-PRODUCT payload (labware_definition_ref, verbatim catalog) — not a bare labware', async () => {
     renderModal()
     fireEvent.change(screen.getByTestId('vendor-product-vendor-input'), {
       target: { value: 'Thermo Fisher Scientific' },
     })
-    // Mixed-case probe: a toUpperCase() (or any other case-reformatting)
-    // mutation of the payload would turn this test RED.
+    // Mixed-case probe: any case-reformatting of the catalogue would turn this RED.
     fireEvent.change(screen.getByTestId('vendor-product-catalog-input'), {
       target: { value: 'a58941B' },
     })
@@ -81,19 +80,31 @@ describe('VendorProductCreateModal', () => {
       expect(createRecordSpy).toHaveBeenCalledTimes(1)
     })
     const [schemaId, payload] = createRecordSpy.mock.calls[0] as [string, Record<string, unknown>]
-    expect(schemaId).toBe('https://computable-lab.com/schema/computable-lab/labware.schema.yaml')
-    expect(payload.kind).toBe('labware')
+    // A labware-definition-backed product is a vendor-product record — the
+    // labware schema rejects labware_definition_ref (unevaluatedProperties:false),
+    // so the purchased identity lives on its own record.
+    expect(schemaId).toBe('https://computable-lab.com/schema/computable-lab/vendor-product.schema.yaml')
+    expect(payload.kind).toBe('vendor-product')
     expect(payload.name).toBe('Thermo Fisher Scientific a58941B')
-    const manufacturer = payload.manufacturer as Record<string, unknown>
-    expect(manufacturer.name).toBe('Thermo Fisher Scientific')
-    // EXACTLY the typed string — verbatim, no case/punctuation rewriting.
-    expect(manufacturer.catalogNumber).toBe('a58941B')
-    expect(payload.definitionRecordId).toBe('LBW-96-PLATE')
-    // The payload must carry the minted recordId and the picked definition's
-    // labwareType (schema/lab/labware.schema.yaml requires both).
-    expect(typeof payload.recordId).toBe('string')
-    expect(payload.recordId).toMatch(/^LW-[0-9A-F]{8}$/)
-    expect(payload.labwareType).toBe('plate')
+    // The seller and the catalogue number, verbatim (no case/punctuation rewriting).
+    expect(payload.vendor).toBe('Thermo Fisher Scientific')
+    expect(payload.catalog_number).toBe('a58941B')
+    // The DEFINITION referent — the picked definition by record id (kind:labware).
+    expect(payload.labware_definition_ref).toEqual({
+      kind: 'record',
+      id: 'LBW-96-PLATE',
+      type: 'labware',
+    })
+    // L2-P1B-PRODUCT-IDENTITY-1: a definition-backed product must NOT carry a
+    // material referent (the oneOf forbids both) and must NOT carry the old
+    // labware fields (recordId / labwareType / definitionRecordId / manufacturer).
+    expect('material_ref' in payload).toBe(false)
+    expect('definitionRecordId' in payload).toBe(false)
+    expect('labwareType' in payload).toBe(false)
+    expect('recordId' in payload).toBe(false)
+    // A minted VPR- product id (the schema's stable vendor-product identifier).
+    expect(typeof payload.id).toBe('string')
+    expect(payload.id).toMatch(/^VPR-[0-9A-F]{8}$/)
 
     // A real catalogue typed verbatim stays byte-equal in the payload.
     fireEvent.change(screen.getByTestId('vendor-product-catalog-input'), {
@@ -105,10 +116,13 @@ describe('VendorProductCreateModal', () => {
     })
     const [, payload2] = createRecordSpy.mock.calls[1] as [string, Record<string, unknown>]
     expect(payload2.name).toBe('Thermo Fisher Scientific A58941')
-    const manufacturer2 = payload2.manufacturer as Record<string, unknown>
-    expect(manufacturer2.catalogNumber).toBe('A58941')
-    expect(payload2.definitionRecordId).toBe('LBW-96-PLATE')
-    expect(payload2.labwareType).toBe('plate')
+    expect(payload2.vendor).toBe('Thermo Fisher Scientific')
+    expect(payload2.catalog_number).toBe('A58941')
+    expect(payload2.labware_definition_ref).toEqual({
+      kind: 'record',
+      id: 'LBW-96-PLATE',
+      type: 'labware',
+    })
   })
 
   it('(b) submit is blocked when the definition is empty', () => {
@@ -205,7 +219,12 @@ describe('VendorProductCreateModal', () => {
     expect(screen.queryByTestId('lab-category-new-product')).toBeNull()
   })
 
-  it('(d) a definition whose payload lacks labwareType is refused, createRecord NOT called', () => {
+  it('(d) a definition whose payload lacks labwareType is STILL accepted — the product records a referent, not a fabricated type', async () => {
+    // L2-P1B-PRODUCT-IDENTITY-1: the product is a vendor-product carrying a
+    // labware_definition_ref. The definition's own labwareType is NOT needed —
+    // the definition remains the single authority for geometry — so a
+    // definition with no labwareType is a valid target (the old labware-kind
+    // "refusing to fabricate one" refusal no longer applies).
     renderModal([
       { recordId: 'LBW-NO-TYPE', schemaId: '', payload: { name: 'plate with no type' } },
     ])
@@ -219,10 +238,18 @@ describe('VendorProductCreateModal', () => {
       target: { value: 'LBW-NO-TYPE' },
     })
     fireEvent.click(screen.getByTestId('vendor-product-create-submit'))
-    // Refused client-side: the error is visible and no record was created.
-    expect(screen.getByTestId('vendor-product-create-error')).toHaveTextContent(
-      'Selected definition has no labwareType; refusing to fabricate one',
-    )
-    expect(createRecordSpy).not.toHaveBeenCalled()
+    await waitFor(() => {
+      expect(createRecordSpy).toHaveBeenCalledTimes(1)
+    })
+    const [schemaId, payload] = createRecordSpy.mock.calls[0] as [string, Record<string, unknown>]
+    expect(schemaId).toBe('https://computable-lab.com/schema/computable-lab/vendor-product.schema.yaml')
+    expect(payload.labware_definition_ref).toEqual({
+      kind: 'record',
+      id: 'LBW-NO-TYPE',
+      type: 'labware',
+    })
+    // No fabricated labwareType and no material referent.
+    expect('labwareType' in payload).toBe(false)
+    expect('material_ref' in payload).toBe(false)
   })
 })

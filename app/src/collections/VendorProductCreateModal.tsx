@@ -1,11 +1,14 @@
 /**
  * VendorProductCreateModal — create a vendor-product record.
  *
- * Per the architect ruling (L2-P1-PRODUCT-DOOR-1): a product and a definition
- * are the SAME existing kind `labware` (schema/lab/labware.schema.yaml),
- * distinguished by the manufacturer block plus an optional definitionRecordId
- * pointer. This door reuses the existing record-create path — one
- * apiClient.createRecord call against the labware schemaId. No new record kind.
+ * Per the product-identity ruling (Brad 2026-11-16): a product realises EXACTLY
+ * one referent — a labware DEFINITION (labware_definition_ref) for a physical
+ * consumable such as a plate, or a material concept (material_ref) for a
+ * substance. A labware-definition-backed product is a `vendor-product` record
+ * (schema/lab/vendor-product.schema.yaml), NOT a bare labware: the labware
+ * schema rejects labware_definition_ref (unevaluatedProperties:false), and the
+ * definition stays the single authority for geometry — this record adds the
+ * purchased identity (seller, catalogue number) on top of it.
  *
  * Catalog number is stored verbatim — only leading/trailing space is trimmed,
  * case and punctuation are never rewritten.
@@ -16,17 +19,17 @@ import type { RecordEnvelope } from '../types/kernel'
 import { apiClient } from '../shared/api/client'
 import { labModalStyles } from './labModalStyles'
 
-const LABWARE_SCHEMA =
-  'https://computable-lab.com/schema/computable-lab/labware.schema.yaml'
+const VENDOR_PRODUCT_SCHEMA =
+  'https://computable-lab.com/schema/computable-lab/vendor-product.schema.yaml'
 
-/** Mint an LW-<8 hex uppercase> recordId */
+/** Mint a VPR-<8 hex uppercase> recordId (the vendor-product's stable id). */
 function mintRecordId(): string {
   const bytes = new Uint8Array(4)
   crypto.getRandomValues(bytes)
   const hex = Array.from(bytes)
     .map((b) => b.toString(16).toUpperCase().padStart(2, '0'))
     .join('')
-  return `LW-${hex}`
+  return `VPR-${hex}`
 }
 
 interface Props {
@@ -67,28 +70,32 @@ export function VendorProductCreateModal({
       return
     }
     const picked = definitions.find((d) => d.recordId === definitionId)
-    const pickedLabwareType = (picked?.payload as Record<string, unknown> | undefined)?.labwareType
-    if (!picked || typeof pickedLabwareType !== 'string') {
-      // Never fabricate a labwareType — the server's Ajv is the sole validator
-      // (schema/lab/labware.schema.yaml requires it).
-      setError('Selected definition has no labwareType; refusing to fabricate one')
+    if (!picked) {
+      setError('Select a definition to point at')
       return
     }
 
     setSaving(true)
     try {
+      // A labware-definition-backed product. It realises the picked DEFINITION
+      // by record id (the definition stays the single authority for geometry);
+      // this record adds the purchased identity (seller + verbatim catalogue).
+      // One referent only — a material_ref is NEVER added here (the schema's
+      // oneOf forbids both). The definition's own labwareType is NOT needed —
+      // never fabricated.
       const payload: Record<string, unknown> = {
-        recordId: mintRecordId(),
-        kind: 'labware',
+        kind: 'vendor-product',
+        id: mintRecordId(),
         name: `${trimmedVendor} ${trimmedCatalog}`,
-        labwareType: pickedLabwareType,
-        manufacturer: {
-          name: trimmedVendor,
-          catalogNumber: trimmedCatalog,
+        vendor: trimmedVendor,
+        catalog_number: trimmedCatalog,
+        labware_definition_ref: {
+          kind: 'record',
+          id: definitionId,
+          type: 'labware',
         },
-        definitionRecordId: definitionId,
       }
-      await apiClient.createRecord(LABWARE_SCHEMA, payload)
+      await apiClient.createRecord(VENDOR_PRODUCT_SCHEMA, payload)
       onSuccess()
       onClose()
     } catch (err) {
