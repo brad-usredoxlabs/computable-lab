@@ -92,3 +92,5 @@ mode, which is where the landed L2-GC-RAW-BINARY-1 wire (merge 2bd733d11) is use
 Recommended next unit (seam, not built here): one-line PARSER_OPTIONS change closing (b).
 Verdict: VERIFIED-WITH-ONE-GAP — the verification leg is closed; gap filed with its seam.
 Nothing was built; no source files edited.
+
+L2-GC-UPLOAD-UI-1 UNIT L2-GC-UPLOAD-UI-1-r1recon DONE 19fcc9d76d6c6532b8179a7ba9595cec022ae668
