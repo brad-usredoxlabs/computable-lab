@@ -52,6 +52,14 @@ export interface JourneyDeclarationRef {
   permittedResultTypes: string[];
   /** `return_contract.require_explicit_resume` — a person must confirm the return. */
   requireExplicitResume: boolean;
+  /**
+   * `steps[].human_task.output_port.record_type` — the record type a committed
+   * completion of this journey CREATES. This is the ONLY source a door may fill
+   * a surface's `:token` from; a declaration that names none has no created-type
+   * answer, so the door emits no route (fail closed, never a TS default).
+   * Absent (not `undefined`) when the document declares no type.
+   */
+  createdType?: string;
   doors: JourneyDeclarationDoor[];
 }
 
@@ -113,6 +121,24 @@ function controlsOf(doc: RawJourneyDocument): string[] {
 }
 
 /**
+ * `steps[].human_task.output_port.record_type` — the record type the declared
+ * human completion CREATES. Read from the document; '' when none is declared
+ * (the caller then omits the field, and a door that needs a type emits no
+ * route). Never defaulted here: a missing declaration is not a material.
+ */
+function createdTypeOf(doc: RawJourneyDocument): string {
+  const steps = Array.isArray(doc.steps) ? doc.steps : [];
+  for (const step of steps) {
+    const outputPort = (
+      step as { human_task?: { output_port?: { record_type?: unknown } } } | undefined
+    )?.human_task?.output_port;
+    const recordType = outputPort?.record_type;
+    if (typeof recordType === 'string' && recordType.trim().length > 0) return recordType.trim();
+  }
+  return '';
+}
+
+/**
  * Project a parsed journey document into its door list. PURE — the caller
  * supplies the document (a test mutates its own copy and measures the
  * emitted set change; the engine/lint paths pass the shipped parse).
@@ -163,12 +189,16 @@ export function journeyRefFromDocument(doc: unknown): JourneyDeclarationRef {
   const permittedResultTypes = Array.isArray(returnContract.permitted_result_types)
     ? returnContract.permitted_result_types.filter((value): value is string => typeof value === 'string')
     : [];
+  const createdType = createdTypeOf(journal);
   return {
     journeyId: typeof journal.journey_id === 'string' ? journal.journey_id : '',
     revision: typeof journal.revision === 'number' ? journal.revision : 0,
     checkpointRef,
     permittedResultTypes,
     requireExplicitResume: returnContract.require_explicit_resume === true,
+    // Absent-or-value (exactOptionalPropertyTypes): a declaration that names no
+    // output type carries NO key, so a consumer cannot mistake '' for a type.
+    ...(createdType.length > 0 ? { createdType } : {}),
     doors: doorsFromJourneyDocument(journal),
   };
 }

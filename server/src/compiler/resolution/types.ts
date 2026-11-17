@@ -176,6 +176,13 @@ export interface ClarificationJourneyFact {
   revision: number;
   checkpointRef: string;
   candidateLabel: string;
+  /**
+   * `steps[].human_task.output_port.record_type` — the record type a committed
+   * completion CREATES, projected by journey/journeyDeclarationDoors.ts. The
+   * door route fills a surface's `:token` from THIS value only; absent when the
+   * declaration names none (the door then emits no route — fail closed).
+   */
+  createdType?: string;
   doors: ClarificationJourneyDoorFact[];
 }
 

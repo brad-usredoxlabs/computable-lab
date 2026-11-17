@@ -347,6 +347,13 @@ export interface AiClarificationRequest {
     journeyId: string
     revision: number
     checkpointRef: string
+    /**
+     * `steps[].human_task.output_port.record_type` — the record type a committed
+     * completion CREATES (server projection of the declaration). The ONLY source
+     * a door fills a surface's `:token` from; absent when the declaration names
+     * none, in which case a token surface gets NO door route (fail closed).
+     */
+    createdType?: string
     candidateLabel: string
     doors: Array<{
       id: string
