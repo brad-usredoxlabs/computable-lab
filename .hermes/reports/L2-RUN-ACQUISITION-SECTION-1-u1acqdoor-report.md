@@ -211,6 +211,34 @@ clean
 - Browser gate (independent reviewer) still owns live-surface acceptance on
   RUN-2026-11-14-run-5714.
 
+## Commit trail (all on branch cl/lane2-run-acqsection-u1-2359, base f22d4305f)
+
+```
+45c9163f4  u1acqdoor (test-fix): parametrize renderPage list fixture + stub universal-chat
+           machinery so the page-level data-door test renders in isolation
+4cc650b26  marker(lane2): DONE — report marker line + .done (cites report commit 217d503)
+217d50354  report(lane2): L2-RUN-ACQUISITION-SECTION-1 u1acqdoor — raw verify receipts
+a6b625622  u1acqdoor (GREEN): run-owned acquisition section + same-route Data toolbar
+           affordance + run-scoped attach; client register-body type closes drift
+d9346ca4c  u1acqdoor (RED): RunAcquisitionSection page-level test (committed before
+           component existed -> RED confirmed)
+```
+
+Line counts vs base (git diff --numstat f22d4305f..HEAD):
+  RunWorkspacePage.tsx  +52 / -10
+  acquisition/RunAcquisitionSection.css   +174 (new)
+  acquisition/RunAcquisitionSection.test.tsx +416 (new)
+  acquisition/RunAcquisitionSection.tsx   +362 (new)
+  shared/api/client.ts                    +7   (type-only: register-body signature)
+
+Honesty note on the trail: the test file's FINAL content (the renderPage fixture
+parametrization + universal-chat stubs) was committed in 45c9163 AFTER the marker
+commit, because the GREEN commit a6b6256 staged the component/page/css/client but not
+the test file. The committed test is therefore the one at 45c9163, and the GREEN
+result (7/7) is reproducible from 45c9163 (re-verified at that commit, output in
+section "1. New tests" — the same 7/7). No file is uncommitted; `git status
+--porcelain` is clean at HEAD.
+
 ## Marker
 
 L2-RUN-ACQUISITION-SECTION-1-u1acqdoor UNIT unit DONE 217d50354afa22890ad3667d4938de882bd2e171
