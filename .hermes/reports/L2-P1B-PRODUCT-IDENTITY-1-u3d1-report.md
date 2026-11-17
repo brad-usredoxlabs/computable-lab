@@ -44,8 +44,8 @@ Nothing else in the tree was modified. `git diff --stat f22d4305f..HEAD` = the t
 ```
 41dbda0e8 test(lane2): RED — product door must list kind=labware-definition records (L2-P1B-PRODUCT-IDENTITY-1 u3d1, gate r2 D1)
 31bfac91b fix(lane2): product door loads labware-definition records too, deduped (L2-P1B-PRODUCT-IDENTITY-1 u3d1, gate r2 D1)
-<report commit> report(L2-P1B-PRODUCT-IDENTITY-1 u3d1): seam-fix report — D1 two-store merge RED->GREEN, baselines, mutation probe
-<marker commit> marker(L2-P1B-PRODUCT-IDENTITY-1 u3d1): DONE marker + report DONE line (names the report commit)
+ec9d1397e report(L2-P1B-PRODUCT-IDENTITY-1 u3d1): seam-fix report — D1 two-store merge RED->GREEN, baselines, mutation probe
+(this commit) marker(L2-P1B-PRODUCT-IDENTITY-1 u3d1): DONE marker + report DONE line (names the report commit)
 ```
 
 The lane's own precedent (`L2-P1B-PRODUCT-IDENTITY-1-u2d1fix`, commits f1f0a4ed6 + 0d08bad7f) puts the
@@ -124,3 +124,5 @@ Restored with `git checkout -- app/src/collections/LabCollectionView.tsx`; tree 
   "Points at definition" select and a `VPR-` product record whose `labware_definition_ref` names it.
 - Remaining defects D2–D5 of gate r2 are NOT in this unit's scope.
 
+
+L2-P1B-PRODUCT-IDENTITY-1 UNIT u3d1 DONE ec9d1397efcd08e42dc965e187c7d3bdba017d1b
