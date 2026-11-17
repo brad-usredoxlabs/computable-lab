@@ -94,3 +94,49 @@ Verdict: VERIFIED-WITH-ONE-GAP — the verification leg is closed; gap filed wit
 Nothing was built; no source files edited.
 
 L2-GC-UPLOAD-UI-1 UNIT L2-GC-UPLOAD-UI-1-r1recon DONE 19fcc9d76d6c6532b8179a7ba9595cec022ae668
+
+## u2units — closes criterion (b): parser options state expected units before upload
+
+Commit: 917ddc2a28605ad6788469d8d12294df6fdc3a54 (code+test, one commit). Changed files (3,
+19 insertions / 8 deletions, report excluded from the 80-line budget):
+
+1. app/src/graph/hooks/useResultsMode.ts:15-22 — each PARSER_OPTIONS entry now carries an
+   `expectedUnits` string; useResultsMode.ts:68 — `parserOptions` type widened to
+   `Array<{ value: string; label: string; expectedUnits: string }>` (the `as const` + spread
+   map at :937 propagates the field unchanged).
+2. app/src/graph/LabwareEventEditor.tsx:3915 — the Parser <select> option now renders
+   `{parser.label} — {parser.expectedUnits}` (label suffix, one of the two allowed renderings;
+   quiet, no new DOM/classes/CSS).
+3. app/src/graph/hooks/useResultsMode.gc.test.tsx:119-128 — new test (a2) asserts BEFORE any
+   upload: agilent6890 option's expectedUnits mentions "min", aia_andi_cdf matches "from file",
+   generic_csv is exactly "as stated in file".
+
+Unit strings, grounded verbatim in parser source (BEDROCK, no invented units):
+- agilent6890 -> "time: min (required); intensity: from file header"
+    agilent6890Parser.ts:283-286 — non-minute time unit is refused: "this parser requires minutes
+    for its timeMin field"; :279 `const intensityUnit = extractUnit(intensityCell) ?? UNSTATED`
+    (read from the column header); :337 `units: { time: timeUnit, intensity: intensityUnit }`.
+- aia_andi_cdf -> "time & intensity: from file"
+    aiaCdfParser.ts:284 `units: { time: retentionUnit, intensity: intensityUnit }` (both read
+    from the file).
+- generic_csv / gemini_csv / abi7500_csv / metrohm761_csv_stub -> "as stated in file"
+    `grep -n "units:" server/src/measurement/parsers/*.ts` shows ONLY the two GC parsers
+    (agilent6890Parser.ts:337, aiaCdfParser.ts:284) declaring a units object; no non-GC parser
+    source line was re-derived — the brief's sanctioned fallback applies.
+
+Verification (real output, at base c62f60d33 then at final commit 917ddc2a2):
+- RED first: with only the new test (a2) present, `npx vitest run
+  src/graph/hooks/useResultsMode.gc.test.tsx` -> "1 failed | 3 passed (4)", failing at
+  `expect(agilent?.expectedUnits).toBeDefined()` (AssertionError: expected undefined not to be
+  undefined, useResultsMode.gc.test.tsx:124). Pre-existing (a)/(b)/(c) stayed green in the same run.
+- GREEN: after the code change, same command -> "Test Files  1 passed (1) / Tests  4 passed (4)".
+- Typecheck `npx tsc --noEmit -p .` in app/: 26 pre-existing errors at base
+  (SchemaRecordForm.tsx, RefCombobox.ontologyref.test.tsx, tabNavPlugin.ts, ajv/yaml module
+  resolution, etc.) — `diff` of base vs final tsc output: identical, ZERO new errors.
+
+Acceptance: (1) agilent6890 option states expected units before any upload — test-asserted
+(a2), RED-first; (2) every units string grounded in a cited parser source line above; (3)
+criterion (b) closes — the GC parser is now offered with its units at the choice point.
+No server code, run-surface components, records/, schema/ or other panel touched.
+
+L2-GC-UPLOAD-UI-1-u2units UNIT L2-GC-UPLOAD-UI-1-u2units DONE 917ddc2a28605ad6788469d8d12294df6fdc3a54
