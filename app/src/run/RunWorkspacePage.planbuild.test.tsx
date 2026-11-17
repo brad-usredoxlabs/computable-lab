@@ -73,6 +73,21 @@ vi.mock('../event-editor/workspace/WorkspaceContext', () => ({
 }))
 vi.mock('../event-editor/EventEditorContext', () => ({
   EventEditorProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  // d2persist: the run surface mounts the deck autosave, which reads the
+  // editor state. A graph id but no placements/events = nothing to save.
+  useEventEditor: () => ({
+    state: {
+      eventGraphId: 'EG-1',
+      runId: 'RUN-1',
+      platformId: 'manual',
+      variantId: 'manual_freeform',
+      loadState: 'ready',
+      labwares: {},
+      placements: [],
+      events: [],
+    },
+    actions: {},
+  }),
 }))
 vi.mock('../event-editor/protocol/ProtocolPreviewBridge', () => ({ ProtocolPreviewBridge: () => null }))
 vi.mock('../event-editor/focus/FocusModalsProvider', () => ({

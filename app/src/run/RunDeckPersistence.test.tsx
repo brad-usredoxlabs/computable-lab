@@ -13,9 +13,11 @@
  * apiClient, so the assertion is on the actual governed write, not on a
  * parallel seam.
  */
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EventEditorState } from '../event-editor/EventEditorContext'
+import { EventGraphChip } from '../event-editor/topbar/EventGraphChip'
 import { RunDeckPersistence } from './RunDeckPersistence'
 
 const mocks = vi.hoisted(() => ({
@@ -47,6 +49,7 @@ function baseState(overrides: Partial<Record<string, unknown>> = {}): EventEdito
   return {
     eventGraphId: 'EG-1',
     runId: 'RUN-1',
+    loadState: 'ready',
     platformId: 'PLT-1',
     variantId: 'VAR-1',
     labwares: {},
@@ -67,11 +70,16 @@ const PLACEMENT = {
 const LABWARE = { labwareId: 'LB-1', labwareType: 'plate96', name: 'Plate' }
 
 async function flushIdle(): Promise<void> {
+  // Past the 1.4s idle debounce, then drain the persistence chain's
+  // microtasks (deck-lock read/write -> saveEventGraph -> adoption/error).
   await act(async () => {
     vi.advanceTimersByTime(1500)
-    await Promise.resolve()
-    await Promise.resolve()
   })
+  for (let i = 0; i < 12; i += 1) {
+    await act(async () => {
+      await Promise.resolve()
+    })
+  }
 }
 
 describe('RunDeckPersistence — a run-deck placement commits to the graph', () => {
@@ -92,15 +100,21 @@ describe('RunDeckPersistence — a run-deck placement commits to the graph', () 
   })
 
   it('issues exactly ONE saveEventGraph whose editorLayout carries the placement', async () => {
-    const { rerender } = render(<RunDeckPersistence />)
+    const view = () => (
+      <MemoryRouter>
+        <RunDeckPersistence />
+        <EventGraphChip />
+      </MemoryRouter>
+    )
+    const { rerender } = render(view())
 
     // The first observation is the loaded deck (not an edit) — the placement
     // arrives after mount, exactly as a slot click does.
     mocks.state = baseState({ labwares: { 'LB-1': LABWARE }, placements: [PLACEMENT] })
-    rerender(<RunDeckPersistence />)
+    rerender(view())
     await flushIdle()
 
-    await waitFor(() => expect(mocks.saveEventGraph).toHaveBeenCalledTimes(1))
+    expect(mocks.saveEventGraph).toHaveBeenCalledTimes(1)
     const [id, payload] = mocks.saveEventGraph.mock.calls[0] as [string | null, {
       editorLayout?: { placements?: Array<Record<string, unknown>> }
     }]
@@ -110,7 +124,10 @@ describe('RunDeckPersistence — a run-deck placement commits to the graph', () 
     ])
     // The graph id is already adopted on this surface, so the topbar chip is
     // NOT in its "Unsaved graph" state after the write resolves.
+    // The surface's chip is bound to the SAME editor state: a saved graph is
+    // not the "Unsaved graph" state (acceptance D2).
     expect(screen.queryByText('Unsaved graph')).toBeNull()
+    expect(screen.getByText(/^Graph /)).toBeTruthy()
     expect(screen.queryByTestId('run-deck-save-error')).toBeNull()
   })
 
@@ -122,7 +139,6 @@ describe('RunDeckPersistence — a run-deck placement commits to the graph', () 
     rerender(<RunDeckPersistence />)
     await flushIdle()
 
-    await waitFor(() => expect(screen.getByTestId('run-deck-save-error')).toBeTruthy())
     expect(screen.getByTestId('run-deck-save-error').textContent).toContain('network down')
     // No save storm: a failure stays ONE attempt per edit.
     expect(mocks.saveEventGraph).toHaveBeenCalledTimes(1)
