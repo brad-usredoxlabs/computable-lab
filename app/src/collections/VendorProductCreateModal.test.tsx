@@ -252,4 +252,80 @@ describe('VendorProductCreateModal', () => {
     expect('labwareType' in payload).toBe(false)
     expect('material_ref' in payload).toBe(false)
   })
+
+  // ── L2-P1B-PRODUCT-IDENTITY-1 u3d1 — gate r2 D1: the two definition stores ──
+  // /lab/labware/new saves kind='labware-definition'; the product door used to
+  // list kind='labware' only, so a definition the person just saved could never
+  // be picked. Both stores feed the one select, deduped by recordId.
+
+  const LW_TESTDEF: RecordEnvelope = {
+    recordId: 'LW-TESTDEF',
+    schemaId: '',
+    payload: { name: 'Thermo Optical-Quality Imaging Plate, 384-well', labwareType: 'plate' },
+  }
+  const LEGACY_LABWARE: RecordEnvelope[] = [
+    { recordId: 'LBW-LEGACY-1', schemaId: '', payload: { name: 'legacy labware row' } },
+  ]
+
+  function renderCollectionAt(category: string) {
+    render(
+      <MemoryRouter initialEntries={[`/lab/${category}`]}>
+        <Routes>
+          <Route
+            path="/lab/:category"
+            element={
+              <ThemeProvider>
+                <OpenTabsProvider>
+                  <LabCollectionView />
+                </OpenTabsProvider>
+              </ThemeProvider>
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    )
+  }
+
+  function mockTwoStores(labware: RecordEnvelope[], definitions: RecordEnvelope[]) {
+    listRecordsByKindSpy.mockImplementation((kind: string) => {
+      if (kind === 'labware') return Promise.resolve({ records: labware, total: labware.length })
+      if (kind === 'labware-definition')
+        return Promise.resolve({ records: definitions, total: definitions.length })
+      return Promise.resolve({ records: [], total: 0 })
+    })
+  }
+
+  function optionValues() {
+    const select = screen.getByTestId('vendor-product-definition-select') as HTMLSelectElement
+    return Array.from(select.options).map((o) => o.value)
+  }
+
+  it('(e) lists a definition saved as kind=labware-definition beside the labware rows (gate r2 D1)', async () => {
+    mockTwoStores(LEGACY_LABWARE, [LW_TESTDEF])
+    renderCollectionAt('labware')
+    fireEvent.click(screen.getByTestId('lab-category-new-product'))
+    await waitFor(() => {
+      expect(optionValues()).toContain('LW-TESTDEF')
+    })
+    // The legacy store is still listed — this is a merge, not a replacement.
+    expect(optionValues()).toContain('LBW-LEGACY-1')
+    const labels = Array.from(
+      (screen.getByTestId('vendor-product-definition-select') as HTMLSelectElement).options,
+    ).map((o) => o.textContent)
+    expect(labels).toContain('Thermo Optical-Quality Imaging Plate, 384-well (LW-TESTDEF)')
+  })
+
+  it('(e) dedupes a recordId present in both stores — it renders once (no duplicate key)', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const shared: RecordEnvelope = { recordId: 'LW-DUP', schemaId: '', payload: { name: 'both stores' } }
+    mockTwoStores([shared], [shared])
+    renderCollectionAt('labware')
+    fireEvent.click(screen.getByTestId('lab-category-new-product'))
+    await waitFor(() => {
+      expect(optionValues()).toContain('LW-DUP')
+    })
+    expect(optionValues().filter((v) => v === 'LW-DUP')).toHaveLength(1)
+    expect(errorSpy.mock.calls.flat().join(' ')).not.toMatch(/same key/i)
+    errorSpy.mockRestore()
+  })
 })

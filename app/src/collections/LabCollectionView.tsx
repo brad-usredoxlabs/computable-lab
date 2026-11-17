@@ -279,11 +279,23 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
   }, [showInstanceModal])
 
   // Load labware records when the product door opens — the definition select
-  // lists existing labware records (definitions and products alike) as
-  // name+recordId, matching the brief.
+  // lists BOTH definition stores: legacy kind='labware' rows and the
+  // kind='labware-definition' records that /lab/labware/new saves. Deduped by
+  // recordId so a record reachable through both stores renders once.
   useEffect(() => {
     if (showProductModal) {
-      void apiClient.listRecordsByKind('labware', 200).then((r) => setProductDefinitions(r.records))
+      void Promise.all([
+        apiClient.listRecordsByKind('labware', 200),
+        apiClient.listRecordsByKind('labware-definition', 200),
+      ]).then(([labware, definitions]) => {
+        const seen = new Set<string>()
+        const merged = [...labware.records, ...definitions.records].filter((record) => {
+          if (seen.has(record.recordId)) return false
+          seen.add(record.recordId)
+          return true
+        })
+        setProductDefinitions(merged)
+      })
     }
   }, [showProductModal])
 
