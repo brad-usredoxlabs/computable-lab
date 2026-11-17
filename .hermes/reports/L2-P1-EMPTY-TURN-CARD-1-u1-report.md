@@ -130,4 +130,4 @@ app/src/shared/hooks/useAiChat.emptyturn.test.tsx (+4/-2).
 No blockers. Acceptance state: implementation complete; independent review
 owns acceptance.
 
-L2-P1-EMPTY-TURN-CARD-1-u1-lane2-EMPTY-TURN-CARD-1-u1-v3-l2t2703.txt UNIT unit DONE 89c007310afeea12a0752ab3b4f35fd9fe764e69
+L2-P1-EMPTY-TURN-CARD-1-u1-lane2-EMPTY-TURN-CARD-1-u1-v3-l2t2703.txt UNIT unit DONE 9a248249c4199682bfa1674ada1b41fa2bebf30c
