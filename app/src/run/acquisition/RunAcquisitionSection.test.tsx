@@ -384,7 +384,7 @@ describe('u1acqdoor — the run-owned acquisition section + the toolbar Data aff
     expect(second.assayType).toBe('gc_fid')
   })
 
-  it('(b3) u2fix: register WITHOUT selecting an assay is refused — no register call, visible error; after selecting it registers', async () => {
+  it('(b3) u2fix: register WITHOUT selecting an assay is refused — no register call, visible error', async () => {
     renderPage()
     await screen.findByTestId('run-acquisition-attach')
     fireEvent.click(screen.getByTestId('run-acquisition-attach'))
@@ -399,9 +399,19 @@ describe('u1acqdoor — the run-owned acquisition section + the toolbar Data aff
     fireEvent.click(screen.getByTestId('run-acquisition-attach-register'))
     await screen.findByTestId('run-acquisition-attach-error')
     expect(screen.getByTestId('run-acquisition-attach-error').textContent).toBeTruthy()
-    // Refused: NO register call fired.
+    // Refused: NO register call fired — nothing is labelled 'other' silently.
     expect(mocks.registerAcquisitionPackage).not.toHaveBeenCalled()
-    // After selecting an assay, the same form registers.
+  })
+
+  it('(b3b) u2fix: after selecting an assay explicitly, the same form registers', async () => {
+    renderPage()
+    await screen.findByTestId('run-acquisition-attach')
+    fireEvent.click(screen.getByTestId('run-acquisition-attach'))
+    await screen.findByTestId('run-acquisition-attach-form')
+    fireEvent.change(screen.getByTestId('run-acquisition-attach-directory'), {
+      target: { value: 'machine1/RES1.D' },
+    })
+    const assaySelect = screen.getByTestId('run-acquisition-attach-assay') as HTMLSelectElement
     fireEvent.change(assaySelect, { target: { value: 'qpcr' } })
     mocks.registerAcquisitionPackage.mockResolvedValue({
       packageRecordId: 'ACQP-NEW-3',
