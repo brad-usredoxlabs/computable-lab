@@ -658,19 +658,33 @@ export function LabLabwareNewPage() {
 
         {/* u2geom — save affordance for the manual-declaration leg (no
             extraction, or extraction with no rows). The extracted-leg button
-            lives with the proposals block; exactly one is rendered. */}
-        {!(state === 'success' && proposals !== null && proposals.length > 0) &&
-          mergedSaveReady && (
+            lives with the proposals block; exactly one is rendered.
+            L2-P1B-PRODUCT-IDENTITY-1: rendered in EVERY state of this leg —
+            disabled with a visible one-line reason when nothing is declared,
+            so a person always sees the control (and why it is idle) instead
+            of a missing save button. It never invents a default payload:
+            disabled means handleSave's mergedSaveReady gate returns early. */}
+        {!(state === 'success' && proposals !== null && proposals.length > 0) && (
+          <div style={{ marginTop: '0.5rem' }}>
             <button
               type="button"
               data-testid="lab-labware-save-button"
               onClick={() => void handleSave()}
-              disabled={saving}
+              disabled={saving || !mergedSaveReady}
               style={{ padding: '0.4rem 0.8rem', border: '1px solid var(--cl-border)', borderRadius: '6px', background: 'var(--cl-bg-elev)', cursor: 'pointer' }}
             >
               {saving ? 'Saving…' : 'Save labware definition'}
             </button>
-          )}
+            {!mergedSaveReady && (
+              <div
+                data-testid="lab-labware-save-disabled-reason"
+                style={{ marginTop: '0.3rem', fontSize: '0.85rem', color: '#666' }}
+              >
+                Nothing declared yet — enter a field below or propose fields from a spec sheet.
+              </div>
+            )}
+          </div>
+        )}
 
         {state === 'success' && proposals && proposals.length > 0 && (
           <div data-testid="lab-labware-proposals">

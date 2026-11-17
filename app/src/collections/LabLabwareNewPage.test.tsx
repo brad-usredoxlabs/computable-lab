@@ -121,7 +121,12 @@ describe('LabLabwareNewPage', () => {
     await waitFor(() => {
       expect(screen.queryByTestId('lab-labware-not-configured')).toBeDefined()
     })
-    expect(screen.queryByTestId('lab-labware-save-button')).toBeNull()
+    // L2-P1B-PRODUCT-IDENTITY-1: the save control is now rendered in EVERY
+    // state — here nothing is declared (no extraction, no manual rows), so it
+    // is PRESENT but DISABLED with a visible reason (was hidden before).
+    expect(screen.queryByTestId('lab-labware-save-button')).not.toBeNull()
+    expect(screen.getByTestId('lab-labware-save-button')).toBeDisabled()
+    expect(screen.queryByTestId('lab-labware-save-disabled-reason')).not.toBeNull()
   })
 
   it('shows blocked state when the fetch is blocked', async () => {
