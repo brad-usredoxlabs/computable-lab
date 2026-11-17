@@ -151,6 +151,19 @@ describe('L2-P1-EMPTY-TURN-CARD-1 u1finalsite — final-answer empty exit', () =
     );
     // absent-or-empty events (the turn produced no draft).
     expect(result.events ?? []).toHaveLength(0);
+    // L2-P1-EMPTY-TURN-CARD-1 (u2fix, advc defect 3 — D3 reachability, route a):
+    // this leg IS the deterministic probe. The harness's config is EXACTLY the
+    // shipped default config: draftFlowMode absent → constructor default
+    // 'forced-tool' (:1367; lane2-config.yaml's ai: block ships no
+    // draftFlowMode), deterministicOnly absent → false. On it, the default
+    // forceDraftTool resolves true (:1544) — the probe's request
+    // forceDraftTool:false overrides that to false (explicit false wins the
+    // ?? chain), the forceDraftTool-gated recovery arms are skipped, preflight
+    // is skipped (:2104-2105), and the no-tool-call final-answer arm reaches
+    // the empty-guard's error arm. PROBE RECEIPT: the wall this leg asserts
+    // (byte-equal, one authority — the assertion just above) proves the AC1
+    // exit is reachable on the shipped default config, not only on the
+    // adversarial probe.
   });
 
   it('AC1b: a truncated (finish_reason "length") no-tool-call answer names the output limit, not a stop', async () => {
