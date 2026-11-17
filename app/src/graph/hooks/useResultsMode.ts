@@ -13,12 +13,12 @@ import type { WellId } from '../../types/plate'
 import { isBiologyContext, parseReadoutContextMetadata, parseReadoutNotes, summarizeQcControls } from '../lib/readoutMetadata'
 
 const PARSER_OPTIONS = [
-  { value: 'generic_csv', label: 'Generic CSV' },
-  { value: 'gemini_csv', label: 'Gemini CSV' },
-  { value: 'abi7500_csv', label: 'ABI 7500 CSV' },
-  { value: 'agilent6890', label: 'Agilent 6890 GC-FID' },
-  { value: 'metrohm761_csv_stub', label: 'Metrohm 761 CSV' },
-  { value: 'aia_andi_cdf', label: 'AIA/ANDI CDF (NetCDF)' },
+  { value: 'generic_csv', label: 'Generic CSV', expectedUnits: 'as stated in file' },
+  { value: 'gemini_csv', label: 'Gemini CSV', expectedUnits: 'as stated in file' },
+  { value: 'abi7500_csv', label: 'ABI 7500 CSV', expectedUnits: 'as stated in file' },
+  { value: 'agilent6890', label: 'Agilent 6890 GC-FID', expectedUnits: 'time: min (required); intensity: from file header' },
+  { value: 'metrohm761_csv_stub', label: 'Metrohm 761 CSV', expectedUnits: 'as stated in file' },
+  { value: 'aia_andi_cdf', label: 'AIA/ANDI CDF (NetCDF)', expectedUnits: 'time & intensity: from file' },
 ] as const
 
 /** What the parser actually read, read back off the created measurement record (never synthesized client-side). */
@@ -65,7 +65,7 @@ export interface ResultsExpectationCheck {
 }
 
 export interface UseResultsModeResult {
-  parserOptions: Array<{ value: string; label: string }>
+  parserOptions: Array<{ value: string; label: string; expectedUnits: string }>
   readEvents: ResultsReadEventSummary[]
   activeReadEventId: string | null
   setActiveReadEventId: (eventId: string | null) => void
