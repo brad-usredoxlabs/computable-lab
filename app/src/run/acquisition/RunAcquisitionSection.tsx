@@ -130,6 +130,30 @@ export function RunAcquisitionSection({
       {empty && (
         <div className="run-acquisition__empty" data-testid="run-acquisition-empty">
           <p className="run-acquisition__empty-text">No instrument data attached to this run yet</p>
+        </div>
+      )}
+
+      {packages !== null && !empty && (
+        <ul className="run-acquisition__list" data-testid="run-acquisition-list">
+          {packages.map((p) => (
+            <li key={p.recordId} className="run-acquisition__item" data-testid="run-acquisition-item">
+              <span className="run-acquisition__id">{p.recordId}</span>
+              <span className="run-acquisition__loc">
+                {p.storageDeviceId ?? '—'} · {p.directoryKey ?? '—'}
+              </span>
+              {p.registeredAt ? <time className="run-acquisition__created" dateTime={p.registeredAt}>{p.registeredAt}</time> : null}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* u2fix (defect 1): the attach control lives OUTSIDE the empty branch —
+          a run that ALREADY has attached packages still offers the affordance
+          (decision rule 4, "one run, many instruments": a second readout is
+          attached through the SAME run-scoped register write). Visible below
+          the list when non-empty, in the door when empty. */}
+      {packages !== null && (
+        <div className="run-acquisition__attach">
           {!attachOpen ? (
             <button
               type="button"
@@ -151,20 +175,6 @@ export function RunAcquisitionSection({
             />
           )}
         </div>
-      )}
-
-      {packages !== null && !empty && (
-        <ul className="run-acquisition__list" data-testid="run-acquisition-list">
-          {packages.map((p) => (
-            <li key={p.recordId} className="run-acquisition__item" data-testid="run-acquisition-item">
-              <span className="run-acquisition__id">{p.recordId}</span>
-              <span className="run-acquisition__loc">
-                {p.storageDeviceId ?? '—'} · {p.directoryKey ?? '—'}
-              </span>
-              {p.registeredAt ? <time className="run-acquisition__created" dateTime={p.registeredAt}>{p.registeredAt}</time> : null}
-            </li>
-          ))}
-        </ul>
       )}
     </section>
   )
@@ -197,7 +207,11 @@ function RunScopedAttachForm({
   const [devices, setDevices] = useState<StorageDevice[]>([])
   const [deviceId, setDeviceId] = useState('')
   const [directoryKey, setDirectoryKey] = useState('')
-  const [assayType, setAssayType] = useState<AssayType>('other')
+  // u2fix (defect 4): the assay starts UNSELECTED. The measurement schema's
+  // enum is declared by the caller (the door never defaults it) — silently
+  // minting a measurement labelled 'other' when the user never touches the
+  // dropdown is a mislabelled record. Empty string = no choice yet.
+  const [assayType, setAssayType] = useState<AssayType | ''>('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<{ token: string; message: string } | null>(null)
   const [configError, setConfigError] = useState<string | null>(null)
@@ -226,8 +240,8 @@ function RunScopedAttachForm({
 
   const register = async () => {
     if (busy) return
-    if (!deviceId || !directoryKey.trim()) {
-      setError({ token: 'MISSING_INPUT', message: 'Choose a storage device and the .D directory to register.' })
+    if (!deviceId || !directoryKey.trim() || assayType === '') {
+      setError({ token: 'MISSING_INPUT', message: 'Choose a storage device, the .D directory, and the assay.' })
       return
     }
     setError(null)
@@ -328,8 +342,11 @@ function RunScopedAttachForm({
         id="run-acquisition-assay"
         data-testid="run-acquisition-attach-assay"
         value={assayType}
-        onChange={(e) => setAssayType(e.target.value as AssayType)}
+        onChange={(e) => setAssayType(e.target.value as AssayType | '')}
       >
+        <option value="" disabled>
+          Select the assay…
+        </option>
         {ASSAY_TYPES.map((t) => (
           <option key={t} value={t}>
             {t}
@@ -344,9 +361,9 @@ function RunScopedAttachForm({
           Cancel
         </button>
       </div>
-      {(!deviceId || !directoryKey.trim()) && !error && !busy && (
+      {(!deviceId || !directoryKey.trim() || assayType === '') && !error && !busy && (
         <span className="run-acquisition__hint" data-testid="run-acquisition-attach-hint">
-          Pick a device and the .D directory to attach.
+          Pick a device, the .D directory, and the assay to attach.
         </span>
       )}
       {error && (

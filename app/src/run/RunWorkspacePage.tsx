@@ -241,7 +241,10 @@ export function RunWorkspacePage() {
                         the run-owned acquisition section below. It carries the
                         current search string into ?section=acquisition so the
                         state survives a refresh, and it NEVER navigates away
-                        from /runs/<id> (the URL stays on the run surface). */}
+                        from /runs/<id> (the URL stays on the run surface).
+                        u2fix (defect 2): rendered ONLY when the resolved record
+                        is kind 'run' — mirrors the section's OWN gate below. */}
+                    {runKind === 'run' ? (
                     <button
                       type="button"
                       className="run-workspace-toolbar__data"
@@ -265,6 +268,7 @@ export function RunWorkspacePage() {
                     >
                       Data
                     </button>
+                    ) : null}
                     <RunProtocolList runId={runId} />
                     <RunPlanGraphBuild runId={runId} />
                     <DeckToolbar tab={deckTab} breadcrumb={runBreadcrumb} />
