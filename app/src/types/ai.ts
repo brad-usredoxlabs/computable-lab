@@ -335,6 +335,34 @@ export interface AiClarificationRequest {
    * (exactOptionalPropertyTypes — the key rides a conditional spread server-side).
    */
   absence?: { mention: string; reason: string }
+  /**
+   * L2-NOUN-CREATION-JOURNEY-1 (unit u1journey) — the DECLARED creation journey
+   * an unbound MATERIAL noun is created through, mirrored verbatim from the
+   * server's AgentClarificationRequest.journey (projected from
+   * config/journey/declarations/noun-create.yaml). The card renders ONE door
+   * per `doors[]` entry; it holds no door list of its own. `candidateLabel` is
+   * the person's own noun — a CANDIDATE, never a minted identity.
+   */
+  journey?: {
+    journeyId: string
+    revision: number
+    checkpointRef: string
+    /**
+     * `steps[].human_task.output_port.record_type` — the record type a committed
+     * completion CREATES (server projection of the declaration). The ONLY source
+     * a door fills a surface's `:token` from; absent when the declaration names
+     * none, in which case a token surface gets NO door route (fail closed).
+     */
+    createdType?: string
+    candidateLabel: string
+    doors: Array<{
+      id: string
+      summary: string
+      surface: string
+      capabilityRef: string
+      candidateLabel: string
+    }>
+  }
 }
 
 export interface AiClarificationAnswer {

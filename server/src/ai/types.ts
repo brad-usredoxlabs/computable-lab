@@ -615,6 +615,14 @@ export interface AgentClarificationRequest {
   options: AgentClarificationOption[];
   allowCreateLocal?: boolean;
   /**
+   * L2-NOUN-CREATION-JOURNEY-1 (unit u1journey): the DECLARED creation journey
+   * an unbound MATERIAL noun is created through. The door list is projected
+   * from config/journey/declarations/noun-create.yaml by
+   * compiler/journey/journeyDeclarationDoors.ts and rides the clarification
+   * verbatim (the card renders these ids/surfaces — it coins none).
+   */
+  journey?: import('../compiler/resolution/types.js').ClarificationJourneyFact;
+  /**
    * Which material LAYER this question is about. The answer's options must be
    * drawn from that layer only — offering a bare concept beside a formulation and
    * an instance (the old flat /m menu) left the biologist guessing which kind of

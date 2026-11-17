@@ -45,6 +45,8 @@ import type {
   ScientistIntent,
   ScientistIntentUnresolvedFact,
 } from '../compiler/scientistIntent/types.js';
+import type { ClarificationJourneyFact } from '../compiler/resolution/types.js';
+import { notALocalTermReason } from '../compiler/journey/journeyDeclarationDoors.js';
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
 import type { LabStateSnapshot } from '../compiler/state/LabState.js';
 import { canonicalLabelKey, localMaterialIdForLabel } from '../materials/termId.js';
@@ -842,6 +844,18 @@ function factMessage(fact: ScientistIntentUnresolvedFact): string | undefined {
   return typeof message === 'string' && message.trim().length > 0 ? message : undefined;
 }
 
+/**
+ * L2-NOUN-CREATION-JOURNEY-1 (unit u1journey): the DECLARED creation journey a
+ * fact carries — the same generic structural read as `factReadings`
+ * (the engine projected it from config/journey/declarations/noun-create.yaml;
+ * the fact envelope itself is untouched, so a fact without a journey maps
+ * byte-identically to today's card).
+ */
+function factJourney(fact: ScientistIntentUnresolvedFact): ClarificationJourneyFact | undefined {
+  const journey = (fact as unknown as Record<string, unknown>)['journey'];
+  return journey !== null && typeof journey === 'object' ? journey as ClarificationJourneyFact : undefined;
+}
+
 /** The option snippet for one reading: its COMPUTED final fractions rendered
  *  through the DATA fraction format (compositionFractions.ts — the same
  *  `messages.fractionFormat` template the settle leg uses; the TS carries no
@@ -1156,6 +1170,16 @@ export function clarificationsFromUnresolvedFacts(
         assumedPrompt = entry.question;
       }
     }
+    const journey = factJourney(fact);
+    // L2-NOUN-CREATION-JOURNEY-1 (unit u1journey): an unbound material noun's
+    // fact carries the DECLARED journey. The card states the miss in the
+    // server's own words and offers one door per declared alternative — the
+    // "Which wells?" face is not this fact's answer (a well range cannot
+    // identify a material). Reads the journey structurally, like the
+    // reading/candidate arms: a fact without a journey maps byte-identically.
+    const journeyAbsence = journey !== undefined && candidateOptions.length === 0 && readings === undefined
+      ? { mention: journey.candidateLabel, reason: notALocalTermReason(journey.candidateLabel) }
+      : undefined;
     return {
       id: factRequestId(fact),
       kind,
@@ -1193,6 +1217,8 @@ export function clarificationsFromUnresolvedFacts(
         : candidateOptions,
       allowCreateLocal,
       unresolvedFact: fact,
+      ...(journey !== undefined ? { journey } : {}),
+      ...(journeyAbsence !== undefined ? { absence: journeyAbsence } : {}),
       ...(clarifyControl !== undefined ? { clarifyControl } : {}),
     };
   });
