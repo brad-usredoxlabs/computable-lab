@@ -113,3 +113,5 @@ base `180cbac54` AND at final `168ee73c6`** (both before and after the change).
 None known: the predicate change is confined to the one `creations.find` in the
 `create_record` branch; equipment/material creations are unaffected (kind-guarded), and the
 `record:<id>` handoff is covered by an existing leg that stayed green.
+
+L2-P1B-PRODUCT-IDENTITY-1-u2d1fix UNIT L2-P1B-PRODUCT-IDENTITY-1-u2d1fix DONE f1f0a4ed66c6246a1d7d267c9e3ad20edf73fab0
