@@ -211,6 +211,16 @@ tripwire below compares one hash against one file).
 | `DECK-ACTIONS-ARE-THE-OPERATION-l2-20261114.md` | 5845a6064 | the AI path invokes `addLabware`/`addLabwareFromRecord` and navigates to existing forms; it does not rebuild them |
 | `GC-ANALYSIS-IS-CL-SURFACE-l2-20261114.md` | 7b9ec0ad0 | GC analysis is CL's surface built to the 2026 manual's spec, not a separate app |
 
+Restated by Brad 2026-11-16 in a live exchange about the event editor: **attaching an
+instrument file belongs to the RUN record, not to an `analysis-run`** — i.e. the
+`RUN-IS-THE-PROVENANCE-RECORD` ruling above, applied to the Attach surface. The survey
+that produced the restatement (structure of the editor's six modes and seven drawer
+tabs, measured from the lane-2 stack, with the record-shape defect that a parsed row
+still requires a `well`) is at
+`~/.hermes/cl/lanes/2/reports/event-editor-results-survey-20261116/SUMMARY.md`.
+That survey's conclusions are NOT coder-facing authority; when a task is authored from
+it, the task cites this ruling, not the report.
+
 ## 6. What a brief must carry from this file
 
 - The distinction that governs the unit (section 2), quoted, with its owning file.
