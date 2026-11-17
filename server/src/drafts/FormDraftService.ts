@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 import type { AppContext } from '../server.js';
@@ -13,6 +14,9 @@ import { loadPipeline } from '../compiler/pipeline/PipelineLoader.js';
 import { runPipeline, type PassStatusEntry } from '../compiler/pipeline/PipelineRunner.js';
 import { DEFAULT_CONFIG as DEFAULT_APP_CONFIG } from '../config/types.js';
 import { stagingStore } from './StagingStore.js';
+import { resumeAfterMaterialCreation } from '../compiler/journey/nounCreateResume.js';
+import { loadJourneyDocument, journeyRefFromDocument } from '../compiler/journey/journeyDeclarationDoors.js';
+import { PendingIntentStore, type ResumeResult } from '../ai-threads/PendingIntentStore.js';
 
 export class DraftError extends Error {constructor(message:string,public status=422){super(message)}}
 
@@ -237,9 +241,73 @@ export class FormDraftService {
           if(this.ctx.authorizationService && !await this.ctx.authorizationService.ensureOwnerPolicy(write,this.actor))throw new DraftError(`Could not preserve access policy for ${write.recordId}.`,503);
         }
         await this.persist({...draft,status:'accepted'},env);
-        return compiled.result;
+        // L2-NOUN-CREATION-JOURNEY-1 (u2resume-v2): the ONE committed effect is now
+        // durable (accepted status persisted). A draft whose input declares the
+        // noun-create journey link resumes the parked origin turn BY IDENTITY — the
+        // pure u1journey leg classifies the return and the store compare-and-set
+        // flips the checkpoint to 'resumed' at most once. Every refusal is NOTED on
+        // the result; the seam never throws out of accept and never re-commits the
+        // creation. Unlinked drafts: the checkpoint store is untouched.
+        const journeyResume = await this.resumeNounCreateJourney(draft);
+        return journeyResume ? {...compiled.result,journeyResume} : compiled.result;
       }catch(error){throw new DraftError(`Save incomplete; retry Accept and save to finish the same draft. ${(error as Error).message}`,503);}
       });
     });
+  }
+  /** L2-NOUN-CREATION-JOURNEY-1 (u2resume-v2) — the return half of the declared noun-create
+   * journey, live at the accept seam. The link is DATA on the draft record (input.journey —
+   * the open object of form-draft.schema.yaml): the parked checkpoint id, the ai-threads
+   * store segments, and the ONE material record the parked checkpoint asked to create.
+   * Identity only: the return cites the committed record and its observed revision token;
+   * the origin prompt is recompiled from the checkpoint's verbatim anchor, never re-resolved. */
+  private async resumeNounCreateJourney(draft: DraftRecord): Promise<Record<string,unknown> | undefined> {
+    const link = object(object(draft.input).journey);
+    if(typeof link.checkpointId !== 'string' || link.checkpointId.length === 0) return undefined;
+    const note = (refusal: { code: string; message: string }) => ({ resumed: false, checkpointId: link.checkpointId, refusal });
+    try {
+      // Same root server.ts:1012-1013 wires (env override first; the workspace default otherwise).
+      const store = new PendingIntentStore({
+        rootDir: process.env.AI_THREADS_ROOT || join(this.ctx.workspaceRoot, 'var', 'ai-threads'),
+        userId: this.actor,
+        endpoint: typeof link.endpoint === 'string' && link.endpoint !== '' ? link.endpoint : 'agent-chat',
+        threadId: typeof link.threadRef === 'string' ? link.threadRef : '',
+      });
+      const checkpoint = await store.load(link.checkpointId);
+      if(!checkpoint) return note({ code: 'checkpoint-not-found', message: `no checkpoint document is stored for this thread; the creation committed and stays the only effect` });
+      const declaration = loadJourneyDocument(checkpoint.journey_ref);
+      if(declaration === undefined) return note({ code: 'journey-declaration-missing', message: `no shipped journey declaration declares '${checkpoint.journey_ref}'` });
+      const journey = journeyRefFromDocument(declaration);
+      const committedRecordId = typeof link.materialRecordId === 'string' ? link.materialRecordId : '';
+      const materialEnv = committedRecordId !== '' ? await this.ctx.store.get(committedRecordId) : null;
+      if(!materialEnv) return note({ code: 'material-record-missing', message: `the draft declares material record '${committedRecordId}' but it is not stored` });
+      const committedRevision = token(materialEnv) ?? 'unobserved';
+      const verdict = resumeAfterMaterialCreation({
+        checkpoint,
+        journey,
+        creation: { committedRecordId, committedRevision, resultType: 'completed', acceptedBy: { actor: this.actor, at: this.clock() } },
+      });
+      if(verdict.kind !== 'resume') return note({ code: verdict.code, message: verdict.message });
+      const resume: ResumeResult = await store.resume(checkpoint.checkpoint_id, {
+        expectedVersion: checkpoint.concurrency_version,
+        receiptId: `RESUME-${draft.id}-v${checkpoint.concurrency_version}`,
+        resumedAt: this.clock(),
+        resumedBy: this.actor,
+        outcome: `draft ${draft.id} committed record ${committedRecordId}; the origin turn resumes by identity`,
+      });
+      if(!resume.ok) return note({ code: resume.diagnostics[0]?.code ?? 'resume-refused', message: resume.diagnostics.map(d => d.code).join(',') });
+      return {
+        resumed: true,
+        checkpointId: checkpoint.checkpoint_id,
+        originPromptText: verdict.originPromptText,
+        delta: verdict.delta,
+        checkpointRef: verdict.checkpointRef,
+        requireExplicitResume: verdict.requireExplicitResume,
+        committedRecordId,
+        committedRevision,
+        receipt: resume.checkpoint.resume_receipt,
+      };
+    } catch(error) {
+      return note({ code: 'resume-error', message: (error as Error).message });
+    }
   }
 }
