@@ -58,3 +58,13 @@
   color: var(--cl-accent, #4b8bbe);
 }
 
+/* d2persist: a deck save that failed — the placement is not durable yet. */
+.run-deck-save-error {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--cl-danger, #cf222e);
+  background: color-mix(in srgb, var(--cl-danger, #cf222e) 12%, transparent);
+  color: var(--cl-danger, #cf222e);
+  font-size: 12px;
+}
+

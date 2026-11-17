@@ -17,6 +17,7 @@ import { DeckChatSlice } from '../event-editor/deck/DeckChatSlice'
 import { SurfaceChatBridge } from '../shared/shell/SurfaceChatBridge'
 import type { AiContext } from '../types/aiContext'
 import { RunWorkspaceShell } from './RunWorkspaceShell'
+import { RunDeckPersistence } from './RunDeckPersistence'
 import { useModeToggle, ModeToggle, type RunMode } from './lib/mode-toggle'
 import { ExecutionView } from '../graph/execution/ExecutionView'
 import { DeckViewer } from '../event-editor/viewer/deck/DeckViewer'
@@ -226,6 +227,10 @@ export function RunWorkspacePage() {
                   required_providers: [deck]); a missing publisher is a loud
                   error, never a silent empty pane. */}
               <DeckChatSlice />
+              {/* d2persist: a hand-placed labware on THIS deck commits through
+                  the existing governed save (the graph's editorLayout is the
+                  one placement authority); a failed save is visible. */}
+              <RunDeckPersistence />
               <SurfaceChatBridge host="run-workspace" base={{ context: aiContext }} />
               <RunWorkspaceShell
                 navPane={<RunNavPane title={title} runId={runId} studyId={resolvedStudyId} />}
