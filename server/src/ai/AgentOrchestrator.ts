@@ -3714,22 +3714,24 @@ export function createAgentOrchestrator(
               const alsoPlace = parseAlsoPlace(submitArgs.alsoPlace);
               onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: creations.length > 0, durationMs: 0 });
               const elapsed = Date.now() - t0;
-              // L2-P1B-PRODUCT-IDENTITY-1: a labware the user described in their own
-              // words is a QUALIFIED vendor product — not something chat can answer
-              // with a bare generic definition. The tool schema does not carry vendor /
-              // catalogue fields (records items are additionalProperties:false), so
-              // `source === 'user-description'` is the one authority that separates a
-              // described product from a product-identified one (record:<id> / exa:<url>).
-              // Refuse-and-route: name the next step (the + New product modal, or the
-              // definition page), and emit NO generic preview proposal.
+              // L2-P1B-PRODUCT-IDENTITY-1: a labware that is not identified by an
+              // EXISTING product record is a QUALIFIED vendor product — not something
+              // chat can answer with a bare generic definition. The tool schema does
+              // not carry vendor / catalogue fields (records items are
+              // additionalProperties:false), so `source` is the one authority — and it
+              // identifies an existing product record ONLY as `record:<id>`. An absent
+              // source (the field is optional), 'user-description', and 'exa:<url>'
+              // all leave the product unidentified. Refuse-and-route: name the next
+              // step (the + New product modal, or the definition page), and emit NO
+              // generic preview proposal.
               const qualifiedLabware = creations.find(
-                (c) => c.kind === 'labware' && c.source === 'user-description',
+                (c) => c.kind === 'labware' && !(typeof c.source === 'string' && c.source.startsWith('record:')),
               );
               const creationResult: AgentResult = qualifiedLabware
                 ? {
                   success: false,
                   error:
-                    `A labware described in your own words ("${qualifiedLabware.name}") is not something chat can author as a bare generic definition — it is a specific vendor product. `
+                    `A labware that is not identified by an existing product record ("${qualifiedLabware.name}") is not something chat can author as a bare generic definition — it is a specific vendor product. `
                     + 'Identify or create that product first: open the "+ New product" modal on /lab/labware and record the vendor, catalogue number, and the definition it realises, or create the definition at /lab/labware/new. Then place that product on the deck.',
                 }
                 : creations.length > 0
