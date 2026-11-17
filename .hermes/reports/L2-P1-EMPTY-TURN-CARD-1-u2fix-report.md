@@ -11,7 +11,8 @@ Commits (commit-per-step):
 - adfe308a2 s1: D2 client shape fix + real fixtures (app)
 - 0c47930f4 s2: D1 streamed-text guard gate + AC2 leg (server)
 - bd90ab09c s3: D3 reachability pin on the shipped default config (route a)
-- <this commit>: report + marker (paperwork; no behaviour change)
+- 66dd4cd76a052ab7528e96fd863ab38133ac3738 s4: report + marker (paperwork; no
+  behaviour change; marker sha corrected by the follow-up marker commits)
 
 ## Environment repair (uncommitted; every path git-ignored, tree stayed clean)
 - The lane-2 node stores (/mnt/vast/.../cl-integration-2/{,app/,server/}node_modules)
