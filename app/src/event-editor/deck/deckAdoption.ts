@@ -67,6 +67,13 @@ export interface DeckPreviewLike {
   ontologyBindings?: DraftOntologyBinding[]
   recordCreations?: AiRecordCreation[]
   sourcePrompt?: string
+  /**
+   * L2-P1B-PRODUCT-IDENTITY-1: the RESOLVED product (vendor-product record id)
+   * the placed labware carries, when the preview resolved one. Threaded to the
+   * mint so the instance ALSO names the specific product alongside its
+   * definition. Absent / empty → the instance is definition-only.
+   */
+  productRecordId?: string
 }
 
 /** The live editor state the adoption persists against + commits into. */
@@ -181,6 +188,10 @@ export async function adoptStagedPreview(
   const minted = await mintPlacedLabwareInstances({
     previewLabwares: preview.previewLabwares,
     materialized: creations.materialized ?? [],
+    // L2-P1B-PRODUCT-IDENTITY-1: a placement that resolved a specific product
+    // carries it through to the instance; absent → the instance is
+    // definition-only (vendorProductRef omitted).
+    productRecordId: preview.productRecordId,
   })
   for (const warning of minted.warnings) console.warn(`[labware instance] ${warning}`)
 

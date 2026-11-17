@@ -148,6 +148,14 @@ export function findUnplaceableLabware(
 export async function mintPlacedLabwareInstances(opts: {
   previewLabwares: Record<string, Labware>
   materialized: Array<MaterializedDefinitionCreation>
+  /**
+   * L2-P1B-PRODUCT-IDENTITY-1: the RESOLVED product (vendor-product record id)
+   * this placement carries, when one is. When present the minted instance ALSO
+   * names the specific product (vendorProductRef) alongside its definition
+   * (labwareId); when absent / empty the field is omitted entirely — a generic
+   * placement never gains a product identity.
+   */
+  productRecordId?: string
   createRecord?: (schemaId: string, payload: Record<string, unknown>) => Promise<unknown>
 }): Promise<{ instanceIds: string[]; instanceBindings: Record<string, string>; warnings: string[]; skipped: string[] }> {
   const { previewLabwares, materialized } = opts
@@ -156,6 +164,15 @@ export async function mintPlacedLabwareInstances(opts: {
   const instanceBindings: Record<string, string> = {}
   const warnings: string[] = []
   const skipped: string[] = []
+
+  // One product for the placement (a qualified placement carries exactly one
+  // specific product). Present + non-empty → the instance names it; otherwise
+  // the ref is ABSENT (never an empty string, never a guess).
+  const productRecordId = typeof opts.productRecordId === 'string' ? opts.productRecordId.trim() : ''
+  const vendorProductRef =
+    productRecordId.length > 0
+      ? { kind: 'record', id: productRecordId, type: 'vendor-product' }
+      : undefined
 
   for (const [key, labware] of Object.entries(previewLabwares)) {
     // Record id only: (1) the records-first creation for this placement
@@ -177,6 +194,9 @@ export async function mintPlacedLabwareInstances(opts: {
       kind: 'labware-instance',
       recordId,
       labwareId: definitionId,
+      // Product identity alongside the definition identity — only when a
+      // specific product is in scope. Absent otherwise (optional in the schema).
+      ...(vendorProductRef ? { vendorProductRef } : {}),
     })
     instanceIds.push(recordId)
     instanceBindings[key] = recordId

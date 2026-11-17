@@ -2,16 +2,28 @@ $schema: "https://json-schema.org/draft/2020-12/schema"
 $id: "https://computable-lab.com/schema/computable-lab/vendor-product.schema.yaml"
 title: "Vendor Product"
 description: >
-  A commercial catalog product sourced from a vendor. Vendor products are linked
-  to a canonical material concept but preserve vendor/catalog/grade details
-  without requiring inventory receiving workflows.
+  A commercial catalog product sourced from a vendor. A product realises EXACTLY ONE
+  referent: a canonical material concept (material_ref) for a substance, or a labware
+  DEFINITION (labware_definition_ref) for a physical consumable such as a plate. It
+  preserves vendor / manufacturer / catalog / grade details without requiring inventory
+  receiving workflows. Brad 2026-11-16: a generic design is sufficient to begin
+  authoring but is NOT evidence of a particular purchased product — this record is where
+  that purchased identity lives.
 
 type: object
 unevaluatedProperties: false
 allOf:
 - $ref: "./common.schema.yaml#/$defs/FAIRCommon"
 
-required: [ kind, id, name, vendor, catalog_number, material_ref ]
+required: [ kind, id, name, vendor, catalog_number ]
+
+# EXACTLY ONE referent (Brad 2026-11-16, product-identity ruling). A product that
+# realises a substance points at a material concept; a product that realises a physical
+# consumable points at the labware definition it instantiates. Both or neither is a
+# defect: it is the difference between "which chemical" and "which plate".
+oneOf:
+- required: [ material_ref ]
+- required: [ labware_definition_ref ]
 
 properties:
   kind:
@@ -26,13 +38,30 @@ properties:
 
   vendor:
     type: string
+    description: "The SELLER the product was purchased from. Not necessarily the maker — see manufacturer."
+
+  manufacturer:
+    type: string
+    description: >
+      The entity that MAKES the product, when it differs from the seller (Brad
+      2026-11-16: a seller and a manufacturer are not the same entity). Absent when
+      unknown — never copied from `vendor` to fill the gap.
 
   catalog_number:
     type: string
+    description: "The vendor's catalogue number, carried VERBATIM (e.g., A58941). Never normalised, never truncated."
 
   material_ref:
     $ref: "./datatypes/ref.schema.yaml"
-    description: "Canonical linked material concept."
+    description: "Canonical linked material concept. Required when this product realises a substance."
+
+  labware_definition_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: >
+      The labware DEFINITION this product realises (e.g. the 384-well black-walled
+      clear-bottom plate type). Required when this product realises a physical
+      consumable. The definition stays the single authority for geometry; this record
+      adds the purchased identity (maker, catalogue number) on top of it.
 
   grade:
     type: string
