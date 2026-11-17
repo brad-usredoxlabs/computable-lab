@@ -165,4 +165,4 @@ Plus this report + marker commit (paperwork only).
 None. Implementation complete; independent reviewer owns acceptance. No YAML
 changed — no lane-stack reload needed.
 
-L2-P1-EMPTY-TURN-CARD-1-u2fix-l2t2707.txt UNIT unit DONE PLACEHOLDER
+L2-P1-EMPTY-TURN-CARD-1-u2fix-l2t2707.txt UNIT unit DONE 66dd4cd761516a3a20947e4a5649929f83b5a69d
