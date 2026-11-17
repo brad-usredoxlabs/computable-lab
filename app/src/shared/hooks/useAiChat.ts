@@ -1700,6 +1700,19 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
       // proposed" — the same delivered-change arm as deckLayoutDelivered.
       let navActionDelivered = false
 
+      // L2-P1-EMPTY-TURN-CARD-1 u1 (c3): whether THIS turn's record-draft
+      // INTENT frame was relayed to the host (the record_draft_proposal block
+      // below). The relay is a HANDLING signal, not a MOUNT report — the host
+      // callback returns void, so the done branch cannot know the card mounted.
+      // A relayed frame that left the turn with NO delivered channel (the
+      // no-channel arm in the done branch) is a "record draft that did not
+      // mount": the turn-scoped relayed flag is the only evidence of the
+      // frame's channel, and the wall names it instead of settling with the
+      // "No events generated." narration alone (gate PROMPT1-GATE-
+      // 20261114T133918Z draw 1: same sentence, draw 1 narration-only with
+      // cardCount 0).
+      let relayedRecordDraft = false
+
       // L2-CLARIFY-CARD-1 (defect 6, ruling l2t1951 Q2 re-send leg): every
       // send of this thread RE-SENDS the requestId-keyed answers the thread has
       // already recorded (the answer user messages, live or rehydrated from
@@ -1855,6 +1868,7 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
               try {
                 recordDraftProposalRef.current(event.recordDraft)
                 handledProposalFrame = true
+                relayedRecordDraft = true
               } catch (err: unknown) {
                 setMessages((prev) => [
                   ...prev,
@@ -2183,6 +2197,14 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
               // "did not propose any changes" bubble must not contradict it in
               // the same turn. The two emptiness gates key on this ONE fact.
               const recordCreationsDelivered = (result.recordCreations?.length ?? 0) > 0
+              // L2-P1-EMPTY-TURN-CARD-1 u1 (c3): a relayed record-draft frame
+              // whose draft did not STAGE through the deck seam (recordDraftStaged
+              // above — requires recordCreations) is a HANDLING signal, not a
+              // delivery: the universal done arm has no mount arm for the frame
+              // alone, so the turn can end with nothing mounted. The
+              // no-channel arm below (when no other delivered channel fired)
+              // names this channel instead of suppressing the wall.
+              const relayedDraftUnstaged = relayedRecordDraft && !recordDraftStaged
               // Lane-1 GATE-FIX-1 D1 carried through the merge: when this turn's
               // intent frame was HANDLED by a proposal relay, the card the host
               // renders IS the proposal — the wall must not say nothing was
@@ -2274,6 +2296,56 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
                         : ''
                   } and asked no questions.${closing}`,
                 )
+              }
+              // L2-P1-EMPTY-TURN-CARD-1 u1 (c3): the terminal else-arm INSIDE
+              // the zero-events block — the gate PROMPT1-GATE-20261114T133918Z
+              // draw 1 defect. A relayed record-draft frame sets
+              // handledProposalFrame (the relay block) while NOTHING mounted
+              // (the host callback returns void — a handling signal, not a
+              // mount report), so BOTH gates above can skip: the wall gate on
+              // !handledProposalFrame, the bubble gate the same way. The turn
+              // then settles with only the "No events generated." narration
+              // and cardCount 0 — the forbidden silently-empty turn. This arm
+              // fires the honest wall when the zero-events arm completes with
+              // NO delivered channel: it is the one statement (the bubble's
+              // "nothing was proposed" is false beside it — onevoice) and it
+              // NAMES the channel that did not mount plus the next step (the
+              // unknown-noun route when the payload carries an unresolved ref
+              // with that reason — the same "Create local term" route the
+              // RefPicker mint row offers; the wall points at it, never
+              // creates a term). recordCreationsDelivered stays a delivery the
+              // first gate names — untouched.
+              const noChannelDelivered =
+                !askedQuestion &&
+                !surfacedError &&
+                !answerDelivered &&
+                !navActionDelivered &&
+                !deckLayoutDelivered &&
+                !recordCreationsDelivered &&
+                !((result.labwareAdditions?.length ?? 0) > 0 ||
+                  (result.instrumentApplianceJobs?.length ?? 0) > 0)
+              if (noChannelDelivered) {
+                const unknownNoun = (result.unresolvedRefs ?? []).find(
+                  (p) => (p.ref as { reason?: unknown }).reason === 'unknown-noun',
+                )
+                const parts: string[] = []
+                if (relayedDraftUnstaged) parts.push('a record draft that did not mount')
+                if (unknownNoun) {
+                  const refLabel = (unknownNoun.ref as { label?: unknown }).label
+                  parts.push(
+                    `an unresolved reference (${
+                      typeof refLabel === 'string' && refLabel.length > 0 ? refLabel : 'unknown-noun'
+                    }, unknown-noun)`,
+                  )
+                }
+                if (parts.length > 0) {
+                  const nextStep = unknownNoun
+                    ? ' Next step: create a local term for the unresolved reference (the "Create local term" route), then resend the prompt.'
+                    : ' Next step: the proposal channel could not be mounted on this surface — review the preserved draft or resend the prompt.'
+                  setHonestWall(
+                    `Draft produced no events — it delivered only ${parts.join(' and ')} and asked no questions.${nextStep}`,
+                  )
+                }
               }
               // L2-SUITE-A-uifix1 D3+D1 (+ F4 fix1): the bubble claims NOTHING
               // was proposed. It is false when the turn asked a question (the

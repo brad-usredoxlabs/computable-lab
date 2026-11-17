@@ -75,7 +75,10 @@ describe('useAiChat — L2-P1-EMPTY-TURN-CARD-1 u1: zero-events turn with no del
     await waitFor(() => expect(hook.current.honestWall).toBeTruthy())
     expect(hook.current.honestWall).toContain('Draft produced no events')
     // The narration tail still lands in the assistant message (unchanged).
-    const last = hook.current.messages[hook.current.messages.length - 1]
-    expect(String(last.content)).toContain('No events generated.')
+    // (The empty-success bubble appends AFTER the assistant row — the pinned
+    // order (empty.test.ts / hydrationClobber.test.tsx) — so assert the
+    // assistant row's content, not the last row's.)
+    const assistant = hook.current.messages[hook.current.messages.length - 2]
+    expect(String(assistant.content)).toContain('No events generated.')
   })
 })
