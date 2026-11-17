@@ -268,6 +268,10 @@ describe('u1acqdoor — the run-owned acquisition section + the toolbar Data aff
     fireEvent.change(screen.getByTestId('run-acquisition-attach-directory'), {
       target: { value: 'machine1/RES1.D' },
     })
+    // u2fix: the assay starts UNSELECTED — an explicit choice is required.
+    fireEvent.change(screen.getByTestId('run-acquisition-attach-assay'), {
+      target: { value: 'gc_ms' },
+    })
     mocks.registerAcquisitionPackage.mockResolvedValue({
       packageRecordId: 'ACQP-NEW-1',
       packagePayload: {},
@@ -282,7 +286,7 @@ describe('u1acqdoor — the run-owned acquisition section + the toolbar Data aff
     expect(body.directoryKey).toBe('machine1/RES1.D')
     expect(body.sourceRunRef).toEqual({ kind: 'record', id: RUN_ID, type: 'run' })
     expect(body.eventGraphRef).toEqual({ kind: 'record', id: EG_ID, type: 'event-graph' })
-    expect(body.assayType).toBe('other')
+    expect(body.assayType).toBe('gc_ms')
     expect(body.entryRef).toBeUndefined()
     expect(body.materialRef).toBeUndefined()
   })
@@ -348,6 +352,69 @@ describe('u1acqdoor — the run-owned acquisition section + the toolbar Data aff
     // The created timestamps (the package records carry registeredAt).
     expect(section.closest('section')!.textContent).toContain('2026-11-15T10:00:00.000Z')
     expect(section.closest('section')!.textContent).toContain('2026-11-16T11:00:00.000Z')
+    // u2fix (defect 1, decision rule 4 "one run, many instruments"): a run that
+    // ALREADY has attached packages still shows the attach control — the
+    // second readout is reachable on the non-empty list.
+    const attachBtn = screen.getByTestId('run-acquisition-attach')
+    expect(attachBtn).toBeTruthy()
+    fireEvent.click(attachBtn)
+    const form = await screen.findByTestId('run-acquisition-attach-form')
+    expect(form).toBeTruthy()
+    fireEvent.change(screen.getByTestId('run-acquisition-attach-directory'), {
+      target: { value: 'machine2/RES2.D' },
+    })
+    fireEvent.change(screen.getByTestId('run-acquisition-attach-assay'), {
+      target: { value: 'gc_fid' },
+    })
+    mocks.registerAcquisitionPackage.mockResolvedValue({
+      packageRecordId: 'ACQP-NEW-2',
+      packagePayload: {},
+      entryRecordId: '',
+    })
+    fireEvent.click(screen.getByTestId('run-acquisition-attach-register'))
+    // A SECOND register call through the SAME run-scoped write (one method).
+    await waitFor(() => {
+      expect(mocks.registerAcquisitionPackage).toHaveBeenCalledTimes(1)
+    })
+    const second = mocks.registerAcquisitionPackage.mock.calls[0][0] as Record<string, unknown>
+    expect(second.deviceId).toBe('dev-1')
+    expect(second.directoryKey).toBe('machine2/RES2.D')
+    expect(second.sourceRunRef).toEqual({ kind: 'record', id: RUN_ID, type: 'run' })
+    expect(second.eventGraphRef).toEqual({ kind: 'record', id: EG_ID, type: 'event-graph' })
+    expect(second.assayType).toBe('gc_fid')
+  })
+
+  it('(b3) u2fix: register WITHOUT selecting an assay is refused — no register call, visible error; after selecting it registers', async () => {
+    renderPage()
+    await screen.findByTestId('run-acquisition-attach')
+    fireEvent.click(screen.getByTestId('run-acquisition-attach'))
+    await screen.findByTestId('run-acquisition-attach-form')
+    fireEvent.change(screen.getByTestId('run-acquisition-attach-directory'), {
+      target: { value: 'machine1/RES1.D' },
+    })
+    // The assay select starts UNSELECTED (empty value + a disabled placeholder
+    // option) — the user never touches it.
+    const assaySelect = screen.getByTestId('run-acquisition-attach-assay') as HTMLSelectElement
+    expect(assaySelect.value).toBe('')
+    fireEvent.click(screen.getByTestId('run-acquisition-attach-register'))
+    await screen.findByTestId('run-acquisition-attach-error')
+    expect(screen.getByTestId('run-acquisition-attach-error').textContent).toBeTruthy()
+    // Refused: NO register call fired.
+    expect(mocks.registerAcquisitionPackage).not.toHaveBeenCalled()
+    // After selecting an assay, the same form registers.
+    fireEvent.change(assaySelect, { target: { value: 'qpcr' } })
+    mocks.registerAcquisitionPackage.mockResolvedValue({
+      packageRecordId: 'ACQP-NEW-3',
+      packagePayload: {},
+      entryRecordId: '',
+    })
+    fireEvent.click(screen.getByTestId('run-acquisition-attach-register'))
+    await waitFor(() => {
+      expect(mocks.registerAcquisitionPackage).toHaveBeenCalledTimes(1)
+    })
+    const body = mocks.registerAcquisitionPackage.mock.calls[0][0] as Record<string, unknown>
+    expect(body.assayType).toBe('qpcr')
+    expect(body.sourceRunRef).toEqual({ kind: 'record', id: RUN_ID, type: 'run' })
   })
 
   it('(d) the toolbar Data affordance opens the section on the SAME route (no navigation away from /runs/<id>)', async () => {
@@ -392,6 +459,10 @@ describe('u1acqdoor — the run-owned acquisition section + the toolbar Data aff
     expect(screen.queryByTestId('run-acquisition-section')).toBeNull()
     expect(screen.queryByTestId('run-acquisition-empty')).toBeNull()
     expect(screen.queryByTestId('run-acquisition-attach')).toBeNull()
+    // u2fix (defect 2): the toolbar Data affordance is gated on runKind ===
+    // 'run' — a non-'run' record shows NO Data button (and no acquisition
+    // section).
+    expect(screen.queryByTestId('run-toolbar-data')).toBeNull()
   })
 
   it('(f) an unresolvable id (404) preserves current not-found behaviour: shell renders, NO section, NO guessed kind label', async () => {
