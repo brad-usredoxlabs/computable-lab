@@ -225,4 +225,58 @@ describe('mintPlacedLabwareInstances — one instance per placed labware, defini
     expect(res.instanceIds).toHaveLength(1)
     vi.resetModules()
   })
+
+  describe('L2-P1B-PRODUCT-IDENTITY-1 — product identity on the minted instance', () => {
+    it('a) a placement carrying a RESOLVED product writes BOTH the definition identity (labwareId) AND the product identity (vendorProductRef) on ONE labware-instance', async () => {
+      const createRecord = vi.fn(async (_schemaId: string, _payload: Record<string, unknown>) => undefined)
+      const res = await mintPlacedLabwareInstances({
+        previewLabwares: { P1: mkLabware('P1') },
+        materialized: [created('P1', 'LBW-96WELL')],
+        productRecordId: 'VPR-THERMO-A58941',
+        createRecord,
+      })
+      expect(createRecord).toHaveBeenCalledTimes(1)
+      const payload = createRecord.mock.calls[0][1] as Record<string, unknown>
+      // BOTH identities on the SAME instance — the definition and the specific product.
+      expect(payload.labwareId).toBe('LBW-96WELL')
+      expect(payload.vendorProductRef).toEqual({
+        kind: 'record',
+        id: 'VPR-THERMO-A58941',
+        type: 'vendor-product',
+      })
+      expect(res.instanceIds).toHaveLength(1)
+      expect(res.warnings).toEqual([])
+    })
+
+    it('b) a GENERIC placement (no product) OMITS vendorProductRef entirely — never an empty string', async () => {
+      const createRecord = vi.fn(async (_schemaId: string, _payload: Record<string, unknown>) => undefined)
+      const res = await mintPlacedLabwareInstances({
+        previewLabwares: { P1: mkLabware('P1') },
+        materialized: [created('P1', 'LBW-96WELL')],
+        createRecord,
+      })
+      expect(createRecord).toHaveBeenCalledTimes(1)
+      const payload = createRecord.mock.calls[0][1] as Record<string, unknown>
+      expect(payload.labwareId).toBe('LBW-96WELL')
+      // Absent, not undefined-valued, not an empty string.
+      expect('vendorProductRef' in payload).toBe(false)
+      expect(payload.vendorProductRef).toBeUndefined()
+      expect(res.instanceIds).toHaveLength(1)
+    })
+
+    it('c) productRecordId that is an empty string is treated as ABSENT (never written as an empty ref)', async () => {
+      const createRecord = vi.fn(async (_schemaId: string, _payload: Record<string, unknown>) => undefined)
+      const res = await mintPlacedLabwareInstances({
+        previewLabwares: { P1: mkLabware('P1') },
+        materialized: [created('P1', 'LBW-96WELL')],
+        productRecordId: '',
+        createRecord,
+      })
+      expect(createRecord).toHaveBeenCalledTimes(1)
+      const payload = createRecord.mock.calls[0][1] as Record<string, unknown>
+      expect(payload.labwareId).toBe('LBW-96WELL')
+      expect('vendorProductRef' in payload).toBe(false)
+      expect(res.instanceIds).toHaveLength(1)
+    })
+  })
 })
