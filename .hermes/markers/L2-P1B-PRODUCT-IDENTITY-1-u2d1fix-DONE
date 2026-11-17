@@ -1,0 +1,7 @@
+L2-P1B-PRODUCT-IDENTITY-1-u2d1fix DONE marker — real commit SHAs from git (branch cl/lane2-p1b-product-identity-u1-l2t2701, base 180cbac54d5844db1db830a07948271d658b4895):
+
+448a64b398836cc1c437a06c0160e394248161d3 test(L2-P1B-PRODUCT-IDENTITY-1 u2d1fix): RED — labware create_record with NO source / exa:<url> source slips past the gate (success:true, generic preview)
+168ee73c61705478ba7fa1ee08d55091fc1e80dc fix(L2-P1B-PRODUCT-IDENTITY-1 u2d1fix): the chat labware gate refuses every source that does not identify an existing product record
+f1f0a4ed66c6246a1d7d267c9e3ad20edf73fab0 report(L2-P1B-PRODUCT-IDENTITY-1 u2d1fix): seam-fix report — D1 predicate flip RED->GREEN, baselines, stale-brief disclosure
+
+L2-P1B-PRODUCT-IDENTITY-1-u2d1fix UNIT L2-P1B-PRODUCT-IDENTITY-1-u2d1fix DONE f1f0a4ed66c6246a1d7d267c9e3ad20edf73fab0
