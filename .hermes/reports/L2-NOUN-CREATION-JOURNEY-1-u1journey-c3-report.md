@@ -5,7 +5,7 @@ Branch cl/lane2-nounjourney-u1-1655 · base c84c59753cdd66eb07885745d9b2c0e81d86
 Tier: consequential. Fixing advc c2 §4 D1-D3
 (/home/brad/.hermes/cl/lanes/2/reviews/L2-NOUN-CREATION-JOURNEY-1-u1journey-advc-c2-l2t2704.md).
 
-## What changed (3 seams, 4 commits)
+## What changed (3 seams, 5 commits)
 
 1. D2 — the declared record type becomes the authority (commit 019e723ac)
    `server/src/compiler/journey/journeyDeclarationDoors.ts`
@@ -121,3 +121,4 @@ server/src/compiler/resolution/types.ts
   read only, never edited — no reload needed for this cycle's behaviour).
 - Independent browser review (AC1 reload on /ingestion?... and AC2 door 2/3
   landing on /record/new/material?prefillName=...).
+L2-NOUN-CREATION-JOURNEY-1-u1journey-c3 UNIT unit DONE 65a0cfe58b1e4bf85d751e2f8898be3711dd5efc
