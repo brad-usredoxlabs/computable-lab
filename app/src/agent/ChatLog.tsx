@@ -30,6 +30,10 @@ import { ParameterAnswerInput } from '../event-editor/right-pane/ai/ParameterAns
 import { ClarifyAssumedChip } from './ClarifyAssumedChip'
 import { ClarifyWellTargetSlot } from './ClarifyWellTargetSlot'
 import { ChatClarificationCard } from './ChatClarificationCard'
+// L2-NOUN-CREATION-JOURNEY-1 (u1journey c2 FIX 2): the single-fact absence
+// arm renders the DECLARED journey doors with the SAME href/label builders
+// the grouped card uses — one door vocabulary, never a second copy.
+import { journeyDoorHref, journeyDoorLabel } from './journeyDoorHref'
 import { ANSWER_KIND_WORD } from '../shared/taptab/slashMenu/tokens'
 import './ChatLog.css'
 
@@ -401,6 +405,8 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
     const hasPicker = requestHasPicker(request)
     const promptAlreadyShown = shownPrompts.has(request.prompt)
     if (!promptAlreadyShown) shownPrompts.add(request.prompt)
+    // The DECLARED journey the fact carries (unbound material noun only).
+    const journey = request.journey
     return <div className="chat-log-clarification" key={`req-${messageId}-${request.id}`} data-testid={`chat-log-request-${request.id}`}>
       {!promptAlreadyShown && <p>{request.prompt}</p>}
       {/* Exactly ONE answer surface per request (the grouped card's law,
@@ -442,13 +448,41 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
         // mirrors the card (an absence WITH options offers the options).
         <div className="chat-clarification-card__absent">
           <p className="chat-clarification-card__absent-reason">{request.absence.reason}</p>
-          <a
-            className="chat-clarification-card__absent-create"
-            data-testid="chat-clarification-absent-create"
-            href={`/lab/labware/new?prefillName=${encodeURIComponent(request.absence.mention)}`}
-          >
-            Create this record
-          </a>
+          {/* L2-NOUN-CREATION-JOURNEY-1 (u1journey c2 FIX 2): an unbound
+              MATERIAL noun carries the DECLARED journey on the fact. This
+              single-fact arm must render the SAME doors the grouped card
+              renders (ChatClarificationCard.tsx:230-249) — before this fix it
+              ignored `request.journey` entirely and offered the labware
+              create link for a material noun. A labware miss (no journey)
+              keeps the single create anchor byte-identically. */}
+          {journey !== undefined && journey.doors.length > 0 ? (
+            <ul className="chat-clarification-card__journey-doors" data-testid="chat-clarification-journey-doors">
+              {journey.doors.map((door) => (
+                <li key={door.id}>
+                  <a
+                    className="chat-clarification-card__journey-door"
+                    data-testid={`chat-clarification-door-${door.id}`}
+                    data-surface={door.surface}
+                    href={journeyDoorHref(
+                      { ...door, candidateLabel: door.candidateLabel || journey.candidateLabel },
+                      journey,
+                    )}
+                    title={door.summary}
+                  >
+                    {journeyDoorLabel(door.id)}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <a
+              className="chat-clarification-card__absent-create"
+              data-testid="chat-clarification-absent-create"
+              href={`/lab/labware/new?prefillName=${encodeURIComponent(request.absence.mention)}`}
+            >
+              Create this record
+            </a>
+          )}
         </div>
       ) : options.length > 0 && onClarificationPick ? (
         <ol className="chat-log-clarification-options">
