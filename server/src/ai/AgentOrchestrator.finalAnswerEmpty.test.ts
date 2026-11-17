@@ -109,17 +109,23 @@ function finalAnswerRequest(): AgentRequest {
   } as unknown as AgentRequest;
 }
 
-async function runFinalAnswer(content: string, finishReason = 'stop', prompt?: string) {
+async function runFinalAnswer(
+  content: string,
+  finishReason = 'stop',
+  prompt?: string,
+  opts: { draftFlowMode?: 'forced-tool' | 'preflight-llm' | 'preflight-deterministic'; forceDraftTool?: boolean } = {},
+) {
   const model = finalAnswerModel(content, finishReason);
   const orchestrator = createAgentOrchestrator(
     model.client,
     { getToolDefinitions: () => [], executeTool: vi.fn() },
     { baseUrl: 'http://test.invalid', model: 'test-model', temperature: 0.1, maxTokens: 512 },
-    { maxTurns: 2 },
+    { maxTurns: 2, ...(opts.draftFlowMode ? { draftFlowMode: opts.draftFlowMode } : {}) },
     orchestratorDeps(),
   );
   const request = finalAnswerRequest();
   if (prompt !== undefined) request.prompt = prompt;
+  if (opts.forceDraftTool !== undefined) request.forceDraftTool = opts.forceDraftTool;
   return orchestrator.run(request);
 }
 
@@ -145,6 +151,19 @@ describe('L2-P1-EMPTY-TURN-CARD-1 u1finalsite — final-answer empty exit', () =
     );
     // absent-or-empty events (the turn produced no draft).
     expect(result.events ?? []).toHaveLength(0);
+    // L2-P1-EMPTY-TURN-CARD-1 (u2fix, advc defect 3 — D3 reachability, route a):
+    // this leg IS the deterministic probe. The harness's config is EXACTLY the
+    // shipped default config: draftFlowMode absent → constructor default
+    // 'forced-tool' (:1367; lane2-config.yaml's ai: block ships no
+    // draftFlowMode), deterministicOnly absent → false. On it, the default
+    // forceDraftTool resolves true (:1544) — the probe's request
+    // forceDraftTool:false overrides that to false (explicit false wins the
+    // ?? chain), the forceDraftTool-gated recovery arms are skipped, preflight
+    // is skipped (:2104-2105), and the no-tool-call final-answer arm reaches
+    // the empty-guard's error arm. PROBE RECEIPT: the wall this leg asserts
+    // (byte-equal, one authority — the assertion just above) proves the AC1
+    // exit is reachable on the shipped default config, not only on the
+    // adversarial probe.
   });
 
   it('AC1b: a truncated (finish_reason "length") no-tool-call answer names the output limit, not a stop', async () => {
@@ -193,6 +212,49 @@ describe('L2-P1-EMPTY-TURN-CARD-1 u1finalsite — final-answer empty exit', () =
     expect(result.success).toBe(true);
     expect(result.error).toBeUndefined();
     expect((result.notes ?? []).length).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// L2-P1-EMPTY-TURN-CARD-1 (u2fix, advc defect 1 — AC2): a turn that delivered
+// STREAMED assistant text must show no honest-wall error and stay byte-identical
+// to pre-guard behavior.
+//
+// Mechanism: on a draftFlowMode where the stream loop streams text to the
+// person (the text_delta fork at :2526 is declared by `draftFlowMode !==
+// 'forced-tool'`), the model's full assistant body — including a JSON
+// deliverable body like {"events":[]} — is DELIVERED to the person as streamed
+// text. Pre-guard behavior for that no-tool-call turn was success:true,
+// events:[] (the client's "No events generated"); the u1finalsite guard
+// added an honest-wall error on top of the delivered text — the AC2
+// violation. The guard now gates on "no non-empty assistant text this run"
+// (the content carrier of the streamed body; the fork is the SAME declared
+// draftFlowMode condition as the stream loop's — not re-derived), so a
+// turn whose text reached the person is byte-identical to pre-guard. On the
+// shipped config (forced-tool, the :2526 fork holds) nothing is streamed, so
+// the identical JSON-body turn still reaches the wall (the AC1 leg pins it) —
+// one authority, no second predicate.
+// ---------------------------------------------------------------------------
+
+describe('L2-P1-EMPTY-TURN-CARD-1 u2fix — AC2: streamed-text turns are never honest-walled', () => {
+  it('AC2: a streamed JSON-body answer on a streaming mode is UNCHANGED (pre-guard bytes) — success, no error, no card', async () => {
+    const body = '{"events":[],"notes":[]}';
+    const result = await runFinalAnswer(
+      body,
+      'stop',
+      undefined,
+      { draftFlowMode: 'preflight-llm' },
+    );
+    // NOT the honest wall: the body above was streamed to the person.
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+    // byte-identical to pre-guard behavior (the pre-u1finalsite no-tool-call
+    // final-answer shape: parsed deliverables only):
+    expect(result.events ?? []).toHaveLength(0);
+    expect(result.notes ?? []).toHaveLength(0);
+    // the guard body never ran on this turn (one authority — the card is
+    // attached ONLY by the guard; skipped here, key absent):
+    expect(result.clarificationRequests ?? []).toHaveLength(0);
   });
 });
 

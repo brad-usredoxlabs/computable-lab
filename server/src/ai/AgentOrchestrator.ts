@@ -3169,10 +3169,26 @@ export function createAgentOrchestrator(
           // turn bypassed the guard entirely, so a notes prose naming a
           // labware the lab does not hold persisted with NO metadata at all
           // (gate r9 defect 2, legC2 e018cfe4 "Nunc CryoBox 12x12").
+          // L2-P1-EMPTY-TURN-CARD-1 (u2fix, advc defect 1 — AC2): a turn that
+          // actually STREAMED assistant text delivered that text to the person
+          // (the stream loop's text_delta fork, :2526 — declared by the SAME
+          // draftFlowMode condition, not re-derived here) and must NOT be
+          // errored by this guard. In-scope content carrier: assistantMsg.content
+          // (the non-streaming final-answer path accumulates the full text there;
+          // the streaming path delivers via text_delta and is excluded by the
+          // same declared fork). On the shipped config (draftFlowMode 'forced-tool'
+          // — config absent → constructor default) the fork holds, so no text
+          // is streamed and the AC1 JSON-body turn stays wall-able; the gate
+          // below is a NO-OP there and active only where streaming exists.
+          // Same one-authority predicates (draftProducedNothingOnServer +
+          // emptyDraftMessage); no second emptiness check, no new message.
           if (
             !isDocDiscussionTurn &&
             result.success &&
-            draftProducedNothingOnServer(result)
+            draftProducedNothingOnServer(result) &&
+            !(draftFlowMode !== 'forced-tool' &&
+              typeof assistantMsg.content === 'string' &&
+              assistantMsg.content.trim().length > 0)
           ) {
             // L2-P1-EMPTY-TURN-CARD-2 (u1emptycard): the empty-turn guard's NAMED
             // ABSENCE card — the user's sentence (effectivePrompt, the last user
