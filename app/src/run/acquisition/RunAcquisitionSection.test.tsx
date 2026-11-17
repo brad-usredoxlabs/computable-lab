@@ -110,6 +110,20 @@ vi.mock('../RunPlanGraphBuild', () => ({
 vi.mock('../gc/GcRunSheetSection', () => ({
   GcRunSheetSection: () => <div data-testid="gc-run-sheet">gc-companion</div>,
 }))
+// The universal-chat machinery (DeckChatSlice + SurfaceChatBridge) reads the
+// event editor + the chat registry — out of scope for the data-door test. Stub
+// to inert (the gc-section lock uses the same posture: it never asserts on the
+// chat). The page's OWN getRecordWithUI + the section's listRecordsByKind stay
+// real (mocked at the client seam).
+vi.mock('../../event-editor/deck/DeckChatSlice', () => ({
+  DeckChatSlice: () => null,
+}))
+vi.mock('../../shared/shell/SurfaceChatBridge', () => ({
+  SurfaceChatBridge: () => null,
+}))
+vi.mock('../../agent/ChatFocusContext', () => ({
+  ChatFocusProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+}))
 vi.mock('../../event-editor/protocol/ProtocolSelectionContext', () => ({
   ProtocolSelectionProvider: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="rwp-protocol">{children}</div>
@@ -182,12 +196,14 @@ function LocationProbe() {
   return <span data-testid="location-probe">{loc.pathname}</span>
 }
 
-function renderPage(runId: string = RUN_ID) {
+function renderPage(runId: string = RUN_ID, listFixture: { records: unknown[]; total: number } = { records: [], total: 0 }) {
   mockUseParams.mockReturnValue({ runId })
   mocks.getRecordWithUI.mockResolvedValue(
     runEnvelope({ kind: 'run', studyId: 'STU-1', methodEventGraphId: EG_ID, title: 'Acq run' }),
   )
-  mocks.listRecordsByKind.mockResolvedValue({ records: [], total: 0 })
+  // The section's ONE listRecordsByKind('acquisition-package') reads THIS fixture
+  // (the default is the zero-package door; a test may pass attached packages).
+  mocks.listRecordsByKind.mockResolvedValue(listFixture)
   mocks.registerAcquisitionPackage.mockReset()
   mocks.getConfig.mockResolvedValue({ storageDevices: [{ id: 'dev-1', label: 'NAS device', default: true }] })
   return render(
@@ -272,7 +288,7 @@ describe('u1acqdoor — the run-owned acquisition section + the toolbar Data aff
   })
 
   it('(c) the non-empty list renders each attached package (record id + device/directory + created) with no invented chrome', async () => {
-    mocks.listRecordsByKind.mockResolvedValue({
+    const fixture = {
       records: [
         {
           recordId: 'ACQP-1',
@@ -314,21 +330,24 @@ describe('u1acqdoor — the run-owned acquisition section + the toolbar Data aff
         },
       ],
       total: 3,
-    })
-    renderPage()
-    const section = await screen.findByTestId('run-acquisition-section')
+    }
+    renderPage(RUN_ID, fixture)
+    // Wait for the LIST to render (the section mounts in the loading state —
+    // showing the empty state — before listRecordsByKind resolves; only once the
+    // packages arrive does the empty state clear and the list appear).
+    const section = await screen.findByText('ACQP-1')
     expect(screen.queryByTestId('run-acquisition-empty')).toBeNull()
-    expect(section!.textContent).toContain('ACQP-1')
-    expect(section!.textContent).toContain('ACQP-2')
+    expect(screen.getByText('ACQP-1').closest('section')?.getAttribute('data-testid')).toBe('run-acquisition-section')
+    expect(section.closest('section')!.textContent).toContain('ACQP-2')
     // The other run's package is filtered OUT (sourceRunRef names a different run).
-    expect(section!.textContent).not.toContain('ACQP-OTHER')
-    expect(section!.textContent).toContain('dev-a')
-    expect(section!.textContent).toContain('machine1/RES1.D')
-    expect(section!.textContent).toContain('dev-b')
-    expect(section!.textContent).toContain('machine2/RES2.D')
+    expect(section.closest('section')!.textContent).not.toContain('ACQP-OTHER')
+    expect(section.closest('section')!.textContent).toContain('dev-a')
+    expect(section.closest('section')!.textContent).toContain('machine1/RES1.D')
+    expect(section.closest('section')!.textContent).toContain('dev-b')
+    expect(section.closest('section')!.textContent).toContain('machine2/RES2.D')
     // The created timestamps (the package records carry registeredAt).
-    expect(section!.textContent).toContain('2026-11-15T10:00:00.000Z')
-    expect(section!.textContent).toContain('2026-11-16T11:00:00.000Z')
+    expect(section.closest('section')!.textContent).toContain('2026-11-15T10:00:00.000Z')
+    expect(section.closest('section')!.textContent).toContain('2026-11-16T11:00:00.000Z')
   })
 
   it('(d) the toolbar Data affordance opens the section on the SAME route (no navigation away from /runs/<id>)', async () => {
@@ -339,15 +358,16 @@ describe('u1acqdoor — the run-owned acquisition section + the toolbar Data aff
     // No legacy link into the editor results route survives on the run surface.
     expect(screen.queryByTestId('run-toolbar-legacy-results-link')).toBeNull()
     fireEvent.click(screen.getByTestId('run-toolbar-data'))
+    // The affordance lands in the section on the SAME route: the section gains
+    // focus (via requestAnimationFrame) and the URL stays /runs/<id> (a ?section
+    // param may be appended, but the PATH never leaves the run surface).
+    const section = await screen.findByTestId('run-acquisition-section')
     await waitFor(() => {
-      expect(acquisitionSection()).toBeTruthy()
+      expect(document.activeElement).toBe(section)
     })
     const after = screen.getByTestId('location-probe').textContent
     expect(after).toBe(before)
     expect(after).toBe(`/runs/${RUN_ID}`)
-    // The affordance lands in the section: it is focused (in view) on the same
-    // route — the URL never leaves /runs/<id>.
-    expect(document.activeElement).toBe(acquisitionSection())
   })
 
   it('(e) a non-\'run\' kind names its kind and renders NO acquisition section / attach affordance', async () => {
@@ -372,5 +392,25 @@ describe('u1acqdoor — the run-owned acquisition section + the toolbar Data aff
     expect(screen.queryByTestId('run-acquisition-section')).toBeNull()
     expect(screen.queryByTestId('run-acquisition-empty')).toBeNull()
     expect(screen.queryByTestId('run-acquisition-attach')).toBeNull()
+  })
+
+  it('(f) an unresolvable id (404) preserves current not-found behaviour: shell renders, NO section, NO guessed kind label', async () => {
+    mockUseParams.mockReturnValue({ runId: 'RUN-GONE-1' })
+    mocks.getRecordWithUI.mockRejectedValue(new Error('404: not found'))
+    mocks.listRecordsByKind.mockResolvedValue({ records: [], total: 0 })
+    render(
+      <MemoryRouter initialEntries={['/runs/RUN-GONE-1']}>
+        <Routes>
+          <Route path="/runs/:runId" element={<RunWorkspacePage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    // The page falls back to the scratch study and renders the shell
+    // (the current not-found behaviour — unchanged by this unit).
+    await screen.findByTestId('rwp-shell')
+    // The kind is UNRESOLVED (null) — no section, and no guessed kind label.
+    expect(screen.queryByTestId('run-acquisition-section')).toBeNull()
+    expect(screen.queryByTestId('run-acquisition-attach')).toBeNull()
+    expect(screen.queryByTestId('run-kind-label')).toBeNull()
   })
 })
