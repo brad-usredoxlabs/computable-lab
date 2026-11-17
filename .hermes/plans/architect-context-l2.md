@@ -210,6 +210,7 @@ tripwire below compares one hash against one file).
 | `ABSENCE-RENDERING-AND-PROBE-TIERS-l2-20261114.md` | f0a2ce783 | one request renders the card; absence never asserted from one lookup tier |
 | `DECK-ACTIONS-ARE-THE-OPERATION-l2-20261114.md` | 5845a6064 | the AI path invokes `addLabware`/`addLabwareFromRecord` and navigates to existing forms; it does not rebuild them |
 | `GC-ANALYSIS-IS-CL-SURFACE-l2-20261114.md` | 7b9ec0ad0 | GC analysis is CL's surface built to the 2026 manual's spec, not a separate app |
+| `BIOLOGY-CONTEXT-NO-INVENTED-REFS-l2-20261116.md` | 07c20e648 | a biology context may declare no instrument/readout (absent = not yet declared); created only on the first explicit role assignment; no creation path invents either |
 
 Restated by Brad 2026-11-16 in a live exchange about the event editor: **attaching an
 instrument file belongs to the RUN record, not to an `analysis-run`** — i.e. the
