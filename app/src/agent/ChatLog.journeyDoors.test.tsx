@@ -97,4 +97,46 @@ describe('ChatLog — single-fact arm renders the DECLARED journey doors (AC2)',
     expect(screen.queryByTestId('chat-clarification-absent-create')).toBeNull()
     expect(node.querySelector('.chat-clarification-card__absent-reason')).toHaveTextContent(NOUN)
   })
+
+  // Fail CLOSED (advc c2 D2): with no DECLARED created type there is no route
+  // for a token surface — the door is dead, never pointed at a guessed type.
+  it('renders a dead door (no href) when the declaration names no created type', async () => {
+    const mod = await import(JOURNEY_MOD)
+    const declared = mod.nounCreateJourneyForCandidate(NOUN)
+    const { createdType: _omitted, ...withoutType } = declared
+    const request = {
+      id: 'fact-journey-notype',
+      kind: 'noun',
+      prompt: 'Which material do you mean?',
+      options: [],
+      absence: { mention: NOUN, reason: mod.notALocalTermReason(NOUN) },
+      journey: withoutType,
+    } as unknown as AiClarificationRequest
+    const message: ChatMessage = {
+      id: 'clar-journey-notype',
+      role: 'assistant',
+      content: 'Which material do you mean?',
+      timestamp: 0,
+      clarificationRequests: [request],
+    }
+
+    render(<ChatLog {...props} messages={[message]} />)
+    const createDoor = declared.doors.find((door: { surface: string }) => door.surface === 'record-create')
+    expect(createDoor).toBeDefined()
+    // Give the registry a turn to load: the dead door must STAY dead.
+    await waitFor(() => {
+      const anchor = screen.getByTestId(`chat-clarification-door-${createDoor.id}`)
+      expect(anchor.getAttribute('href')).toBeNull()
+      expect(anchor.getAttribute('aria-disabled')).toBe('true')
+    })
+    // A surface with no token needs no created type, so that door still routes.
+    await waitFor(() => {
+      expect(
+        screen
+          .getByTestId('chat-clarification-door-add-from-vendor-or-ontology')
+          .getAttribute('href')
+          ?.startsWith('/ingestion?'),
+      ).toBe(true)
+    })
+  })
 })
