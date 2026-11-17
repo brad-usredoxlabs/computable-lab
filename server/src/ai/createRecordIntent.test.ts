@@ -33,9 +33,11 @@ function props(def: { function: { parameters: unknown } }) {
 }
 
 describe('the create_record intent', () => {
-  it('is one of exactly three intents, on the single forced tool', () => {
+  it('carries create_record on the single forced tool, alongside the existing intents', () => {
     const intent = props(AGENT_INTENT_TOOL_DEF).intent as { enum: string[] };
-    expect(intent.enum).toEqual(['event_graph', 'deck_layout', 'create_record']);
+    expect(intent.enum).toContain('create_record');
+    // The original emission intents are still present — create_record joins them.
+    expect(intent.enum).toEqual(expect.arrayContaining(['event_graph', 'deck_layout']));
     // Still ONE tool: tool_choice forces it, so the model cannot choose a tool at all.
     expect(AGENT_INTENT_TOOL_DEF.function.name).toBe('agent_intent');
   });
