@@ -26,6 +26,9 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
+// Ruling c94bd866 §1.2: the domain slot has ONE normalising accessor. This
+// module reads a declared argument's domain through it, never raw.
+import { declaredDomains } from '../scientistIntent/vocabulary.js';
 
 /** One DECLARED door (an `alternatives.options[]` entry, checked against `human_task.controls`). */
 export interface JourneyDeclarationDoor {
@@ -219,12 +222,14 @@ export const NOUN_CREATION_JOURNEY_ID = 'journey-noun-create';
  */
 export const MATERIAL_ARG_DOMAIN_TAG = 'material';
 
-/** True when the declared argument contract names the vocabulary's material domain. */
-export function isMaterialNounContract(declared: { domain?: string | readonly string[] }): boolean {
-  const domain = declared.domain;
-  if (domain === undefined) return false;
-  const tags = typeof domain === 'string' ? [domain] : domain;
-  return tags.some((tag) => tag.toLowerCase() === MATERIAL_ARG_DOMAIN_TAG);
+/**
+ * True when the declared argument contract names the vocabulary's material
+ * domain. The slot is read through `declaredDomains` (ruling c94bd866 §1.2):
+ * this module may not read or lowercase a domain slot itself — the accessor
+ * owns the normalisation, so a casing variant of the tag still matches.
+ */
+export function isMaterialNounContract({ domain }: { domain?: string | readonly string[] }): boolean {
+  return declaredDomains(domain).includes(MATERIAL_ARG_DOMAIN_TAG);
 }
 
 /**
