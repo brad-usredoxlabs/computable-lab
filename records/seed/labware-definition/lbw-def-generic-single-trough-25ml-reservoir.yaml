@@ -1,0 +1,20 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
+kind: labware-definition
+recordId: lbw-def-generic-single-trough-25ml-reservoir
+type: labware_definition
+id: reservoir_25ml_single
+display_name: 25 mL Single-Trough Reagent Reservoir
+source:
+  kind: curated
+  version: v1
+platform_aliases:
+  - platform: generic
+    alias: reservoir_25ml_single
+topology:
+  addressing: single
+capacity:
+  max_well_volume_uL: 25000
+aspiration_hints:
+  single_well_multichannel_source: true
+render_hints:
+  profile: reservoir

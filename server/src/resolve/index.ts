@@ -6,6 +6,7 @@ export { createResolveSpine, createResolveSpineFromContext } from './ResolveSpin
 export type { ResolveSpine, ResolveSpineDeps } from './ResolveSpine.js';
 export { createOakProvider, resolveOakServiceUrl } from './providers/oak.js';
 export { createOls4Provider, searchOls4 } from './providers/ols4.js';
+export { createLocalOboProvider, loadLocalOboSources, parseObo, searchLocalObo } from './providers/localObo.js';
 export { createRecordProvider } from './providers/records.js';
 export { createTermProvider } from './providers/terms.js';
 export { createVendorExaProvider } from './providers/vendorExa.js';

@@ -11,12 +11,21 @@
    language, owned by its turn). */
 .harness-chat-pane__honest-wall { margin:.75rem 1rem 0; padding:.6rem .75rem; border:1px solid var(--cl-border, #aaa); border-left:4px solid #b3541e; border-radius:.3rem; background:var(--cl-bg-elev, #f6f8fa); color:var(--cl-text, #1f2328); font-size:.85rem; line-height:1.35; }
 
+/* L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render: the named-reason state — the
+   selected thread's read returned no messages in this tab (transcript
+   region; clears on the next readable read). */
+.harness-chat-pane__thread-unreadable { margin:.75rem 1rem 0; padding:.6rem .75rem; border:1px solid var(--cl-border, #aaa); border-left:4px solid var(--cl-text, #1f2328); border-radius:.3rem; background:var(--cl-bg-elev, #f6f8fa); color:var(--cl-text, #1f2328); font-size:.85rem; line-height:1.35; }
+
 /* L2-THREAD-SCOPED-1: the per-tab thread picker (thread-scoped chats only). */
 .harness-chat-pane__threads { display:flex; align-items:center; gap:.5rem; margin:.5rem 1rem 0; flex-wrap:wrap; }
 .harness-chat-pane__threads-select { box-sizing:border-box; max-width:60%; padding:.3rem .4rem; border:1px solid var(--cl-border, #aaa); border-radius:.3rem; color:var(--cl-text, #1f2328); background:var(--cl-bg-elev, #f6f8fa); font-size:.8rem; }
 .harness-chat-pane__threads-select:disabled { opacity:.5; cursor:default; }
 .harness-chat-pane__threads-new { color:var(--cl-text, #1f2328); background:var(--cl-bg-elev, #f6f8fa); border:1px solid var(--cl-border, #aaa); border-radius:.3rem; padding:.3rem .5rem; font-size:.8rem; }
 .harness-chat-pane__threads-error { font-size:.75rem; color:#b3541e; }
+
+/* L2-P1-RETURN-LEG-1 u4 (LEG C): the cold-reload resume control — stages the
+   last user message verbatim into the composer (nothing auto-sent). */
+.harness-chat-pane__resume { color: var(--cl-text, #1f2328); background: var(--cl-bg-elev, #f6f8fa); border: 1px solid var(--cl-border, #aaa); border-radius: .3rem; padding: .3rem .5rem; font-size: .8rem; }
 
 /* L2-CHAT-1 LEG A (A1): the bubble rows (rendered by ChatLog inside this
    pane) get horizontal breathing room from the pane edges — the 85% max-width

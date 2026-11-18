@@ -57,3 +57,4 @@ export * from './CheckinHandlers.js';
 export * from './ProtocolPromotionHandlers.js';
 export * from './LifecycleHandlers.js';
 export * from './SignatureHandlers.js';
+export * from './SpecSheetHandlers.js';

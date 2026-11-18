@@ -96,6 +96,7 @@ import {
   applySoleDeckPlacement,
   scientistAnswersFromReadingAnswers,
   answeredClarificationLabelsFromBatch,
+  recordIdFromCurie,
   type AcceptedShorthandBinding,
   type AnsweredSlot,
   type ShorthandCompileDeps,
@@ -108,7 +109,8 @@ import {
 import { demoteUnstatedQuantities } from './demoteUnstatedQuantities.js';
 // Canonical shorthand re-serialization (the carryShorthandIdentity /
 // foldAnswersIntoShorthand shape — one serialization home in shorthandChat).
-import { stringify as stringifyShorthandYaml } from 'yaml';
+import { existsSync, readFileSync } from 'node:fs';
+import { stringify as stringifyShorthandYaml, parse as parseYaml } from 'yaml';
 import { ScientistIntentValidationError } from '../compiler/scientistIntent/parseScientistIntent.js';
 import type { ScientistIntentCompileResult } from '../compiler/scientistIntent/compileScientistIntent.js';
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
@@ -119,6 +121,7 @@ import {
   clarificationRequestFromLegacy,
   clarificationRequestsFromGaps,
   clarificationRequestsFromAssurance,
+  emptyTurnAbsenceRequests,
   legacyClarificationFromRequests,
   parseClarificationRequests,
 } from './clarifications.js';
@@ -852,6 +855,87 @@ function extractJsonObject(text: string): Record<string, unknown> | null {
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// L2-PROSE-SHORTHAND-SALVAGE-1 (C1): the YAML arm of prose draft recovery.
+// The accepted shapes are DATA (config/drafting/draft-content-recovery.yaml);
+// Ajv via parseShorthandForChat is the SOLE authority on validity.
+// ---------------------------------------------------------------------------
+// D3 (advc C1) FAIL-CLOSED by decision: these closed unions are what the extractor/`RecoveredDraftDriver` can emit; DATA naming anything else throws (a new shape is a code change, never silently half-data).
+type DraftContentShape = 'tool-envelope' | 'fenced-json' | 'fenced-yaml' | 'bare-yaml';
+const DRAFT_CONTENT_SHAPES: readonly DraftContentShape[] = ['tool-envelope', 'fenced-json', 'fenced-yaml', 'bare-yaml'];
+const DRAFT_RECOVERY_DRIVERS: readonly RecoveredDraftDriver[] = ['tool-envelope', 'fenced-json', 'yaml-shorthand'];
+
+interface DraftContentRecoveryEntry {
+  shape: DraftContentShape;
+  driver: RecoveredDraftDriver;
+  enabled: boolean;
+}
+
+/** Read PER call (the forcedToolCompliance precedent: a DATA edit needs no
+ *  restart). Missing or malformed throws, naming the path — never a silent-off
+ *  default that would make the recovery path lie about what it accepts. */
+function loadDraftContentRecoveryPolicy(policyPath?: string): DraftContentRecoveryEntry[] {
+  // Optional path is the narrow injectable seam a test uses to point the loader
+  // at a temp DATA file (advc C1 D1: witness the `enabled` gate, not just the
+  // shape pairing). Production callers pass nothing.
+  const policyFile = policyPath ?? new URL('../../../config/drafting/draft-content-recovery.yaml', import.meta.url);
+  const where = String(policyFile);
+  if (!existsSync(policyFile)) throw new Error(`draft-content recovery policy not found: ${where}`);
+  let raw: unknown;
+  try {
+    raw = parseYaml(readFileSync(policyFile, 'utf8'));
+  } catch (error) {
+    throw new Error(`draft-content recovery policy unreadable: ${error instanceof Error ? error.message : String(error)}: ${where}`);
+  }
+  const shapes = raw !== null && typeof raw === 'object' && !Array.isArray(raw)
+    ? (raw as Record<string, unknown>).shapes
+    : undefined;
+  if (!Array.isArray(shapes) || shapes.length === 0) {
+    throw new Error(`draft-content recovery policy: \`shapes\` must be a non-empty list: ${where}`);
+  }
+  return shapes.map((item: unknown): DraftContentRecoveryEntry => {
+    const { shape, driver, enabled } = (item ?? {}) as Record<string, unknown>;
+    if (typeof shape !== 'string' || !DRAFT_CONTENT_SHAPES.includes(shape as DraftContentShape)) {
+      throw new Error(`draft-content recovery policy: \`shape\` must be one of ${DRAFT_CONTENT_SHAPES.join(', ')}: ${where}`);
+    }
+    if (typeof driver !== 'string' || !DRAFT_RECOVERY_DRIVERS.includes(driver as RecoveredDraftDriver)) {
+      throw new Error(`draft-content recovery policy: \`driver\` must be one of ${DRAFT_RECOVERY_DRIVERS.join(', ')}: ${where}`);
+    }
+    if (typeof enabled !== 'boolean') {
+      throw new Error(`draft-content recovery policy: \`enabled\` must be a boolean: ${where}`);
+    }
+    return { shape: shape as DraftContentShape, driver: driver as RecoveredDraftDriver, enabled };
+  });
+}
+
+/** Driver a declared+enabled shape recovers as; null when the DATA does not
+ *  declare (or has disabled) it. */
+function declaredDraftDriver(shape: DraftContentShape, policyPath?: string): RecoveredDraftDriver | null {
+  return loadDraftContentRecoveryPolicy(policyPath).find((e) => e.shape === shape && e.enabled)?.driver ?? null;
+}
+
+/**
+ * The shorthand-YAML document carried as TEXT: the inner text of the first
+ * ```yaml / ```yml fence, else the whole trimmed text only when its top-level
+ * keys declare `intentId` AND `actions` (a prose mention is never a candidate).
+ * Returned VERBATIM — validity is parseShorthandForChat's call, not this one's.
+ */
+function extractShorthandYamlCandidate(content: string): { text: string; shape: 'fenced-yaml' | 'bare-yaml' } | null {
+  const trimmed = content.trim();
+  if (!trimmed) return null;
+  const fenced = trimmed.match(/```ya?ml[^\S\r\n]*\r?\n([\s\S]*?)```/i);
+  if (fenced?.[1]?.trim()) return { text: fenced[1].trim(), shape: 'fenced-yaml' };
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(trimmed);
+  } catch {
+    return null;
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  const keys = Object.keys(parsed as Record<string, unknown>);
+  return keys.includes('intentId') && keys.includes('actions') ? { text: trimmed, shape: 'bare-yaml' } : null;
+}
+
 /** Top-level keys that mark a bare forced-draft argument object. */
 // DRAFT_ARG_KEYS lives in draftArgDiagnostics.ts — one source, so the guard
 // below and the unknown-field diagnostic can never disagree.
@@ -865,36 +949,114 @@ function extractJsonObject(text: string): Record<string, unknown> | null {
  * or null when the content carries no usable draft JSON — in which case the
  * caller re-asks the model. Parsing this inline skips a second inference call.
  */
-export function coerceDraftArgsFromContent(content: unknown): Record<string, unknown> | null {
-  if (typeof content !== 'string') return null;
+export function coerceDraftArgsFromContent(
+  content: unknown,
+  policyPath?: string,
+): Record<string, unknown> | null {
+  return recoverDraftArgsCore(content, policyPath).args;
+}
+
+/** JSON/`<tool_call>` driver classification (unchanged: the envelope marker). */
+function jsonRecoveryDriver(content: string): RecoveredDraftDriver {
+  return content.includes('<tool_call>') ? 'tool-envelope' : 'fenced-json';
+}
+
+interface DraftArgsRecovery {
+  args: Record<string, unknown> | null;
+  driver: RecoveredDraftDriver | null;
+  /** The validator's OWN refusal reason when a YAML candidate was rejected. */
+  refusal?: string;
+}
+
+/**
+ * One parse, one decision — the internal pass behind both public entry points
+ * (coerce: args only; recover: args + driver + named refusal).
+ */
+function recoverDraftArgsCore(content: unknown, policyPath?: string): DraftArgsRecovery {
+  if (typeof content !== 'string') return { args: null, driver: null };
   const obj = extractJsonObject(content);
-  if (!obj) return null;
-  if ('arguments' in obj) {
-    const args = obj.arguments;
-    if (args && typeof args === 'object' && !Array.isArray(args)) return args as Record<string, unknown>;
-    if (typeof args === 'string') {
+  if (obj) {
+    if ('arguments' in obj) {
+      const args = obj.arguments;
+      if (args && typeof args === 'object' && !Array.isArray(args)) {
+        return { args: args as Record<string, unknown>, driver: jsonRecoveryDriver(content) };
+      }
+      if (typeof args === 'string') {
+        try {
+          const parsed = JSON.parse(args) as unknown;
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            return { args: parsed as Record<string, unknown>, driver: jsonRecoveryDriver(content) };
+          }
+        } catch {
+          /* not a JSON-encoded arguments string — fall through */
+        }
+      }
+    }
+    // Bare argument object: require a known draft key so unrelated prose-JSON
+    // (an example, a code block) is never fed to the compiler. The protocol_edit
+    // signature keys ride PROTOCOL_EDIT_ARG_KEYS (coerceAgentIntent's intent
+    // table) rather than DRAFT_ARG_KEYS, because that list also drives the
+    // unknown-field diagnostic and must stay event-draft-only. Guard stays
+    // strict: `{intent, protocolId}` with no substantive key is still not a draft.
+    if (DRAFT_ARG_KEYS.some((k) => k in obj)) return { args: obj, driver: jsonRecoveryDriver(content) };
+    if (PROTOCOL_EDIT_ARG_KEYS.some((k) => k in obj)) return { args: obj, driver: jsonRecoveryDriver(content) };
+    // SHORTHAND-CHAT: a `{intent:'event_shorthand', shorthand:'…'}` prose payload
+    // is a draft too — recognised via SHORTHAND_ARG_KEYS (coerceAgentIntent's
+    // intent table, one source), NOT by widening DRAFT_ARG_KEYS.
+    if (SHORTHAND_ARG_KEYS.some((k) => k in obj)) return { args: obj, driver: jsonRecoveryDriver(content) };
+    if ('sequenceAction' in obj) return { args: obj, driver: jsonRecoveryDriver(content) };
+  }
+  // C1: the YAML arm runs AFTER the JSON attempt and the argument-key guards,
+  // so JSON/`<tool_call>` recovery is untouched. The document rides the
+  // existing shorthand envelope (SHORTHAND_ARG_KEYS' route) — never events,
+  // never a second parser.
+  const yamlCandidate = extractShorthandYamlCandidate(content);
+  if (yamlCandidate) {
+    const driver = declaredDraftDriver(yamlCandidate.shape, policyPath);
+    if (driver) {
       try {
-        const parsed = JSON.parse(args) as unknown;
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
-      } catch {
-        /* not a JSON-encoded arguments string — fall through */
+        parseShorthandForChat(yamlCandidate.text);
+        return { args: { intent: 'event_shorthand', shorthand: yamlCandidate.text }, driver };
+      } catch (error) {
+        // REFUSED BY NAME: the validator's OWN text rides the recovery result
+        // to the caller's notes channel — its message plus the first Ajv row
+        // (path + the schema's suggestion, e.g. "teleport_sample is not
+        // allowed here"). Nothing is re-derived and nothing is coerced.
+        const row = error instanceof ScientistIntentValidationError
+          ? (error.errors?.[0] as { path?: string; suggestion?: string; message?: string } | undefined)
+          : undefined;
+        const reason = error instanceof Error ? error.message : String(error);
+        const detail = [row?.path, row?.suggestion ?? row?.message].filter((part): part is string => Boolean(part)).join(' ');
+        return { args: null, driver: null, refusal: detail ? `${reason}: ${detail}` : reason };
       }
     }
   }
-  // Bare argument object: require a known draft key so unrelated prose-JSON
-  // (an example, a code block) is never fed to the compiler. The protocol_edit
-  // signature keys ride PROTOCOL_EDIT_ARG_KEYS (coerceAgentIntent's intent
-  // table) rather than DRAFT_ARG_KEYS, because that list also drives the
-  // unknown-field diagnostic and must stay event-draft-only. Guard stays
-  // strict: `{intent, protocolId}` with no substantive key is still not a draft.
-  if (DRAFT_ARG_KEYS.some((k) => k in obj)) return obj;
-  if (PROTOCOL_EDIT_ARG_KEYS.some((k) => k in obj)) return obj;
-  // SHORTHAND-CHAT: a `{intent:'event_shorthand', shorthand:'…'}` prose payload
-  // is a draft too — recognised via SHORTHAND_ARG_KEYS (coerceAgentIntent's
-  // intent table, one source), NOT by widening DRAFT_ARG_KEYS.
-  if (SHORTHAND_ARG_KEYS.some((k) => k in obj)) return obj;
-  if ('sequenceAction' in obj) return obj;
-  return null;
+  return { args: null, driver: null };
+}
+
+/** Recovery drivers — closed set (the YAML arm classifies as `yaml-shorthand`). */
+export type RecoveredDraftDriver = 'tool-envelope' | 'fenced-json' | 'yaml-shorthand';
+export interface RecoveredDraft { driver: RecoveredDraftDriver }
+
+/**
+ * Wrapper around {@link coerceDraftArgsFromContent} that declares HOW the
+ * content was recovered. Returns `{ args, recoveredFrom }` where `args` is
+ * the parsed argument object (or null) and `recoveredFrom` carries the
+ * driver classification (or null when args is null). `refusal` is present
+ * ONLY when a shorthand-YAML candidate was rejected: it carries the
+ * validator's own reason so the caller can name it and nothing is coerced.
+ *
+ * Single source of truth: `args` AND the driver come from one internal pass
+ * (recoverDraftArgsCore) — the caller never re-classifies the text.
+ */
+export function recoverDraftArgsFromContent(content: unknown, policyPath?: string):
+  { args: Record<string, unknown> | null; recoveredFrom: RecoveredDraft | null; refusal?: string } {
+  const recovered = recoverDraftArgsCore(content, policyPath);
+  return {
+    args: recovered.args,
+    recoveredFrom: recovered.args !== null && recovered.driver ? { driver: recovered.driver } : null,
+    ...(recovered.refusal ? { refusal: recovered.refusal } : {}),
+  };
 }
 
 function buildForcedDraftJsonPrompt(originalPrompt: string, antiEchoClause?: string): string {
@@ -1097,6 +1259,45 @@ export interface AgentOrchestratorDeps extends ResolveMentionDeps {
   fetch?: typeof fetch;
 }
 
+
+/**
+ * L2-NOUN-RESOLUTION-POLICY-1 A1: derive AnsweredNounAnswer[] from the fold's
+ * accepted bindings. The fold's AcceptedShorthandBinding carries {label, ref}
+ * — the label is the scientist's chosen label (spliced into the document), and
+ * the ref is the record CURIE. Map each binding into the tier-1 binding the
+ * resolver accepts directly: the mechanism already exists (answeredSlotBindings
+ * in resolveNounsPass.ts), but was not passed on this arm.
+ *
+ * label = the binding's label (matched against the parsed intent's raw slot).
+ * recordId = the curie-stripped ref.
+ * recordLabel = the chosen record's own name/title/label from the store, with
+ *   safe fallback to the binding label when the record is absent (never throws).
+ * Store-miss = skip that entry (never-guess contract).
+ */
+async function bindingsToAnsweredSlots(
+  bindings: readonly AcceptedShorthandBinding[],
+  store: import('../store/types.js').RecordStore,
+): Promise<import('../compiler/resolution/resolveNounsPass.js').AnsweredNounAnswer[]> {
+  const out: import('../compiler/resolution/resolveNounsPass.js').AnsweredNounAnswer[] = [];
+  for (const binding of bindings) {
+    const recordId = recordIdFromCurie(binding.ref);
+    // Read the record's own label for recordLabel evidence.
+    // Store-miss is honest: skip the entry (never-guess contract).
+    const record = await store.get(recordId);
+    if (!record) continue;
+    const payload = record.payload as Record<string, unknown> | undefined;
+    const recordLabel: string =
+      typeof payload?.name === 'string' && payload.name
+        ? payload.name
+        : typeof payload?.title === 'string' && payload.title
+          ? payload.title
+          : typeof payload?.label === 'string' && payload.label
+            ? payload.label
+            : binding.label;
+    out.push({ label: binding.label, recordId, recordLabel });
+  }
+  return out;
+}
 
 /**
  * GHOSTPAINT-1 Leg 2B: exported helper that wraps the fold-seam compile.
@@ -1450,6 +1651,12 @@ export function createAgentOrchestrator(
         shorthandDeckLabwares,
         deps.searchLabwareByHint,
       );
+      // L2-P1-ABSENCE-PROBE-TIERS-1 (u1probe): the DEFINITION tier of the
+      // two-tier absence probe — the labware-definition registry (display
+      // names the lab KNOWS), as opposed to the record tier above (kind
+      // 'labware' the lab HOLDS). Consulted by the two empty-turn absence
+      // call sites only AFTER the record tier misses.
+      const shorthandSearchDefinitionsByHint = deps.searchLabwareDefinitionsByHint;
 
       /**
        * PROTO-AI-12 §4 — fire-and-forget shadow classification. Called ONLY
@@ -1516,6 +1723,41 @@ export function createAgentOrchestrator(
             // the answer fold is where a binding becomes ACCEPTED.
             const foldBindings = [...shorthandReuseBindings, ...folded.bindings];
             rememberAcceptedShorthandBindings(conversationKey, foldBindings);
+            // L2-NOUN-RESOLUTION-POLICY-1 A1: derive AnsweredNounAnswer[] from
+            // the fold's accepted bindings BEFORE building the deps object
+            // (the mapper is async — store.get reads must complete).
+            // L2-P1-AMBIGUOUS-OPTIONS-1 / u4foldbind (r12 D1): when the fold
+            // recorded NO bindings the tier-1 direct bind must STILL ride the
+            // recompile. A plain option pick splices through the DECLARED-kind
+            // arm (shorthandChat.ts:1510-1535 — the wells/quantity arm writes
+            // the slot and `continue`s before the binding block), so the
+            // answer's record identity — which rides the answer's OWN `ref`
+            // (the id in `ref.id`, the card's shape — never a mint) — is the
+            // only source of the id. Synthesize the binding straight from the
+            // ref (label = the HELD fact's label — the bar's noun; id = the
+            // ref's record id) and run it through the SAME mapper: the
+            // store.get skip keeps the never-guess contract, and a ref-less
+            // answer yields no binding (today's behaviour, byte-identical).
+            const foldAnswerBindings: AcceptedShorthandBinding[] = [];
+            if (folded.bindings.length === 0) {
+              for (const answer of foldAnswers) {
+                const id = (answer.ref as { id?: unknown } | undefined)?.id;
+                const recordId = typeof id === 'string' && id.trim().length > 0 ? id.trim() : null;
+                if (!recordId) continue;
+                const fact = held.clarifications.find((f) => factRequestId(f) === answer.requestId);
+                if (!fact) continue;
+                foldAnswerBindings.push({
+                  label: fact.label,
+                  ref: recordId.startsWith('local:') ? recordId : `local:${recordId}`,
+                });
+              }
+            }
+            const effectiveFoldBindings =
+              folded.bindings.length > 0 ? folded.bindings : foldAnswerBindings;
+            const answeredFromFold =
+              deps.store && effectiveFoldBindings.length > 0
+                ? await bindingsToAnsweredSlots(effectiveFoldBindings, deps.store)
+                : [];
             // GHOSTPAINT-1 Leg 2B: before compile, inject the sole deck
             // placement's labwareId into well-bearing actions that carry no
             // identity. The expander emits a top-level labwareId from
@@ -1526,6 +1768,11 @@ export function createAgentOrchestrator(
               ...(deps.store ? { store: deps.store } : {}),
               ...(shorthandSearchLabwareByHint ? { searchLabwareByHint: shorthandSearchLabwareByHint } : {}),
               ...(foldBindings.length > 0 ? { reuseBindings: foldBindings } : {}),
+              // L2-NOUN-RESOLUTION-POLICY-1 A1: carry the fold's accepted bindings
+              // as tier-1 answeredSlots so the resolver binds the noun to the
+              // chosen record id directly. Conditional spread: ABSENT when empty,
+              // never undefined (exactOptionalPropertyTypes).
+              ...(answeredFromFold.length > 0 ? { answeredSlots: answeredFromFold } : {}),
               // WELLSET-RESOLVER-1 (report 3a/4d): the conversation's committed
               // contents layer rides the recompile as priorLabState (the same
               // cache the FIRST compile read — a recompile of the held intent
@@ -2189,6 +2436,7 @@ export function createAgentOrchestrator(
       for (let turn = 0; turn < effectiveMaxTurns; turn++) {
         const turnStart = Date.now();
         const turnToolStats: Array<{ name: string; durationMs: number; success: boolean }> = [];
+        const extraSubmissionNotes: string[] = [];
         const promptSize = messages.reduce((n, m) => n + (typeof m.content === 'string' ? m.content.length : 0), 0);
         console.log(`[agent ${tid}] turn ${turn + 1} starting, promptChars=${promptSize}, docDiscussion=${isDocDiscussionTurn}`);
         onEvent?.({ type: 'status', message: isDocDiscussionTurn ? `Generating summary… (${Math.round(promptSize / 1024)} KB context)` : `Turn ${turn + 1}...` });
@@ -2598,7 +2846,11 @@ export function createAgentOrchestrator(
           // Fast path: the appliance usually returns the tool call as plain
           // content (its tool-call parser is off). Parse those args directly so
           // the common case costs ONE inference call, not two.
-          const rawInlineArgs = coerceDraftArgsFromContent(assistantMsg.content);
+          // C2: use recoverDraftArgsFromContent — the wrapper that also classifies
+          // HOW the draft was recovered (fenced-json / tool-envelope).
+          const recoveryResult = recoverDraftArgsFromContent(assistantMsg.content);
+          const rawInlineArgs = recoveryResult.args;
+          const recoveredFrom = recoveryResult.recoveredFrom;
           // The forced flow ships `agent_intent` as the terminal tool, so recovered
           // args must be callable AS that tool. Wrapping them as the compile-draft
           // tool produced a call no branch handled and the draft vanished with no
@@ -2626,11 +2878,26 @@ export function createAgentOrchestrator(
             onEvent?.({
               type: 'status',
               message: `Parsed the draft from the model's text (it did not emit a tool call); invoking ${inlineToolName}…`,
+              ...(recoveredFrom ? { recoveredFrom } : {}),
             });
+            if (recoveredFrom) {
+              extraSubmissionNotes.push(`recoveredFrom: ${recoveredFrom.driver}`);
+            }
             console.log(
-              `[agent ${tid}] recovered draft args from content as ${inlineToolName}${rawInlineArgs !== inlineArgs ? ' (intent inferred)' : ''}; skipped the second call`,
+              `[agent ${tid}] recovered draft args from content as ${inlineToolName}${rawInlineArgs !== inlineArgs ? ' (intent inferred)' : ''}; driver=${recoveredFrom?.driver ?? 'none'}; skipped the second call`,
             );
           } else {
+          // C1: a shorthand-YAML candidate that FAILED the Ajv gate is REFUSED
+          // BY NAME — the validator's own reason rides the notes channel (the
+          // :2709 `recoveredFrom` precedent) and nothing is handed to the
+          // compiler. The re-ask budget below still runs.
+          if (recoveryResult.refusal) {
+            extraSubmissionNotes.push(`recoveredFrom: yaml-shorthand refused — ${recoveryResult.refusal}`);
+            onEvent?.({
+              type: 'status',
+              message: `Refused the shorthand draft in the model's text: ${recoveryResult.refusal}`,
+            });
+          }
           // SH-QC-1S R1 (architect D2): the bounded zero-tool-call compliance
           // arm is DATA (config/drafting/forced-tool-compliance.yaml — loaded
           // PER call, the drafting-config convention), NOT a surface literal.
@@ -2857,7 +3124,7 @@ export function createAgentOrchestrator(
             turns: turn + 1,
             toolCalls: totalToolCalls,
           };
-          const result: AgentResult = isDocDiscussionTurn
+          let result: AgentResult = isDocDiscussionTurn
             ? docDiscussionContent.trim().length > 0
               // L2-FREEFORM-1 H5 (OQ3 ruling): the STRUCTURAL deliverable
               // marker — a doc-discussion prose answer is a deliverable, and
@@ -2879,6 +3146,85 @@ export function createAgentOrchestrator(
                 turn + 1,
                 totalToolCalls,
               );
+          // L2-P1-EMPTY-TURN-CARD-1 (u1finalsite): the FINAL-ANSWER exit —
+          // the ONE silent-success site the "draft produced nothing" guard's
+          // own doc comment never covered. A no-tool-call answer that parses
+          // to an empty deliverable set used to return success:true with
+          // events:[] (the client's only surviving statement: "No events
+          // generated."). Route it through the SAME guard as the draft-tool
+          // arm (draftProducedNothingOnServer + emptyDraftMessage — no second
+          // predicate, no new message vocabulary), passing ONLY what the
+          // finish actually observed (choice.finish_reason): truncated=true
+          // means the noToolCall "stop" sentence never fires (it states the
+          // OBSERVED cause, never a guessed one). A notes-only answer-intent
+          // turn is a legitimate deliverable and must NOT be errored — the
+          // guard counts the 7 canonical channels only, so the notes channel
+          // is checked here, beside it. Non-doc-discussion arm ONLY: the
+          // doc-discussion prose answer (proseDeliverable) is unchanged.
+          // L2-P1-EMPTY-TURN-CARD-2 (u4guard): the guard REACHES a notes-bearing
+          // empty turn too — but ONLY to attach the named-absence card (the
+          // card beside the notes; success stays true, NO error). The no-notes
+          // arm below stays byte-identical in behavior (same probe, same
+          // error, same conditional spread). Before this, ANY notes-bearing
+          // turn bypassed the guard entirely, so a notes prose naming a
+          // labware the lab does not hold persisted with NO metadata at all
+          // (gate r9 defect 2, legC2 e018cfe4 "Nunc CryoBox 12x12").
+          // L2-P1-EMPTY-TURN-CARD-1 (u2fix, advc defect 1 — AC2): a turn that
+          // actually STREAMED assistant text delivered that text to the person
+          // (the stream loop's text_delta fork, :2526 — declared by the SAME
+          // draftFlowMode condition, not re-derived here) and must NOT be
+          // errored by this guard. In-scope content carrier: assistantMsg.content
+          // (the non-streaming final-answer path accumulates the full text there;
+          // the streaming path delivers via text_delta and is excluded by the
+          // same declared fork). On the shipped config (draftFlowMode 'forced-tool'
+          // — config absent → constructor default) the fork holds, so no text
+          // is streamed and the AC1 JSON-body turn stays wall-able; the gate
+          // below is a NO-OP there and active only where streaming exists.
+          // Same one-authority predicates (draftProducedNothingOnServer +
+          // emptyDraftMessage); no second emptiness check, no new message.
+          if (
+            !isDocDiscussionTurn &&
+            result.success &&
+            draftProducedNothingOnServer(result) &&
+            !(draftFlowMode !== 'forced-tool' &&
+              typeof assistantMsg.content === 'string' &&
+              assistantMsg.content.trim().length > 0)
+          ) {
+            // L2-P1-EMPTY-TURN-CARD-2 (u1emptycard): the empty-turn guard's NAMED
+            // ABSENCE card — the user's sentence (effectivePrompt, the last user
+            // message, :1540) names a labware noun with no store/deck match
+            // (probe: shorthandSearchLabwareByHint, :1650). The named-cause error
+            // stays EXACTLY as-is; the card rides the typed channel beside it
+            // (conditional spread — key ABSENT, never undefined, when no noun misses).
+            const emptyTurnAbsence = await emptyTurnAbsenceRequests(
+              effectivePrompt,
+              shorthandSearchLabwareByHint ?? (async () => []),
+              shorthandSearchDefinitionsByHint ?? (async () => []),
+            );
+            if (!(result.notes?.length ?? 0)) {
+              result = {
+                ...result,
+                success: false,
+                error: emptyDraftMessage({
+                  truncated: choice.finish_reason === 'length',
+                  hadArguments: false,
+                  noToolCall: true,
+                }),
+                ...(emptyTurnAbsence.length > 0 ? { clarificationRequests: emptyTurnAbsence } : {}),
+              };
+            } else if (emptyTurnAbsence.length > 0) {
+              // u4guard: notes-bearing arm — the named-absence card RIDES the
+              // notes deliverable on the typed channel (client renders the card
+              // beside the notes; the channel object was the seam — a turn
+              // whose result never carries clarificationRequests renders none).
+              // The notes prose itself is the deliverable: success stays true,
+              // no error, no message vocabulary added.
+              result = {
+                ...result,
+                clarificationRequests: emptyTurnAbsence,
+              };
+            }
+          }
           const elapsed = Date.now() - t0;
           
           // Record final turn stats
@@ -2927,7 +3273,6 @@ export function createAgentOrchestrator(
         // 3b. Terminal via submit_suggestion (#8): the agent finalized through
         // the structured output tool. Capture its args as the result directly —
         // no regex parse, grounded by the tool schema.
-        const extraSubmissionNotes: string[] = [];
         // ONE call is the contract ("call the agent_intent tool exactly once"),
         // and models break it: observed live, a turn carrying [create_record,
         // event_graph] lost the draft because the first match won and the rest
@@ -3300,6 +3645,19 @@ export function createAgentOrchestrator(
               if (shResult.success && !shResult.error && draftProducedNothingOnServer(shResult)) {
                 shResult.error = emptyDraftMessage({ truncated: false, hadArguments: true });
                 console.warn(`[agent ${tid}] ${shResult.error}`);
+                // L2-P1-EMPTY-TURN-CARD-2 (u1emptycard): the SAME named-absence card
+                // on the shorthand-arm backstop (same effectivePrompt :1540 and
+                // probe :1650). The guard above proves clarificationRequests is
+                // empty, so the card adds only a key no other path set here;
+                // absent (never undefined) when no labware noun misses.
+                const shEmptyTurnAbsence = await emptyTurnAbsenceRequests(
+                  effectivePrompt,
+                  shorthandSearchLabwareByHint ?? (async () => []),
+                  shorthandSearchDefinitionsByHint ?? (async () => []),
+                );
+                if (shEmptyTurnAbsence.length > 0) {
+                  shResult.clarificationRequests = shEmptyTurnAbsence;
+                }
               }
               // Enrich compiler-draft events: material_spec_ref expansion +
               // composition_snapshot so deterministic drafts carry bound refs.
@@ -3372,7 +3730,27 @@ export function createAgentOrchestrator(
               const alsoPlace = parseAlsoPlace(submitArgs.alsoPlace);
               onEvent?.({ type: 'tool_result', toolName: submitCall.function.name, success: creations.length > 0, durationMs: 0 });
               const elapsed = Date.now() - t0;
-              const creationResult: AgentResult = creations.length > 0
+              // L2-P1B-PRODUCT-IDENTITY-1: a labware that is not identified by an
+              // EXISTING product record is a QUALIFIED vendor product — not something
+              // chat can answer with a bare generic definition. The tool schema does
+              // not carry vendor / catalogue fields (records items are
+              // additionalProperties:false), so `source` is the one authority — and it
+              // identifies an existing product record ONLY as `record:<id>`. An absent
+              // source (the field is optional), 'user-description', and 'exa:<url>'
+              // all leave the product unidentified. Refuse-and-route: name the next
+              // step (the + New product modal, or the definition page), and emit NO
+              // generic preview proposal.
+              const qualifiedLabware = creations.find(
+                (c) => c.kind === 'labware' && !(typeof c.source === 'string' && c.source.startsWith('record:')),
+              );
+              const creationResult: AgentResult = qualifiedLabware
+                ? {
+                  success: false,
+                  error:
+                    `A labware that is not identified by an existing product record ("${qualifiedLabware.name}") is not something chat can author as a bare generic definition — it is a specific vendor product. `
+                    + 'Identify or create that product first: open the "+ New product" modal on /lab/labware and record the vendor, catalogue number, and the definition it realises, or create the definition at /lab/labware/new. Then place that product on the deck.',
+                }
+                : creations.length > 0
                 ? {
                   success: true,
                   notes: Array.isArray(submitArgs.notes) ? (submitArgs.notes as string[]) : [],

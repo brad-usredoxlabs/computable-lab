@@ -1,0 +1,27 @@
+# Reference cascade policy — L2-RECORD-DELETE-DEPENDENTS-1
+#
+# Declares cascade-vs-refuse per (referrerKind, pointer) combination.
+# The store reads this file; TypeScript interprets it.
+#
+# Default: refuse (anything not listed here blocks deletion).
+#
+# access-policy → resourceRef is always cascade (the rule from criterion (a)):
+# deleting a record always cascades the access-policy whose resourceRef
+# points to that record — discovered by scanning resourceRef, never by
+# constructing "ACL-" + uppercase(id).
+#
+# The declaration below covers the known reference patterns:
+#   - access-policy.resourceRef: cascade (always)
+#   - All other (referrerKind, pointer) pairs: refuse (default)
+#
+# To add cascade for another field, add:
+#   - referrerKind: <kind>
+#     pointers:
+#       <fieldPath>: cascade    # e.g. "links.studyId"
+#
+# No hardcoding of kind names in TypeScript — the file owns the list.
+
+rules:
+  - referrerKind: access-policy
+    pointers:
+      resourceRef: cascade

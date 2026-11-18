@@ -24,6 +24,20 @@ function stateWithTrace(trace: ChatState['trace']): ChatState {
   }
 }
 
+function stateWithStatus(
+  status: string,
+  statusRecoveredFrom?: { driver: string } | null,
+): ChatState {
+  return {
+    messages: [],
+    pending: null,
+    status,
+    error: null,
+    ...(statusRecoveredFrom ? { statusRecoveredFrom } : {}),
+    trace: [],
+  }
+}
+
 afterEach(() => cleanup())
 
 // Regression (2026-09-19): a tool call whose arguments were EMPTY looked exactly
@@ -93,5 +107,26 @@ describe('MessageLog observability trace', () => {
   it('renders nothing when the turn has no trace', () => {
     render(<MessageLog state={stateWithTrace([])} />)
     expect(screen.queryByTestId('message-log-trace')).toBeNull()
+  })
+})
+
+// The draft-recovery marker is receipt plumbing: a browser gate proves the
+// salvage fired by reading this attribute, not by parsing prose.
+describe('MessageLog draft-recovery marker', () => {
+  it('exposes the salvage marker on the status line without changing its text', () => {
+    const message = "Parsed the draft from the model's text"
+    render(<MessageLog state={stateWithStatus(message, { driver: 'fenced-json' })} />)
+    const status = document.querySelector('[data-testid="message-log-status"]')
+    expect(status).not.toBeNull()
+    expect(status?.getAttribute('data-recovered-from')).toBe('fenced-json')
+    expect(status?.textContent).toBe(message)
+  })
+
+  it('omits the marker for a clean turn but still renders the status line', () => {
+    render(<MessageLog state={stateWithStatus('Working on it')} />)
+    const status = document.querySelector('[data-testid="message-log-status"]')
+    expect(status).not.toBeNull()
+    expect(status?.hasAttribute('data-recovered-from')).toBe(false)
+    expect(status?.textContent).toBe('Working on it')
   })
 })

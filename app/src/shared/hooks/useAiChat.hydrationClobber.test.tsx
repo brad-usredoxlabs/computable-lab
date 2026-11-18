@@ -280,9 +280,15 @@ describe('useAiChat — LEG F in-flight-turn guard (mount-time scope flip must n
     expect(assistantPosts[0]!.headers['x-cl-thread-id'], 'assistant POST rides the MINTED thread id A').toBe(idA)
     expect(assistantPosts[0]!.headers['x-cl-thread-scope'], 'assistant POST rides the pre-flip scope (none)').toBeUndefined()
     // Server-side truth (the fake router appends like the real one): thread A
-    // holds the WHOLE turn; thread B received nothing from it.
+    // holds the WHOLE turn; thread B received nothing from it. The turn's own
+    // rows (user, assistant) land on A IN ORDER; the pre-existing empty-done
+    // "did not propose any changes" bubble (useAiChat.ts:2311-2322) ALSO lands
+    // on A — L2-P1-R16D1-RELOAD-1 u1 made `system` messages persist instead of
+    // being dropped by the sync effect (applied-result records must survive a
+    // cold reload), so the server-side pin now includes that third row. The
+    // protected invariant is unchanged: nothing crosses onto thread B.
     const threadA = serverThreads[keyOf(undefined, idA)]
-    expect(threadA?.messages.map((m) => m.role)).toEqual(['user', 'assistant'])
+    expect(threadA?.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'system'])
     const threadB = serverThreads[keyOf('evg-1', idB)]
     expect(threadB?.messages ?? []).toHaveLength(0)
   })

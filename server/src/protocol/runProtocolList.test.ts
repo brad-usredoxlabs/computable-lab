@@ -1,0 +1,247 @@
+// @vitest-environment node
+import { describe, expect, it } from 'vitest';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { loadSchemasFromContent } from '../schema/SchemaLoader.js';
+import { createValidator } from '../validation/AjvValidator.js';
+import {
+  protocolRefsOf,
+  protocolIdsOf,
+  leadProtocolId,
+  withAttachedProtocol,
+  withDetachedProtocol,
+} from './runProtocolList.js';
+
+function runSchemaId() {
+  return 'https://computable-lab.com/schema/computable-lab/run.schema.yaml';
+}
+
+async function loadRunSchemas() {
+  const schemaRoot = join(process.cwd(), 'schema');
+  const contents = new Map<string, string>();
+  for (const p of ['core/common.schema.yaml', 'core/datatypes/ref.schema.yaml', 'studies/run.schema.yaml']) {
+    contents.set(p, await readFile(join(schemaRoot, p), 'utf8'));
+  }
+  return loadSchemasFromContent(contents);
+}
+
+describe('protocolRefsOf — legacy singular ref', () => {
+  it('returns one element from localProtocolRef', () => {
+    const payload = {
+      kind: 'run',
+      localProtocolRef: { kind: 'record', id: 'LPR-1', type: 'local-protocol' },
+    };
+    expect(protocolIdsOf(payload)).toEqual(['LPR-1']);
+    expect(protocolRefsOf(payload).length).toBe(1);
+  });
+});
+
+describe('protocolRefsOf — ordered list', () => {
+  it('returns ids in order', () => {
+    const refA = { kind: 'record', id: 'LPR-A', type: 'local-protocol' };
+    const refB = { kind: 'record', id: 'LPR-B', type: 'local-protocol' };
+    const payload = { kind: 'run', localProtocolRefs: [refA, refB] };
+    expect(protocolIdsOf(payload)).toEqual(['LPR-A', 'LPR-B']);
+  });
+});
+
+describe('protocolRefsOf — both list and singular', () => {
+  it('list wins and singular is deduped by id', () => {
+    const refA = { kind: 'record', id: 'LPR-A', type: 'local-protocol' };
+    const refB = { kind: 'record', id: 'LPR-B', type: 'local-protocol' };
+    const payload = {
+      kind: 'run',
+      localProtocolRef: { kind: 'record', id: 'LPR-A', type: 'local-protocol' },
+      localProtocolRefs: [refA, refB],
+    };
+    const ids = protocolIdsOf(payload);
+    expect(ids).toEqual(['LPR-A', 'LPR-B']);
+    expect(ids.length).toBe(2);
+  });
+});
+
+describe('protocolRefsOf — no fields', () => {
+  it('returns empty array, never throws', () => {
+    expect(protocolIdsOf({ kind: 'run' })).toEqual([]);
+    expect(protocolRefsOf({})).toEqual([]);
+    expect(protocolIdsOf({})).toEqual([]);
+  });
+});
+
+describe('withAttachedProtocol — idempotency and legacy compat', () => {
+  it('applying twice does not grow the list', () => {
+    const refB = { kind: 'record', id: 'LPR-B', type: 'local-protocol' };
+    const payload = { kind: 'run' as const, localProtocolRefs: [{ kind: 'record', id: 'LPR-A', type: 'local-protocol' }] };
+    const once = withAttachedProtocol(payload, refB);
+    const twice = withAttachedProtocol(once, refB);
+    expect(twice.localProtocolRefs).toBeDefined();
+    expect(Array.isArray(twice.localProtocolRefs)).toBe(true);
+    expect((twice.localProtocolRefs as any[]).length).toBe((once.localProtocolRefs as any[]).length);
+  });
+
+  it('legacy singular payload returns list form, legacy field untouched', () => {
+    const refB = { kind: 'record', id: 'LPR-B', type: 'local-protocol' };
+    const payload = {
+      kind: 'run' as const,
+      localProtocolRef: { kind: 'record', id: 'LPR-A', type: 'local-protocol' },
+    };
+    const result = withAttachedProtocol(payload, refB);
+    expect(result.localProtocolRef).toEqual(payload.localProtocolRef);
+    expect(Array.isArray(result.localProtocolRefs)).toBe(true);
+    expect((result.localProtocolRefs as any[]).length).toBe(2);
+    expect(protocolIdsOf(result)).toEqual(['LPR-A', 'LPR-B']);
+  });
+});
+
+describe('withDetachedProtocol — inverse of attach', () => {
+  const refA = { kind: 'record', id: 'LPR-A', type: 'local-protocol' };
+  const refB = { kind: 'record', id: 'LPR-B', type: 'local-protocol' };
+
+  it('removes the named ref and keeps the order of the rest', () => {
+    const payload = { kind: 'run' as const, localProtocolRefs: [refA, refB] };
+    const next = withDetachedProtocol(payload, 'LPR-A');
+    expect(protocolIdsOf(next)).toEqual(['LPR-B']);
+    expect((next.localProtocolRefs as unknown[]).length).toBe(1);
+  });
+
+  it('drops the legacy singular when it names the detached id', () => {
+    const payload = { kind: 'run' as const, localProtocolRef: refA, localProtocolRefs: [refA, refB] };
+    const next = withDetachedProtocol(payload, 'LPR-A');
+    expect('localProtocolRef' in next).toBe(false);
+    expect(protocolIdsOf(next)).toEqual(['LPR-B']);
+  });
+
+  it('detaching the last ref yields an empty list that reads as empty', () => {
+    const payload = { kind: 'run' as const, localProtocolRef: refA, localProtocolRefs: [refA] };
+    const next = withDetachedProtocol(payload, 'LPR-A');
+    expect(next.localProtocolRefs).toEqual([]);
+    expect(protocolIdsOf(next)).toEqual([]);
+  });
+
+  it('removes every duplicate entry of the detached id', () => {
+    const payload = { kind: 'run' as const, localProtocolRefs: [refA, refB, refA] };
+    expect(protocolIdsOf(withDetachedProtocol(payload, 'LPR-A'))).toEqual(['LPR-B']);
+  });
+
+  it('is idempotent and never mutates the input payload', () => {
+    const payload = { kind: 'run' as const, localProtocolRefs: [refA, refB] };
+    const next = withDetachedProtocol(payload, 'LPR-MISSING');
+    expect(next).toEqual(payload);
+    expect(next).not.toBe(payload);
+    expect(payload.localProtocolRefs).toEqual([refA, refB]);
+  });
+});
+
+describe('protocolRefsOf — lab-layer fallback to protocolRef', () => {
+  it('resolves protocolRef when local fields are absent', () => {
+    const payload = {
+      kind: 'run',
+      protocolRef: { kind: 'record', id: 'PRT-1', type: 'protocol' },
+      sourceType: 'protocol',
+      sourceRef: { kind: 'record', id: 'PRT-1', type: 'protocol' },
+    };
+    expect(protocolIdsOf(payload)).toEqual(['PRT-1']);
+  });
+
+  it('dedupes localProtocolRefs and protocolRef when they share the same id', () => {
+    const payload = {
+      kind: 'run',
+      localProtocolRefs: [{ kind: 'record', id: 'A', type: 'local-protocol' }],
+      protocolRef: { kind: 'record', id: 'A', type: 'protocol' },
+    };
+    expect(protocolIdsOf(payload)).toEqual(['A']);
+  });
+
+  it('ignores sourceRef when sourceType is event-graph', () => {
+    const payload = {
+      kind: 'run',
+      sourceType: 'event-graph',
+      sourceRef: { kind: 'record', id: 'EG-1', type: 'event-graph' },
+    };
+    expect(protocolIdsOf(payload)).toEqual([]);
+  });
+
+  it('respects precedence: localProtocolRef > protocolRef', () => {
+    const payload = {
+      kind: 'run',
+      localProtocolRef: { kind: 'record', id: 'L', type: 'local-protocol' },
+      protocolRef: { kind: 'record', id: 'P', type: 'protocol' },
+    };
+    expect(protocolIdsOf(payload)).toEqual(['L', 'P']);
+  });
+
+  it('resolves sourceRef when sourceType is protocol and no other refs exist', () => {
+    const payload = {
+      kind: 'run',
+      sourceType: 'protocol',
+      sourceRef: { kind: 'record', id: 'PRT-9', type: 'protocol' },
+    };
+    expect(protocolIdsOf(payload)).toEqual(['PRT-9']);
+  });
+});
+
+describe('run schema — localProtocolRefs validation', () => {
+  it('validates a run with localProtocolRefs', async () => {
+    const result = await loadRunSchemas();
+    expect(result.errors).toEqual([]);
+    const validator = createValidator({ strict: false });
+    for (const entry of result.entries) {
+      validator.addSchema(entry.schema, entry.id);
+    }
+    const valid = validator.validate(
+      {
+        kind: 'run',
+        recordId: 'RUN-001',
+        status: 'planned',
+        localProtocolRefs: [
+          { kind: 'record', id: 'LPR-A', type: 'local-protocol' },
+          { kind: 'record', id: 'LPR-B', type: 'local-protocol' },
+        ],
+      },
+      runSchemaId(),
+    );
+    expect(valid.valid).toBe(true);
+  });
+
+  it('validates a legacy singular run', async () => {
+    const result = await loadRunSchemas();
+    expect(result.errors).toEqual([]);
+    const validator = createValidator({ strict: false });
+    for (const entry of result.entries) {
+      validator.addSchema(entry.schema, entry.id);
+    }
+    const valid = validator.validate(
+      {
+        kind: 'run',
+        recordId: 'RUN-002',
+        status: 'planned',
+        localProtocolRef: { kind: 'record', id: 'LPR-1', type: 'local-protocol' },
+      },
+      runSchemaId(),
+    );
+    expect(valid.valid).toBe(true);
+  });
+
+  it('rejects a ref entry with undeclared property', async () => {
+    const result = await loadRunSchemas();
+    expect(result.errors).toEqual([]);
+    const validator = createValidator({ strict: false });
+    for (const entry of result.entries) {
+      validator.addSchema(entry.schema, entry.id);
+    }
+    const valid = validator.validate(
+      {
+        kind: 'run',
+        recordId: 'RUN-003',
+        status: 'planned',
+        localProtocolRefs: [
+          { kind: 'record', id: 'LPR-A', type: 'local-protocol', undeclaredProp: 'bad' },
+        ],
+      },
+      runSchemaId(),
+    );
+    expect(valid.valid).toBe(false);
+    const pathError = valid.errors?.find((e) => e.path.includes('/localProtocolRefs/0'));
+    expect(pathError).toBeDefined();
+  });
+});

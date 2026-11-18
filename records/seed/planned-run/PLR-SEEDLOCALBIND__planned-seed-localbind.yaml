@@ -1,0 +1,14 @@
+$schema: https://computable-lab.com/schema/computable-lab/planned-run.schema.yaml
+kind: planned-run
+recordId: PLR-SEEDLOCALBIND
+title: Seed local-bind run — binds to prt-seed-biological-transfer
+sourceType: protocol
+sourceRef:
+  kind: record
+  id: prt-seed-biological-transfer
+  type: protocol
+protocolRef:
+  kind: record
+  id: prt-seed-biological-transfer
+  type: protocol
+state: draft

@@ -21,6 +21,7 @@ import { homedir } from 'node:os';
 
 import { SchemaRegistry, createSchemaRegistry } from './schema/SchemaRegistry.js';
 import { loadAllSchemas } from './schema/SchemaLoader.js';
+import { makeGetSchemaProperties } from './schema/composedProperties.js';
 import { AjvValidator, createValidator } from './validation/AjvValidator.js';
 import { LintEngine, createLintEngine } from './lint/LintEngine.js';
 import { loadAllLintSpecs } from './lint/LintSpecLoader.js';
@@ -28,7 +29,7 @@ import { PredicateRegistry, loadPredicateRegistry } from './registry/PredicateRe
 import { KindLifecycleRegistry, loadKindLifecycleRegistry, collectKnownKinds } from './registry/KindLifecycleRegistry.js';
 import { createRepoAdapter, isGitRepoAdapter } from './repo/createRepoAdapter.js';
 import type { RepoAdapter } from './repo/types.js';
-import { RecordStoreImpl, createRecordStore } from './store/RecordStoreImpl.js';
+import { RecordStoreImpl } from './store/RecordStoreImpl.js';
 import { resolveSeedRecordsDir } from './index/seedRecordsDir.js';
 import { createEmbeddedDefaultRepositoryConfig, loadConfig, getDefaultRepository } from './config/loader.js';
 import { DEFAULT_CONFIG as DEFAULT_APP_CONFIG, type AppConfig, type RepositoryConfig, resolveAiProfile } from './config/types.js';
@@ -86,8 +87,10 @@ import {
   createCheckinHandlers,
 } from './api/handlers/index.js';
 import { createResolveSpineFromContext, createCompileOntologyResolver, createResolveSpine, createTermProvider, createRecordProvider } from './resolve/index.js';
+import { warmLocalOboSources } from './resolve/providers/localObo.js';
 import { buildResidentContext } from './ai/residentContext.js';
 import { createIngestionAIHandlers } from './api/handlers/IngestionAIHandlers.js';
+import { createSpecSheetHandlers } from './api/handlers/SpecSheetHandlers.js';
 import { createInventoryShelfHandlers } from './api/handlers/InventoryShelfHandlers.js';
 import { createMaterialAIHandlers } from './api/handlers/MaterialAIHandlers.js';
 import { createAiIngestionHandlers } from './api/handlers/AiIngestionHandlers.js';
@@ -96,6 +99,7 @@ import { createProtocolIdeHandlers } from './api/handlers/ProtocolIdeHandlers.js
 import { createProtocolIntakeHandlers } from './api/handlers/ProtocolIntakeHandlers.js';
 import { createPlannedRunHandlers } from './api/handlers/PlannedRunHandlers.js';
 import { createAiThreadHandlers } from './api/handlers/AiThreadHandlers.js';
+import { createPendingIntentHandlers } from './api/handlers/PendingIntentHandlers.js';
 import { createCorpusHandlers } from './api/handlers/CorpusHandlers.js';
 import { createStorageHandlers } from './api/handlers/StorageHandlers.js';
 import { createAnalysisHandlers } from './api/handlers/AnalysisHandlers.js';
@@ -151,10 +155,10 @@ import type { KnowledgeAIHandlers } from './api/handlers/KnowledgeAIHandlers.js'
 import type { AiRecordDraftHandlers } from './api/handlers/AiRecordDraftHandlers.js';
 import { loadPlatformRegistry } from './platform-registry/YamlPlatformRegistryLoader.js';
 import type { PlatformRegistry } from './platform-registry/PlatformRegistry.js';
-import { ArtifactBlobStore } from './ingestion/ArtifactBlobStore.js';
+import { ArtifactBlobStore, LegacyArtifactBlobStore, createArtifactBlobStoreRecorder } from './ingestion/ArtifactBlobStore.js';
 import { LifecycleEngine, loadLifecyclesFromDir } from './lifecycle/index.js';
 import { PolicyBundleService } from './policy/PolicyBundleService.js';
-import { createLabwareLookup } from './ai/compiler/labwareLookup.js';
+import { createLabwareDefinitionLookup, createLabwareLookup } from './ai/compiler/labwareLookup.js';
 import { loadDefaultSurfacesRegistry } from './surfaces/surfaces.js';
 import { createLedgerQueryHost } from './workspace-session/ledgerQuery.js';
 import { journalPolicyPath } from './workspace-session/WorkstateJournal.js';
@@ -533,10 +537,11 @@ export async function initializeApp(
 
   // Initialize record store (use resolved identity for git commits)
   const seedDir = resolveSeedRecordsDir();
-  const store = createRecordStore(repoAdapter, validator, lintEngine, {
+  const store = new RecordStoreImpl(repoAdapter, validator, lintEngine, {
     baseDir: recordsDir,
     author: identity?.username ?? 'record-store',
     email: identity?.email ?? 'store@computable-lab.com',
+    cascadePolicyPath: join(schemaDir, 'store/reference-cascade.yaml'),
     ...(seedDir ? { seedDir } : {}),
     // Same list the record API walls read below: the store backstop and the
     // API answer 405/APPEND_ONLY from one data source (W2-5 §3.2).
@@ -812,6 +817,9 @@ export async function createServer(
       // QMS7-3: registry-kind lifecycle coverage (loaded in initializeApp;
       // absent when the load failed → no stamp-at-create, degraded loudly).
       getKindLifecycleCoverage: () => ctx.kindLifecycleRegistry,
+      // f3server: schema-driven provenance check — consult the schema registry
+      // to decide which provenance fields to inject. Absent → kind-based fallback.
+      getSchemaProperties: makeGetSchemaProperties(ctx.schemaRegistry),
     },
   );
   const schemaHandlers = createSchemaHandlers(ctx.schemaRegistry);
@@ -838,6 +846,26 @@ export async function createServer(
   void resolveSpine
     .resolve('cell', { limit: 1 })
     .catch(() => {});
+
+  // Warm the local OBO snapshots for the same reason: today they are parsed
+  // lazily inside the first search, and a missing/unparsable file only shows up
+  // as a quietly smaller result set. Deferred via setImmediate so parsing never
+  // blocks boot, and best-effort so an unreadable registry cannot fail startup.
+  // A healthy boot logs nothing; each broken source gets ONE named warn line.
+  setImmediate(() => {
+    try {
+      for (const status of warmLocalOboSources()) {
+        if (!status.ok) {
+          console.warn(
+            `local-obo source ${status.id} failed to load from ${status.path}: ${status.error}`,
+          );
+        }
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`local-obo sources failed to load: ${message}`);
+    }
+  });
 
   // Compile hot path uses the SHARED full resolve() spine (local records + OAK +
   // OLS4), so the compiler agrees with the UI and agent — "one resolution path,
@@ -985,6 +1013,15 @@ export async function createServer(
     process.env.AI_THREADS_ROOT || resolve(ctx.workspaceRoot, 'var', 'ai-threads');
   const aiThreadStore = new AiThreadStore({ rootDir: aiThreadsRoot });
   const aiThreadHandlers = createAiThreadHandlers(aiThreadStore, ctx.store);
+  // L2-JOURNEY-CHECKPOINT-1: the pending-intent checkpoint store root is the SAME
+  // ai-threads root (the store derives its per-(user, endpoint, scope, thread) file
+  // path from it); the HTTP handlers re-implement nothing — every write delegates
+  // to the store (one Ajv seam, compare-and-set resume, injection-mode refusal).
+  // L2-JOURNEY-FALSIFY-1 (u1refdrill): the SAME record store (created in initializeApp and
+  // carried here as ctx.store; NOT a second instance) is wired as the origin-record authority —
+  // a resume consults restoreCheckpoint against it BEFORE any 'resumed' write, so a journey
+  // whose origin record changed while away is blocked (409), not silently redirected.
+  const pendingIntentHandlers = createPendingIntentHandlers({ rootDir: aiThreadsRoot, recordStore: ctx.store });
 
   const jsonLdSearchHandlers = createJsonLdSearchHandlers(
     ctx.jsonLdIndex,
@@ -1025,9 +1062,18 @@ export async function createServer(
     : undefined;
   const extractHandlers = createExtractHandlers(runner, ctx.store, ctx.schemaRegistry, ctx.validator, ctx.extractionMetrics!, auditService, semanticPassRunner);
 
+  // Lazy device resolution: construction must never throw when
+  // storageDevices is empty (DEFAULT_APP_CONFIG) — the device is resolved on
+  // the first save()/loadBase64() instead. Legacy on-disk blobs stay readable.
+  const ingestionBlobStore = new ArtifactBlobStore(
+    ctx.storageService,
+    'ingestion-artifacts',
+    createArtifactBlobStoreRecorder(ctx.store),
+    new LegacyArtifactBlobStore(ctx.workspaceRoot, join(ctx.recordsDir, '.ingestion-artifacts')),
+  );
   const ingestionHandlers = createIngestionHandlers(
     ctx.store,
-    new ArtifactBlobStore(ctx.workspaceRoot, join(ctx.recordsDir, '.ingestion-artifacts')),
+    ingestionBlobStore,
     runner,
   );
 
@@ -1217,6 +1263,14 @@ export async function createServer(
         fetchProtocol: fetchRecordPayload,
         fetchGraphComponent: fetchRecordPayload,
         searchLabwareByHint: createLabwareLookup(ctx.store),
+        // L2-P1-ABSENCE-PROBE-TIERS-1 (u1probe): the DEFINITION tier of the
+        // two-tier absence probe — the labware-definition registry by display
+        // name, probed only after the record tier misses, so a definition-only
+        // labware is never falsely declared "not in this lab's records".
+        // Wired here (the orchestrator deps the two absence call sites read),
+        // not in the runChatbotCompile deps: the compile path never calls the
+        // absence probe, so a slot there would be dead wiring.
+        searchLabwareDefinitionsByHint: createLabwareDefinitionLookup(ctx.store),
         extractionService: runner,
         llmClient: inferenceClient,
         ...(compileOntologyResolver ? { ontologyResolver: compileOntologyResolver } : {}),
@@ -1613,6 +1667,8 @@ export async function createServer(
     registerDraftRoutes(instance, ctx);
     const routeOpts: import('./api/routes.js').RouteOptions = {
       recordHandlers,
+      // labware-definition search's second source; the route has no other reader.
+      recordStore: ctx.store,
       recordSearchHandlers,
       relatedRecordsHandlers,
       schemaHandlers,
@@ -1686,6 +1742,7 @@ export async function createServer(
     };
     routeOpts.aiHandlers = aiHandlers;
     routeOpts.aiThreadHandlers = aiThreadHandlers;
+    routeOpts.pendingIntentHandlers = pendingIntentHandlers;
     routeOpts.jsonLdSearchHandlers = jsonLdSearchHandlers;
     routeOpts.graphSearchHandlers = graphSearchHandlers;
     // Phase-1 fix-it chat: streams worker-Qwen-backed diagnoses for AI
@@ -1712,6 +1769,9 @@ export async function createServer(
     routeOpts.identityHandlers = identityHandlers;
     routeOpts.authHandlers = authHandlers;
     routeOpts.labSyncHandlers = labSyncHandlers;
+    // Spec-sheet extraction: mounted unconditionally; Exa config is read live
+    // per request so a key added in config takes effect without a restart.
+    routeOpts.specSheetHandlers = createSpecSheetHandlers({ getAppConfig: () => ctx.appConfig });
     registerRoutes(instance, routeOpts);
     
     // Protocol Steps Routes (CRUD for protocol step sub-graphs, settings, etc.)

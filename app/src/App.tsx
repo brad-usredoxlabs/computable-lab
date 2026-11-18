@@ -77,6 +77,11 @@ const GraphSearchPage = lazy(async () => import('./graph-search/GraphSearchPage'
 const SequencesPage = lazy(async () => import('./sequences/SequencesPage').then(m => ({ default: m.SequencesPage })))
 const AnalysisPage = lazy(async () => import('./analysis/AnalysisPage').then((m) => ({ default: m.AnalysisPage })))
 const ChatPage = lazy(async () => import('./chat/ChatPage').then((m) => ({ default: m.ChatPage })))
+const LabMaterialNewPage = lazy(async () => import('./collections/LabMaterialNewPage').then((m) => ({ default: m.LabMaterialNewPage })))
+const LabLabwareNewPage = lazy(async () => import('./collections/LabLabwareNewPage').then((m) => ({ default: m.LabLabwareNewPage })))
+// u6binddoor: role binding surface — mounts RunEditorRouter on /runs/:runId/bindings
+const RunEditorRouter = lazy(async () => import('./graph/RunEditorRouter').then((m) => ({ default: m.RunEditorRouter })))
+const LabwareEditorRoutePage = lazy(async () => import('./graph/LabwareEditorRoutePage').then((m) => ({ default: m.LabwareEditorRoutePage })))
 // QMS-5: record registry (multi-kind QMS browser). QMS7-1: the page itself is
 // now imported by RegistryHostPage (the shell host), not routed directly.
 
@@ -158,6 +163,10 @@ export function App() {
               <Route path="/claims/:claimId" element={<DeferredRoute><ClaimWorkspace /></DeferredRoute>} />
               <Route path="/lab" element={<DeferredRoute><LabCollectionView /></DeferredRoute>} />
               <Route path="/lab/:category" element={<DeferredRoute><LabCollectionView /></DeferredRoute>} />
+              {/* Unit 1: material creation entry point */}
+              <Route path="/lab/materials/new" element={<DeferredRoute><LabMaterialNewPage /></DeferredRoute>} />
+              {/* L2-SPEC-SHEET-INGEST-1: labware creation entry point (spec-sheet ingest) */}
+              <Route path="/lab/labware/new" element={<DeferredRoute><LabLabwareNewPage /></DeferredRoute>} />
               <Route path="/lab/:category/:entityId" element={<DeferredRoute><LabEntityWorkspace /></DeferredRoute>} />
               <Route path="/ingestion" element={<DeferredRoute><IngestionPage /></DeferredRoute>} />
               <Route path="/ingestion/:tab" element={<DeferredRoute><IngestionPage /></DeferredRoute>} />
@@ -188,6 +197,10 @@ export function App() {
               <Route path="/event-editor/fixit" element={<DeferredRoute><Slot name="event-editor.fix-it-route" /></DeferredRoute>} />
               <Route path="/event-editor/:eventGraphId" element={<DeferredRoute><EventEditorPage /></DeferredRoute>} />
               <Route path="/runs/:runId/event-editor" element={<DeferredRoute><EventEditorPage /></DeferredRoute>} />
+              {/* u6binddoor: role binding surface — mounts RunEditorRouter on
+                  /runs/:runId/bindings (BindingModeEditor for planned-run,
+                  LabwareEventEditor as fallback). */}
+              <Route path="/runs/:runId/bindings" element={<DeferredRoute><RunEditorRouter /></DeferredRoute>} />
 
               {/* Phase 11: legacy global endpoints redirect into the workspace's
                   mode dispatcher. Each preserves its query string so deep-links
@@ -233,6 +246,15 @@ export function App() {
                   QMS7-1: hosted in the unified workspace shell. */}
               <Route path="/registry" element={<DeferredRoute><RegistryHostPage /></DeferredRoute>} />
               <Route path="/settings" element={<DeferredRoute><SettingsRoute /></DeferredRoute>} />
+              <Route path="/labware-editor" element={<DeferredRoute><LabwareEditorRoutePage /></DeferredRoute>} />
+              {/* u1resultsroute: the editor's own mode switcher (LabwareEventEditor.tsx:6267)
+                  navigates to /runs/<runId>/editor/<mode> for every mode, but no such route was
+                  registered, so it fell through to the 404 catch-all. Register the ONE missing
+                  route — the SAME LabwareEditorRoutePage as /labware-editor (no second routing
+                  mechanism, no copy of the Attach capability) — so results/readouts/biology/...
+                  are reachable. The editor reads its mode from the :mode param and ?id= from the
+                  query string, which this route preserves. */}
+              <Route path="/runs/:runId/editor/:mode" element={<DeferredRoute><LabwareEditorRoutePage /></DeferredRoute>} />
               {/* Phase 7: retired legacy URLs do not redirect. */}
               <Route path="*" element={<NotFoundRoute />} />
               </Routes>

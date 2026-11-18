@@ -1,22 +1,37 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   apiClient,
+  type MaterialRefInput,
   type MeasurementContextRecord,
   type MeasurementParserValidationResult,
   type MeasurementRecordPayload,
   type RunWorkspaceResponse,
 } from '../../shared/api/client'
+import { ApiError } from '../../shared/api/errors'
 import type { PlateEvent, ReadDetails } from '../../types/events'
 import type { WellId } from '../../types/plate'
 import { isBiologyContext, parseReadoutContextMetadata, parseReadoutNotes, summarizeQcControls } from '../lib/readoutMetadata'
 
 const PARSER_OPTIONS = [
-  { value: 'generic_csv', label: 'Generic CSV' },
-  { value: 'gemini_csv', label: 'Gemini CSV' },
-  { value: 'abi7500_csv', label: 'ABI 7500 CSV' },
-  { value: 'agilent6890_csv_stub', label: 'Agilent 6890 CSV' },
-  { value: 'metrohm761_csv_stub', label: 'Metrohm 761 CSV' },
+  { value: 'generic_csv', label: 'Generic CSV', expectedUnits: 'as stated in file' },
+  { value: 'gemini_csv', label: 'Gemini CSV', expectedUnits: 'as stated in file' },
+  { value: 'abi7500_csv', label: 'ABI 7500 CSV', expectedUnits: 'as stated in file' },
+  { value: 'agilent6890', label: 'Agilent 6890 GC-FID', expectedUnits: 'time: min (required); intensity: from file header' },
+  { value: 'metrohm761_csv_stub', label: 'Metrohm 761 CSV', expectedUnits: 'as stated in file' },
+  { value: 'aia_andi_cdf', label: 'AIA/ANDI CDF (NetCDF)', expectedUnits: 'time & intensity: from file' },
 ] as const
+
+/** What the parser actually read, read back off the created measurement record (never synthesized client-side). */
+export interface ResultsParseSummary {
+  recordId: string
+  parserId: string
+  parserVersion: string
+  units: string
+  rowCount: number
+  firstPoint: string | null
+  lastPoint: string | null
+  storedPath: string | null
+}
 
 export interface ResultsReadEventSummary {
   eventId: string
@@ -50,7 +65,7 @@ export interface ResultsExpectationCheck {
 }
 
 export interface UseResultsModeResult {
-  parserOptions: Array<{ value: string; label: string }>
+  parserOptions: Array<{ value: string; label: string; expectedUnits: string }>
   readEvents: ResultsReadEventSummary[]
   activeReadEventId: string | null
   setActiveReadEventId: (eventId: string | null) => void
@@ -76,6 +91,18 @@ export interface UseResultsModeResult {
   uploadFile: (file: File) => Promise<void>
   uploading: boolean
   uploadedFileName: string | null
+  /** sha256 of the stored bytes, exactly as the server's data-reference write returned it (binary uploads only). */
+  uploadedContentHash: string | null
+  /** Data-reference record id anchoring the uploaded bytes (binary uploads only). */
+  uploadedDataReferenceId: string | null
+  /** What the parser actually read, read back from the created measurement record (null until readable). */
+  parseSummary: ResultsParseSummary | null
+  /** Declared equipment records (the store's `equipment` kind) backing the Attach drawer's instrument pick. */
+  equipmentOptions: Array<{ id: string; label: string }>
+  selectedEquipmentId: string | null
+  setSelectedEquipmentId: (id: string | null) => void
+  /** Which source resolves the recorded instrument: the person's pick, the active readout, or none. */
+  equipmentSource: 'picked' | 'readout' | null
   parserId: string
   setParserId: (parserId: string) => void
   preview: MeasurementParserValidationResult | null
@@ -132,6 +159,42 @@ function eventLabel(event: PlateEvent): string {
   const assay = typeof details.assay_ref === 'string' ? details.assay_ref : undefined
   const instrument = typeof details.instrument === 'string' ? details.instrument : undefined
   return [event.eventId, assay, instrument].filter(Boolean).join(' · ')
+}
+
+/** One data point rendered verbatim from the record's own row — no recomputation. */
+function formatDataPoint(row: { timeMin?: number; value: number; unit?: string }): string {
+  const unit = row.unit ? ` ${row.unit}` : ''
+  const time = typeof row.timeMin === 'number' ? `${row.timeMin} min — ` : ''
+  return `${time}${row.value}${unit}`
+}
+
+/** Build the parse summary READ-BACK from the created record's payload; null when the record is not readable — never synthesized. */
+function buildParseSummary(recordId: string, payload: MeasurementRecordPayload | null): ResultsParseSummary | null {
+  if (!payload) return null
+  const parserId = payload.parserInfo?.parserId
+  if (!parserId) return null
+  const rows = (payload.data ?? []) as Array<{ timeMin?: number; value: number; unit?: string }>
+  const first = rows[0]
+  const last = rows.length > 0 ? rows[rows.length - 1] : undefined
+  // Units are the record's own per-row fields (timeMin in minutes; per-row unit) — verbatim, not recomputed.
+  const hasTime = rows.some((row) => typeof row.timeMin === 'number')
+  const intensityUnits = Array.from(new Set(rows.map((row) => row.unit).filter((unit): unit is string => Boolean(unit))))
+  const unitsParts: string[] = []
+  if (hasTime) unitsParts.push('time: min')
+  if (intensityUnits.length > 0) unitsParts.push(`intensity: ${intensityUnits.join(' / ')}`)
+  const units = unitsParts.length > 0 ? unitsParts.join(' · ') : 'unstated'
+  const fileRef = payload.artifacts?.[0]?.fileRef as Record<string, unknown> | undefined
+  const storedPath = typeof fileRef?.stored_path === 'string' ? fileRef.stored_path : null
+  return {
+    recordId,
+    parserId,
+    parserVersion: payload.parserInfo?.parserVersion ?? 'unknown',
+    units,
+    rowCount: rows.length,
+    firstPoint: first ? formatDataPoint(first) : null,
+    lastPoint: last ? formatDataPoint(last) : null,
+    storedPath,
+  }
 }
 
 function measurementLabwareId(
@@ -234,6 +297,9 @@ export function useResultsMode(args: {
   const [rawDataPath, setRawDataPath] = useState('')
   const [uploading, setUploading] = useState(false)
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null)
+  const [uploadedContentHash, setUploadedContentHash] = useState<string | null>(null)
+  const [uploadedDataReferenceId, setUploadedDataReferenceId] = useState<string | null>(null)
+  const [ingestedMeasurementId, setIngestedMeasurementId] = useState<string | null>(null)
   const [parserId, setParserId] = useState<string>('generic_csv')
   const [preview, setPreview] = useState<MeasurementParserValidationResult | null>(null)
   const [draftingEvidence, setDraftingEvidence] = useState(false)
@@ -242,6 +308,38 @@ export function useResultsMode(args: {
   const [validating, setValidating] = useState(false)
   const [ingesting, setIngesting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [selectedEquipmentId, setSelectedEquipmentId] = useState<string | null>(null)
+  const [equipmentOptions, setEquipmentOptions] = useState<Array<{ id: string; label: string }>>([])
+  // True when the equipment load itself failed (the store did not answer). A
+  // failed load is NOT a declared absence: refusal fires only on an answered,
+  // empty listing — a store outage must not silently block publishing.
+  const [equipmentLoadFailed, setEquipmentLoadFailed] = useState(false)
+
+  // Declared equipment records back the Attach drawer's instrument pick. Loaded
+  // once on mount from the store — the drawer never invents an instrument list.
+  useEffect(() => {
+    let cancelled = false
+    void apiClient
+      .listRecordsByKind('equipment', 200)
+      .then(({ records }) => {
+        if (cancelled) return
+        setEquipmentLoadFailed(false)
+        setEquipmentOptions(
+          (Array.isArray(records) ? records : []).map((record) => ({
+            id: record.recordId,
+            label: typeof record.payload.name === 'string' && record.payload.name.trim() !== '' ? record.payload.name : record.recordId,
+          })),
+        )
+      })
+      .catch(() => {
+        // An answered-empty store is a DECLARED absence ("No equipment records
+        // declared"); a failed load is surfaced as a load error, not a refusal.
+        if (!cancelled) setEquipmentLoadFailed(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -377,6 +475,16 @@ export function useResultsMode(args: {
   )
   const activeContextLabel = activeContext?.payload.name || null
 
+  const pickedEquipment = useMemo(
+    () => (selectedEquipmentId ? equipmentOptions.find((option) => option.id === selectedEquipmentId) ?? null : null),
+    [equipmentOptions, selectedEquipmentId],
+  )
+  const equipmentSource: 'picked' | 'readout' | null = pickedEquipment
+    ? 'picked'
+    : activeContext?.payload.equipment_ref
+      ? 'readout'
+      : null
+
   const activeMeasurement = useMemo(
     () => measurements.find((measurement) => measurement.recordId === activeMeasurementId) ?? null,
     [measurements, activeMeasurementId],
@@ -416,6 +524,14 @@ export function useResultsMode(args: {
     if (preview?.data?.length) return readRows(preview)
     return readRows(activeMeasurement?.payload ?? null)
   }, [activeMeasurement?.payload, preview])
+
+  // Read the created measurement back off the refreshed workspace (existing load/refresh path) and summarize
+  // what the parser actually put in the record. Not (yet) readable -> null; the UI says so; nothing is synthesized.
+  const parseSummary = useMemo(() => {
+    if (!ingestedMeasurementId) return null
+    const record = workspace?.measurements.find((measurement) => measurement.recordId === ingestedMeasurementId)
+    return buildParseSummary(ingestedMeasurementId, record?.payload ?? null)
+  }, [ingestedMeasurementId, workspace?.measurements])
 
   const availableMetrics = useMemo(
     () => Array.from(new Set(rowSource.map((row) => row.metric))),
@@ -514,6 +630,12 @@ export function useResultsMode(args: {
       })
       setRawDataPath(response.path)
       setUploadedFileName(response.fileName)
+      // The content hash shown to the person is the server's data-reference
+      // anchor (sha256 of the stored bytes) — never computed client-side.
+      // Optional fields stay absent rather than undefined for text-mode
+      // (git-inbox) uploads.
+      setUploadedContentHash(response.sha256 ?? null)
+      setUploadedDataReferenceId(response.dataReferenceId ?? null)
       setPreview(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to upload measurement file')
@@ -531,13 +653,29 @@ export function useResultsMode(args: {
       setError('Run context is missing.')
       return
     }
+    // The instrument is stated, never silently inherited: the person's explicit
+    // pick wins, then the active readout's declared ref. When neither resolves,
+    // publishing is refused with a named reason — never an instrument-less
+    // measurement published silently. (A failed equipment load is not a
+    // declared absence: the readout ref is forwarded in that case.)
+    const equipmentRef: MaterialRefInput | null = pickedEquipment
+      ? { kind: 'record', id: pickedEquipment.id, type: 'equipment' }
+      : activeContext?.payload.equipment_ref ?? null
+    if (!equipmentRef && !equipmentLoadFailed) {
+      setError(
+        activeContext
+          ? `No instrument is recorded for this measurement: choose one from the declared equipment records, or clear the pick so the readout "${activeContextLabel ?? activeContext.recordId}"'s instrument is used.`
+          : 'No instrument is recorded for this measurement: choose one from the declared equipment records before publishing.',
+      )
+      return
+    }
     setIngesting(true)
     setError(null)
     try {
       const measurementContext = activeContext
       const measurementLabwareId = measurementContext?.payload.source_ref?.id || targetLabwareId || sourceLabwareId
       const response = await apiClient.ingestMeasurement({
-        ...(measurementContext?.payload.equipment_ref ? { equipmentRef: measurementContext.payload.equipment_ref } : {}),
+        ...(equipmentRef ? { equipmentRef } : {}),
         ...(measurementLabwareId ? { labwareInstanceRef: { kind: 'record', id: measurementLabwareId, type: 'labware' } } : {}),
         eventGraphRef: { kind: 'record', id: eventGraphId, type: 'event-graph' },
         ...(measurementContext ? { measurementContextRef: { kind: 'record', id: measurementContext.recordId, type: 'measurement-context', label: measurementContext.payload.name } } : {}),
@@ -549,15 +687,23 @@ export function useResultsMode(args: {
       if (!response.success || !response.recordId) {
         throw new Error('Measurement ingest did not return a record id.')
       }
+      setIngestedMeasurementId(response.recordId)
       await refresh()
       setActiveMeasurementId(response.recordId)
       setPreview(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to ingest measurement')
+      // Preserve a typed server refusal verbatim (e.g. a parser's own
+      // BAD_REQUEST with the offending line quoted): an ApiError from the
+      // server response carries the exact code/message — do not replace it.
+      if (ApiError.isApiError(err)) {
+        setError(err.message)
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to ingest measurement')
+      }
     } finally {
       setIngesting(false)
     }
-  }, [activeContext, activeReadEventId, eventGraphId, parserId, rawDataPath, refresh, runId, sourceLabwareId, targetLabwareId, timepoint])
+  }, [activeContext, activeContextLabel, activeReadEventId, eventGraphId, parserId, pickedEquipment, rawDataPath, refresh, runId, sourceLabwareId, targetLabwareId, timepoint])
 
   const activeLabwareId = measurementLabwareId(activeMeasurement, activeContext)
   const sourceWellContents = useMemo(() => {
@@ -814,6 +960,13 @@ export function useResultsMode(args: {
     uploadFile,
     uploading,
     uploadedFileName,
+    uploadedContentHash,
+    uploadedDataReferenceId,
+    parseSummary,
+    equipmentOptions,
+    selectedEquipmentId,
+    setSelectedEquipmentId,
+    equipmentSource,
     parserId,
     setParserId,
     preview,

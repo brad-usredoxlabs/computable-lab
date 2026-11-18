@@ -30,6 +30,7 @@ import type {
   OntologyRefProposal,
   AiConversationMessage,
   AiLabwareAddition,
+  AiRecordCreation,
   InstrumentApplianceJob,
   PromptMention,
   AiAgentActionEnvelope,
@@ -181,7 +182,7 @@ async function resolveLabwareAdditionPayload(addition: AiLabwareAddition): Promi
   if (definitionPayload) return definitionPayload
   try {
     const record = await apiClient.getRecord(addition.recordId)
-    if (record?.payload) return record.payload as unknown as LabwareRecordPayload
+    if (record?.payload) return { ...record.payload, recordId: addition.recordId } as unknown as LabwareRecordPayload
   } catch {
     // Seed/local labware ids are valid editor labware refs even when they are
     // not backed by /api/records.
@@ -252,6 +253,23 @@ export interface UseAiChatReturn {
    */
   honestWall: string | null
   /**
+   * L2-PROSE-SHORTHAND-SALVAGE-1 (browser-gate L2-prose-shorthand-browser-g1
+   * D2, surface half): the drafting transcript's recovery marker. The LAST
+   * status frame's `recoveredFrom` — the server-named driver that salvaged a
+   * draft from the model's text — relayed OPAQUELY (a `string`, never a
+   * client-side driver union). null when the turn was not recovered (or had
+   * no status frame yet); cleared on the same resets that clear the status
+   * surface (a new send, a thread reset, clearHistory). ChatLog renders it as
+   * the inspection-only `data-recovered-from` attribute — no visible text.
+   *
+   * OPTIONAL on the interface only so the hand-rolled legacy stub literals
+   * that predate the marker (e.g. ChatPreviewCard.dropRestore's faithful
+   * chat host) keep typechecking without editing files this unit does not
+   * own. The REAL hook always supplies the key (null on a clean turn), so a
+   * consumer never sees it missing where `useAiChat` produced the chat.
+   */
+  statusRecoveredFrom?: { driver: string } | null
+  /**
    * L2-CHAT-1 regatefix2 D1: the adoption REFUSAL the card must show
    * verbatim — set when the `onPreviewAccept` seam THROWS (e.g. the deck
    * lock conflict, `RunDeckLockConflictError`), cleared on a fresh apply
@@ -318,6 +336,22 @@ export interface UseAiChatReturn {
   thinkingMode: boolean
   setThinkingMode: (value: boolean) => void
   /**
+   * L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render: the NAMED-REASON the pane must
+   * show when a SELECTED thread's hydration GET resolved to ZERO messages —
+   * this tab could not read the thread's messages (thread id + scope named).
+   * One predicate, fed by the hydration result: SET when a user-initiated
+   * `switchThread`'s read resolves empty, CLEARED when a read resolves with
+   * messages and on every thread reset (switch / new / re-key / fresh send).
+   * A fresh mint resolving empty is a NEW conversation (honest blank pane),
+   * NOT a named reason (mint-exempt: the flag is set ONLY by `switchThread`
+   * and cleared on every non-user activation — mount/scope mint, `newThread`).
+   * Optional (absent-not-undefined, exactOptionalPropertyTypes) so hand-rolled
+   * stub literals that predate it keep typechecking; the REAL hook always
+   * supplies the key (null when no reason) — a consumer never sees it missing
+   * where `useAiChat` produced the chat.
+   */
+  threadUnreadable?: { threadId: string; scope: string } | null
+  /**
    * L2-THREAD-SCOPED-1: the ACTIVE thread id of the current scope. Only
    * present when the chat is thread-scoped (an `endpoint` is set) — absent
    * (not undefined) on in-memory chats so exactOptional surfaces never see a
@@ -344,6 +378,17 @@ export interface UseAiChatReturn {
    * identity). Absent without an `endpoint`.
    */
   listThreads?: () => Promise<ThreadSummary[]>
+  /**
+   * L2-P1-THREAD-RESTORE-1 u4scope: the resolved sessionStorage tab id for
+   * THIS chat's (tab, scope) — the exact key the hook mints/persists under
+   * (`getThreadTabId(activeThread.scope)`, same single mint the wire header
+   * uses; mints nothing new). Present only on thread-scoped chats. The
+   * ThreadPicker resume check MUST read the id THROUGH here, never call
+   * getThreadTabId() bare: the bare read hits the no-scope bucket and never
+   * matches a scoped host's persisted row (r12 legB: run-door reload never
+   * resumes).
+   */
+  tabThreadId?: () => string | undefined
 }
 
 /**
@@ -361,8 +406,14 @@ export type AcceptEventHandler = (event: PlateEvent) => void
  */
 export interface DeckAdoptionOutcome {
   adopted: boolean
-  /** Refused at the ontology sign-off gate: unsigned decisionNeeded terms. */
+  /** Refused before any write: `blocked` names the count (unsigned
+   *  decisionNeeded terms, or placed labwares with no resolvable definition). */
   blocked?: number
+  /** u3ghostfix D3: WHY it was refused — the refusal wording branches on this
+   *  (a ghost-gate refusal is not an ontology sign-off). */
+  reason?: 'ontology-signoff' | 'unplaceable-labware'
+  /** Ghost-gate refusals: the deck keys that could not name a definition. */
+  unplaceable?: string[]
   /** Adopted: the counts of what was ACTUALLY committed (for the summary
    *  line — never "Accepted N events." while labware/placements were
    *  silently dropped). */
@@ -400,12 +451,23 @@ export interface DeckPreviewLike {
 export interface AiProposalDraft {
   events: PlateEvent[]
   labwareAdditions: AiLabwareAddition[]
+  /** Store payloads for the identities selected by the compiler. */
+  labwareRecords?: Record<string, LabwareRecordPayload>
   /**
    * Resolved placement offers (REVISE-GHOST-1 fix3 shape): labware hints the
    * pipeline bound against real inventory records. Ghosted as placements of
    * the EXISTING record (keyed by recordId), never a re-creation.
    */
   resolvedLabwares?: Array<{ hint?: string; recordId: string; title?: string }>
+  /**
+   * L2-P1-CREATE-RECORD-LANDS-1 u1recordsdraft (decision
+   * STARTER-PACK-AND-PROMPT1-l2-20261114 / gate PROMPT1-GATE-20261114T051016Z,
+   * finding R1-13): records the done wants CREATED — carried VERBATIM from
+   * result.recordCreations (conditional spread: ABSENT when the done carried
+   * none — exactOptionalPropertyTypes). Staging writes nothing (Accept is the
+   * one write path; builder forwards them, draftPreview.ts:487).
+   */
+  recordCreations?: AiRecordCreation[]
   /** The prompt that produced this draft. */
   prompt: string
   // NOTE (L2-CHAT-1 FIX1 D7): this draft carries NO `revisionHistory` field.
@@ -709,6 +771,11 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
   // REPORTED failure in plain language, owned by its turn. AiTabPanel's
   // `honestWall` state ported to the generic stack.
   const [honestWall, setHonestWall] = useState<string | null>(null)
+  // L2-PROSE-SHORTHAND-SALVAGE-1 (gate D2 surface half): the drafting
+  // lineage's recovery marker. Owned by the LAST status frame of a turn and
+  // cleared on the same resets as the status surface — never sticky across
+  // turns. `?? null` keeps the state shape (a clean frame writes null).
+  const [statusRecoveredFrom, setStatusRecoveredFrom] = useState<{ driver: string } | null>(null)
   // L2-CHAT-1 regatefix2 D1 — the adoption REFUSAL the card renders as a
   // visible honest wall (the onPreviewAccept seam threw; e.g. the deck lock
   // conflict). Null when the last apply attempt succeeded or was not yet
@@ -881,11 +948,19 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
   const turnInFlightRef = useRef(false)
   // LEG F fix run 1 (advc D1): the thread scope the SYNC effect persists
   // into. Tracks the hydration effect's last ADVANCED binding — during a
-  // guarded re-key that binding stays the turn's minted (pre-flip) scope,
-  // so a surviving turn's whole persistence destination never splits
+  // guarded re-key that binding stays the turn's minted (pre-flip) scope, so
+  // a surviving turn's whole persistence destination never splits
   // across two server threads. Equals `activeThread.scope` whenever no
   // turn is in flight.
   const persistedScopeRef = useRef<string>('')
+  // L2-P1-TAB2-TRANSCRIPT-1 / u3selectid: the id twin of the binding above —
+  // the thread id the SYNC effect persists into. The wire identity is a
+  // record id (never a name, never "the tab's current mint"): the sync's
+  // threadOpts ride this so a deferred in-flight re-key (LEG F) keeps
+  // POSTing the surviving turn into the SAME (scope, id) pair the hydration
+  // bound — a post-flip id with the pre-flip scope would split the turn
+  // across two server threads (the cross-scope split, id axis).
+  const activeThreadIdRef = useRef<string | null>(null)
   // LEG F fix run 1 (advc D1): TRUE while the hydration effect has DEFERRED
   // a re-key because a turn was in flight. The binding (lastThreadKeyRef +
   // persistedScopeRef) is held on the turn's minted thread until the turn's
@@ -906,6 +981,26 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
   // previewEvents, messages]; the ref keeps the CURRENT pair live).
   const activeThreadRef = useRef(activeThread)
   activeThreadRef.current = activeThread
+  // L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render: the NAMED-REASON state (one
+  // predicate, fed by the hydration result — never re-derived from the list's
+  // messageCount). `userSwitchRef` marks that the current activation is a
+  // USER-initiated `switchThread`, so a read resolving EMPTY is a "could not
+  // read" state (not a fresh-mint new conversation — the honest blank pane).
+  const [threadUnreadable, setThreadUnreadable] = useState<{ threadId: string; scope: string } | null>(null)
+  const userSwitchRef = useRef(false)
+  // L2-P1-TAB2-TRANSCRIPT-1 / u3selectid: a user selection that lands
+  // DURING the scope's PROVISIONAL hold (switchThread below). The hold's
+  // effects (lazy-mint, hydration, sync) RETURN EARLY — C-2. The defect
+  // this ref closes: the pre-fix early `return` SILENTLY DROPPED the
+  // selection (recon R1-8, shots 83/86 — the picker moved, the wire read
+  // the tab's own minted id, the pane stayed blank). The selection is
+  // HELD here (a ref: the lazy-mint effect's settle re-run reads it) and
+  // applied THERE — the map entry is written AT APPLY, never during the
+  // hold (threadTabIds stays the single mint; the selection is not a
+  // mint). No IO during the hold (C-2): the wipe + the user-switch mark
+  // ride the hold, the hydration GET fires on the settle re-run with the
+  // SELECTED id.
+  const heldSelectionRef = useRef<string | null>(null)
 
   // L2-THREADSCOPE-FLIP-1 unit 2 (C-2/C-4): scope-DECISION status
   // (absent / 'settled' = default). While provisional the lazy-mint and
@@ -919,6 +1014,18 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
 
   const resetChatState = useCallback(() => {
     setMessages([])
+    // L2-PROSE-SHORTHAND-SALVAGE-1: a transcript wipe (switchThread /
+    // newThread / re-key) also drops the recovery marker — it belonged to the
+    // turn whose messages just left the screen.
+    setStatusRecoveredFrom(null)
+    // L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render: the named-reason belongs to the
+    // read that produced it — a wipe (switch / new / re-key) drops it.
+    setThreadUnreadable(null)
+    // L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render2: the named-reason RODE the
+    // honest-wall channel (its text is in paneRelevantSignature — the bump
+    // that re-renders the SIBLING pane); the wipe drops it too, the same
+    // idiom as the recovery marker above it.
+    setHonestWall(null)
     persistedIdsRef.current = new Set()
     hydratedRef.current = false
     // LEG F: a USER-initiated wipe (switchThread / newThread) also drops the
@@ -934,9 +1041,26 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
   const switchThread = useCallback(
     (id: string) => {
       if (!endpoint) return
-      if (scopeStatusRef.current === 'provisional') return
-      writeTabThreadMapEntry(scope, id)
+      // L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render: this activation is a
+      // USER-initiated selection — if its read resolves EMPTY, the pane
+      // shows the named reason (it is NOT a fresh-mint new conversation).
+      userSwitchRef.current = true
       resetChatState()
+      // L2-P1-TAB2-TRANSCRIPT-1 / u3selectid: the scope's PROVISIONAL hold
+      // makes the lazy-mint / hydration / sync effects RETURN EARLY (C-2).
+      // The pre-fix `return` SILENTLY DROPPED the selection here (recon
+      // R1-8, shots 83/86 — the picker moved, the wire read the tab's own
+      // minted id, the pane stayed blank). No IO and NO map write during the
+      // hold (C-2; threadTabIds stays the single mint — a selection is not a
+      // mint): HOLD the selection in a ref; the lazy-mint effect's settle
+      // re-run APPLIES it (map write + activation + the hydration GET
+      // carrying the SELECTED id). Settled: apply it now.
+      if (scopeStatusRef.current === 'provisional') {
+        heldSelectionRef.current = id
+        return
+      }
+      heldSelectionRef.current = null
+      writeTabThreadMapEntry(scope, id)
       setActiveThread({ scope: scope ?? '', id })
     },
     [endpoint, scope, resetChatState],
@@ -945,7 +1069,15 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
   const newThread = useCallback(() => {
     if (!endpoint) return
     if (scopeStatusRef.current === 'provisional') return
+    // L2-P1-TAB2-TRANSCRIPT-1 / u3selectid: a fresh mint is the user
+    // ABANDONING any held selection — drop it so the settle re-run does not
+    // resurrect a thread the user just chose to leave.
+    heldSelectionRef.current = null
     const id = mintTabThreadEntry(scope)
+    // L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render2: a fresh mint is a NEW
+    // conversation — its empty read must stay an honest blank pane, never a
+    // stale "could not read" reason from a prior unreadable selection.
+    userSwitchRef.current = false
     resetChatState()
     setActiveThread({ scope: scope ?? '', id })
   }, [endpoint, scope, resetChatState])
@@ -974,15 +1106,52 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
   useEffect(() => {
     if (!endpoint) return
     if (scopeStatus === 'provisional') return
-    const id = resolveTabThreadId(scope)
+    // L2-P1-TAB2-TRANSCRIPT-1 / u3selectid: a selection that landed DURING
+    // the hold is APPLIED at the settle re-run — the map write + activation
+    // (the hydration GET then fires with the SELECTED id; the user-switch
+    // mark switchThread set is NOT cleared, so an empty read still shows
+    // the named reason). Cleared BEFORE the stable-pair return so a same-pair
+    // settle re-run cannot leave the held id dangling for a later flip.
+    const held = heldSelectionRef.current
+    if (held) {
+      heldSelectionRef.current = null
+      // u3selectid: the held selection is APPLIED at the settle — persist it
+      // to the tab map (so a RELOAD keeps it, AC4) exactly as the settled
+      // switchThread branch would. This is a selection WRITE (not a mint):
+      // threadTabIds stays the single mint site.
+      writeTabThreadMapEntry(scope, held)
+    }
+    const id = held ?? resolveTabThreadId(scope)
     const next = { scope: scope ?? '', id }
     // Stable activation (C-3): a settle re-run that resolves to the
     // ALREADY-ACTIVE pair does not re-activate → the hydration effect
     // (keyed on activeThread) does not re-run (no double-fetch).
     const prev = activeThreadRef.current
     if (prev && prev.scope === next.scope && prev.id === next.id) return
+    // L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render2: this activation is NOT a
+    // user-initiated switchThread (mount mint, scope-change mint, settle
+    // re-run) — its empty read is a new conversation (honest blank pane),
+    // never a "could not read" named reason. Cleared on the activation, not
+    // before the stable-pair early return, so a same-pair settle re-run
+    // cannot drop an in-flight user switch's flag. (The held-selection
+    // branch above is the switchThread re-application: ITS flag — set by
+    // switchThread during the hold — must survive, so the clear is skipped.)
+    if (!held) userSwitchRef.current = false
     setActiveThread(next)
   }, [endpoint, scope, scopeStatus])
+
+  // L2-P1-THREAD-RESTORE-1 u4scope: the resolved (tab, scope) tab id the
+  // ThreadPicker resume check reads. THE pane's load closure is stale by
+  // construction (it captures the first-render chat — see the pane's
+  // activeIdRef comment), so the accessor reads the STABLE ref at CALL time
+  // (one render after the lazy-mint resolves the pair, the ref is current)
+  // and keeps a stable identity (useCallback on the ref) so the pane's
+  // load-dep array never re-fires on accessor churn. Absent until the
+  // lazy-mint has run (activeThread null → undefined).
+  const tabThreadId = useCallback(
+    () => (activeThreadRef.current ? resolveTabThreadId(activeThreadRef.current.scope) : undefined),
+    [activeThreadRef],
+  )
 
   useEffect(() => {
     if (!endpoint) {
@@ -1029,10 +1198,22 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
     } else {
       if (reKeyed) {
         setMessages([])
+        // L2-PROSE-SHORTHAND-SALVAGE-1 fix1 (advc c1 D1): the re-key wipe
+        // drops the transcript, so it drops the recovery marker with it —
+        // matching resetChatState (:947) and the send reset (:1265). Without
+        // this a fresh EMPTY transcript rendered the previous turn's marker.
+        setStatusRecoveredFrom(null)
+        // L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render: the re-key wipe drops the
+        // named-reason too (it belonged to the read it preceded).
+        setThreadUnreadable(null)
         persistedIdsRef.current = new Set()
       }
       lastThreadKeyRef.current = threadKey
       persistedScopeRef.current = activeThread.scope
+      // L2-P1-TAB2-TRANSCRIPT-1 / u3selectid: the id twin of the binding —
+      // the sync effect persists into the pair the hydration bound (the
+      // deferred in-flight re-key holds the minted id; see the ref).
+      activeThreadIdRef.current = activeThread.id
       // A resolved run (idle re-key, user switch, or plain mount/mint) is
       // the binding landing on the current thread — any pending deferral is
       // satisfied here, not just by the send-time resume.
@@ -1040,16 +1221,61 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
     }
     let cancelled = false
     hydratedRef.current = false
-    const threadOpts = { ...(activeThread.scope ? { scope: activeThread.scope } : {}) }
+    // L2-P1-TAB2-TRANSCRIPT-1 / u3selectid: the SELECTED thread's id rides
+    // the wire (identity is a record id, never a name — the picker's title
+    // only pre-selects the candidate). ABSENT-NOT-UNDEFINED: the id key is
+    // spread in only when activeThread holds a non-empty id, else the key is
+    // absent and the client's single header site falls back to the tab's own
+    // minted id (the single mint site — the tab's OWN thread, byte-unchanged
+    // contract).
+    const threadOpts = {
+      ...(activeThread.scope ? { scope: activeThread.scope } : {}),
+      ...(activeThread.id ? { threadId: activeThread.id } : {}),
+    }
     getThread(endpoint, threadOpts)
       .then((thread) => {
         if (cancelled) return
+        // L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render: the NAMED-REASON predicate,
+        // fed by the hydration result (ONE source — never the list's
+        // messageCount). A non-empty read is readable: clear the reason. An
+        // EMPTY read is a named reason ONLY when the activation is a
+        // USER-initiated switchThread (userSwitchRef) — a fresh mint (or the
+        // mount-time restore of a minted thread) resolving empty is a NEW
+        // conversation: the honest blank pane, not a "could not read" claim.
+        // The reason RIDES `honestWall` (the pane-relevant, transcript-region
+        // honest-failure channel): `honestWall` is in
+        // AiPanelContext.paneRelevantSignature, so setting/clearing it bumps
+        // the registration store and re-renders the pane in the production
+        // SIBLING topology (the pane is not a child of the hook owner). The
+        // pane renders the distinct `thread-unreadable` state off the
+        // STRUCTURED `threadUnreadable` predicate (this effect is the single
+        // writer — the wording never claims the thread is empty, only that
+        // this tab's read of it returned no messages).
         if (thread.messages.length > 0) {
+          setThreadUnreadable(null)
+          setHonestWall(null)
+          userSwitchRef.current = false
+        } else {
+          const pair = activeThreadRef.current
+          if (userSwitchRef.current && pair) {
+            setThreadUnreadable({ threadId: pair.id, scope: pair.scope })
+            setHonestWall(
+              `This tab could not read the messages for thread ${pair.id} (scope ${pair.scope || 'default'}). The selected listed thread's read returned no messages to show here.`,
+            )
+          }
+        }
+        if (thread.messages.length > 0) {
+          // L2-P1-R16D1-RELOAD-1 u1: the applied-result record is persisted as
+          // a `system` message and must ride the hydration filter back so a
+          // cold reload shows what was already applied (gate r16 D1 high).
+          // `tool` is still dropped — it has no ChatMessage role and no
+          // rendering surface here (the read-side complement of the sync
+          // persistence above; same single authority, no second one).
           const hydrated: ChatMessage[] = thread.messages
-            .filter((m) => m.role === 'user' || m.role === 'assistant')
+            .filter((m) => m.role === 'user' || m.role === 'assistant' || m.role === 'system')
             .map((m, idx) => ({
               id: `persisted-${idx}-${m.createdAt}`,
-              role: m.role as 'user' | 'assistant',
+              role: m.role as ChatMessage['role'],
               content: m.content,
               ...(m.metadata?.sequenceProposal ? { sequenceProposal: m.metadata.sequenceProposal as Record<string, unknown> } : {}),
               ...(typeof m.metadata?.sequenceProposalRequest === 'string' ? { sequenceProposalRequest: m.metadata.sequenceProposalRequest } : {}),
@@ -1073,6 +1299,17 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
               // persisted (the conditional-spread idiom), never `undefined`.
               ...(Array.isArray(m.metadata?.clarificationAnswers) && m.metadata.clarificationAnswers.length > 0
                 ? { clarificationAnswers: m.metadata.clarificationAnswers as AiClarificationAnswer[] }
+                : {}),
+              // L2-P1-RELOAD-CLARIFIER-1 / u2surviveriders (hydrate leg): ride the
+              // TYPED clarification requests back VERBATIM (the persist leg above
+              // wrote them) so a cold reload mid-clarification restores the SAME
+              // grouped card — same request ids, prompts and offered options —
+              // from the persisted document, NEVER re-derived on hydrate and never
+              // re-asked. Key ABSENT when never persisted (conditional-spread
+              // idiom), never `undefined`. The grouped-card arm (ChatLog.tsx:538)
+              // is NOT gated on `restored`, so no render change is needed.
+              ...(Array.isArray(m.metadata?.clarificationRequests) && m.metadata.clarificationRequests.length > 0
+                ? { clarificationRequests: m.metadata.clarificationRequests as AiClarificationRequest[] }
                 : {}),
               // L2-SUITE-A-uifix3 [D3-CHROME] (regate-5 defect 3, chrome slice):
               // mark the RESTORED message. Its answer inputs (the picker's
@@ -1120,13 +1357,31 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
     // POST to the same server thread. Identical to `activeThread.scope`
     // whenever no guard is active.
     const persistScope = persistedScopeRef.current
-    const threadOpts = { ...(persistScope ? { scope: persistScope } : {}) }
+    // L2-P1-TAB2-TRANSCRIPT-1 / u3selectid: the wire identity is a record id
+    // (never a name). The sync rides the binding the hydration effect last
+    // ADVANCED — both its scope (LEG F) and its id (u3selectid): a deferred
+    // in-flight re-key keeps POSTing the surviving turn into the SAME
+    // (scope, id) pair the hydration bound, so the turn's persistence never
+    // splits across two server threads (the cross-scope split, id axis).
+    const persistThreadId = activeThreadIdRef.current
+    const threadOpts = {
+      ...(persistScope ? { scope: persistScope } : {}),
+      ...(persistThreadId ? { threadId: persistThreadId } : {}),
+    }
     const unsynced = messages.filter(
       (m) => !persistedIdsRef.current.has(m.id) && !m.isStreaming,
     )
     if (unsynced.length === 0) return
     for (const m of unsynced) {
-      if (m.role === 'system') continue
+      // L2-P1-R16D1-RELOAD-1 u1: system messages are NO LONGER skipped. The
+      // applied-result record ("Accepted N event… commit <sha>") is pushed as
+      // a `system` message (the adoption arm) and MUST persist so a cold
+      // reload shows what was already applied (gate r16 D1 high). The server
+      // thread-messages endpoint accepts role `system` (ThreadRole includes
+      // it; the store `append` has no role whitelist) — the single authority
+      // for message persistence, no second authority added. Idempotency is
+      // preserved by persistedIdsRef below (each id posts exactly once), so
+      // two sync passes never duplicate a system message.
       persistedIdsRef.current.add(m.id)
       // Phase 5: persist the full message shape so promoted `conversation`
       // records carry preview events, labware additions, clarifications,
@@ -1148,6 +1403,15 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
       // prompt message persists byte-identically.
       if (m.clarificationAnswers && m.clarificationAnswers.length > 0)
         metadata.clarificationAnswers = m.clarificationAnswers
+      // L2-P1-RELOAD-CLARIFIER-1 / u2surviveriders (persist leg): persist the
+      // TYPED clarification requests the live done arm rode on the message so a
+      // cold reload mid-clarification restores the SAME grouped card (same
+      // request ids, prompts, offered options) — restored from persisted
+      // message metadata, never re-derived or re-asked. Conditional write: the
+      // key is ABSENT (never `undefined`) when the turn carried no requests, so
+      // a plain turn persists byte-identically.
+      if (m.clarificationRequests && m.clarificationRequests.length > 0)
+        metadata.clarificationRequests = m.clarificationRequests
       // L2-CHAT-UI-1 LEG A (A3): persist the shorthand so the intent card
       // survives a reload (the hydration ride below reads it back).
       if (m.shorthand) metadata.shorthand = m.shorthand
@@ -1234,6 +1498,13 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
       // synchronously (before any await) so the fresh turn never renders the
       // prior turn's wall.
       setHonestWall(null)
+      // L2-PROSE-SHORTHAND-SALVAGE-1: a new send starts a new turn — the
+      // prior turn's recovery marker must not survive onto it.
+      setStatusRecoveredFrom(null)
+      // L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render: a new send is the user acting
+      // on the thread — the prior read's named-reason must not survive onto
+      // the fresh turn (the composer is live, the conversation is resumable).
+      setThreadUnreadable(null)
 
       // LEG F fix run 1 (advc D1): RESUME a deferred re-key at the START of
       // a new turn. If the thread scope flipped while the previous turn was
@@ -1429,6 +1700,19 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
       // proposed" — the same delivered-change arm as deckLayoutDelivered.
       let navActionDelivered = false
 
+      // L2-P1-EMPTY-TURN-CARD-1 u1 (c3): whether THIS turn's record-draft
+      // INTENT frame was relayed to the host (the record_draft_proposal block
+      // below). The relay is a HANDLING signal, not a MOUNT report — the host
+      // callback returns void, so the done branch cannot know the card mounted.
+      // A relayed frame that left the turn with NO delivered channel (the
+      // no-channel arm in the done branch) is a "record draft that did not
+      // mount": the turn-scoped relayed flag is the only evidence of the
+      // frame's channel, and the wall names it instead of settling with the
+      // "No events generated." narration alone (gate PROMPT1-GATE-
+      // 20261114T133918Z draw 1: same sentence, draw 1 narration-only with
+      // cardCount 0).
+      let relayedRecordDraft = false
+
       // L2-CLARIFY-CARD-1 (defect 6, ruling l2t1951 Q2 re-send leg): every
       // send of this thread RE-SENDS the requestId-keyed answers the thread has
       // already recorded (the answer user messages, live or rehydrated from
@@ -1460,6 +1744,15 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
           resendAnswers,
         )) {
           accumulated.push(event)
+
+          // L2-PROSE-SHORTHAND-SALVAGE-1 (gate D2 surface half): the status
+          // frame is where the server names the recovery driver. Record the
+          // LAST frame's marker — a plain status frame (no `recoveredFrom`)
+          // clears it, keeping the marker one-turn-scoped. Opaque relay: the
+          // driver rides as a plain string, no client-side driver union.
+          if (event.type === 'status') {
+            setStatusRecoveredFrom(event.recoveredFrom ?? null)
+          }
 
           const content = buildAssistantContent(accumulated)
 
@@ -1575,6 +1868,7 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
               try {
                 recordDraftProposalRef.current(event.recordDraft)
                 handledProposalFrame = true
+                relayedRecordDraft = true
               } catch (err: unknown) {
                 setMessages((prev) => [
                   ...prev,
@@ -1708,7 +2002,10 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
             // the previous preview's trail + THIS draft's prompt, so the FIRST
             // draft's prompt rides as currentPreviewDraft.sourcePrompt and is
             // never in the trail (the trail starts at the 2nd draft).
-            if (normalizedPreviewEvents.length > 0 && !isConfirm) {
+            if ((normalizedPreviewEvents.length > 0 || (result.recordCreations?.length ?? 0) > 0) && !isConfirm) {
+              // L2-P1-CREATE-RECORD-LANDS-1 u1recordsdraft: a records-only turn
+              // (zero events) ALSO reaches the deck's proposal review — SAME
+              // seam, SAME data path. No onProposalDrafted => non-deck arm below.
               revisionTrailRef.current = revising
                 ? [...revisionTrailRef.current, { prompt, createdAt: new Date().toISOString() }]
                 : []
@@ -1717,10 +2014,20 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
               // deck (event editor) receives the event-bearing proposal here
               // and mounts it as ghosts on the editor state (the port of
               // AiTabPanel's buildPreviewFromDraft seam, AiTabPanel.tsx:608-669).
+              const labwareRecords: Record<string, LabwareRecordPayload> = {}
+              if (onProposalDraftedRef.current) {
+                const offers = [...(result.labwareAdditions ?? []), ...(result.resolvedLabwares ?? [])]
+                await Promise.all([...new Set(offers.map((offer) => offer.recordId))].map(async (recordId) => {
+                  labwareRecords[recordId] = await resolveLabwareAdditionPayload({ recordId })
+                }))
+              }
+              if (controller.signal.aborted) return
               onProposalDraftedRef.current?.({
                 events: normalizedPreviewEvents,
                 labwareAdditions: result.labwareAdditions ?? [],
+                ...(Object.keys(labwareRecords).length > 0 ? { labwareRecords } : {}),
                 ...(result.resolvedLabwares ? { resolvedLabwares: result.resolvedLabwares } : {}),
+                ...(result.recordCreations?.length ? { recordCreations: result.recordCreations } : {}),
                 prompt,
               })
             } else {
@@ -1824,6 +2131,15 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
             // "produced something" because the LEGACY pane renders them; it is
             // jurisdiction-correct for AiTabPanel, not for this stack.
             const hasEvents = (result.events?.length ?? 0) > 0
+            // L2-P1-CREATE-RECORD-LANDS-1 u1recordsdraft: a records-only done
+            // the deck just STAGED (draft carrying recordCreations handed to
+            // onProposalDrafted above — SAME per-turn shape as
+            // handledProposalFrame, :1635/:1801). Only when a draft WAS handed
+            // AND recordCreations carried; else the wall still fires.
+            const recordDraftStaged =
+              (result.recordCreations?.length ?? 0) > 0 &&
+              onProposalDraftedRef.current !== undefined
+            if (recordDraftStaged) handledProposalFrame = true
             // SEQ-ANSWER-CONTRACT-1 D4: derive whether the turn streamed
             // answer text (visible to the user) from accumulated text_delta
             // frames. A whitespace-only delta is NOT an answer — trim before
@@ -1872,6 +2188,23 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
                 Boolean(result.clarificationNeeded?.trim()) ||
                 (result.clarificationRequests?.length ?? 0) > 0
               const surfacedError = Boolean(result.error?.trim())
+              // onevoice (L2-P1-CREATE-RECORD-LANDS-1): records-to-create is a
+              // DELIVERY the wall names ("it delivered only records to create").
+              // It is a staged draft — nothing is written before an accept (the
+              // §2.5 proposal≠commitment line) — so the applied-truth ("nothing
+              // was applied") stays true, but the wall must not DENY the
+              // delivery it just named ("Nothing was proposed …"), and the
+              // "did not propose any changes" bubble must not contradict it in
+              // the same turn. The two emptiness gates key on this ONE fact.
+              const recordCreationsDelivered = (result.recordCreations?.length ?? 0) > 0
+              // L2-P1-EMPTY-TURN-CARD-1 u1 (c3): a relayed record-draft frame
+              // whose draft did not STAGE through the deck seam (recordDraftStaged
+              // above — requires recordCreations) is a HANDLING signal, not a
+              // delivery: the universal done arm has no mount arm for the frame
+              // alone, so the turn can end with nothing mounted. The
+              // no-channel arm below (when no other delivered channel fired)
+              // names this channel instead of suppressing the wall.
+              const relayedDraftUnstaged = relayedRecordDraft && !recordDraftStaged
               // Lane-1 GATE-FIX-1 D1 carried through the merge: when this turn's
               // intent frame was HANDLED by a proposal relay, the card the host
               // renders IS the proposal — the wall must not say nothing was
@@ -1882,9 +2215,37 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
                 // "nothing" was proposed when it proposed unmountable things.
                 const notesDelivered = (result.notes?.length ?? 0) > 0
                 const labwareOnly = (result.labwareAdditions?.length ?? 0) > 0
+                // L2-P1-DECK-ACTION-ROUTE-1 u1deckmount (DECK-ACTIONS-ARE-THE-OPERATION clause 1):
+                // a labware-only done MOUNTS through the existing deck action — same invocation shape as
+                // the legacy per-event apply (:2504-2505); !hasEvents wall context only, so the event-bearing
+                // adoption path is untouched. Clause 3: a payload-resolution THROW keeps the named wall.
+                // No handler wired: behavior unchanged.
+                let labwareMountedCount = 0
+                let labwareUnresolvedCount = 0
+                if (labwareOnly && addLabwareFromRecordRef.current !== undefined) {
+                  for (const addition of result.labwareAdditions ?? []) {
+                    try {
+                      const payload = await resolveLabwareAdditionPayload(addition)
+                      addLabwareFromRecordRef.current?.(payload as unknown as Record<string, unknown>, addition)
+                      labwareMountedCount++
+                    } catch {
+                      labwareUnresolvedCount++
+                    }
+                  }
+                  if (labwareMountedCount > 0) {
+                    setMessages((prev) => [
+                      ...prev,
+                      { id: generateMessageId(), role: 'system', content: `Placed ${labwareMountedCount} new labware${labwareMountedCount === 1 ? '' : 's'} on the deck.`, timestamp: Date.now() },
+                    ])
+                  }
+                }
+                // The wall names only what was NOT mounted (no handler: base wording).
+                const labwareWallCount = addLabwareFromRecordRef.current === undefined
+                  ? (result.labwareAdditions?.length ?? 0)
+                  : labwareUnresolvedCount
                 const unmountable = [
-                  labwareOnly
-                    ? `proposed ${result.labwareAdditions?.length} new labware, which this surface cannot mount without events`
+                  labwareWallCount > 0
+                    ? `proposed ${labwareWallCount} new labware, which this surface cannot mount without events`
                     : null,
                   (result.equipmentRequirements?.length ?? 0) > 0 ? 'bench-equipment requirements' : null,
                   (result.recordCreations?.length ?? 0) > 0 ? 'records to create' : null,
@@ -1913,7 +2274,19 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
                   // on reload (gate D1: freeform in session, Single SBS
                   // Plate after reload, same wall text). Scope it to the view.
                   ? ' The deck layout was applied to this view.'
-                  : ' Nothing was proposed and nothing was applied.'
+                  // onevoice (L2-P1-CREATE-RECORD-LANDS-1): the wall just NAMED
+                  // the records it delivered ("it delivered only records to
+                  // create"), so appending "Nothing was proposed …" would deny
+                  // the delivery it just named — the same contradiction the
+                  // bubble gate below guards. Keep the applied-truth (a staged
+                  // record-creation is not an applied/mounted change, so
+                  // "nothing was applied" stays true) and drop the false
+                  // "nothing was proposed."
+                  : recordCreationsDelivered
+                    ? ' Nothing was applied.'
+                    : labwareMountedCount > 0
+                      ? ` Placed ${labwareMountedCount} new labware${labwareMountedCount === 1 ? '' : 's'} on the deck.`
+                      : ' Nothing was proposed and nothing was applied.'
                 setHonestWall(
                   `Draft produced no events${
                     unmountable.length > 0
@@ -1923,6 +2296,86 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
                         : ''
                   } and asked no questions.${closing}`,
                 )
+              }
+              // L2-P1-EMPTY-TURN-CARD-1 u1 (c3): the terminal else-arm INSIDE
+              // the zero-events block — the gate PROMPT1-GATE-20261114T133918Z
+              // draw 1 defect. A relayed record-draft frame sets
+              // handledProposalFrame (the relay block) while NOTHING mounted
+              // (the host callback returns void — a handling signal, not a
+              // mount report), so BOTH gates above can skip: the wall gate on
+              // !handledProposalFrame, the bubble gate the same way. The turn
+              // then settles with only the "No events generated." narration
+              // and cardCount 0 — the forbidden silently-empty turn. This arm
+              // fires the honest wall when the zero-events arm completes with
+              // NO delivered channel: it is the one statement (the bubble's
+              // "nothing was proposed" is false beside it — onevoice) and it
+              // NAMES the channel that did not mount plus the next step (the
+              // unknown-noun route when the payload carries an unresolved ref
+              // with that reason — the same "Create local term" route the
+              // RefPicker mint row offers; the wall points at it, never
+              // creates a term). recordCreationsDelivered stays a delivery the
+              // first gate names — untouched.
+              const noChannelDelivered =
+                !askedQuestion &&
+                !surfacedError &&
+                !answerDelivered &&
+                !navActionDelivered &&
+                !deckLayoutDelivered &&
+                !recordCreationsDelivered &&
+                !((result.labwareAdditions?.length ?? 0) > 0 ||
+                  (result.instrumentApplianceJobs?.length ?? 0) > 0)
+              if (noChannelDelivered) {
+                // L2-P1-EMPTY-TURN-CARD-1 u2fix (advc D2): resolve the
+                // unknown-noun entry against BOTH shipped unresolvedRefs
+                // shapes, never throwing. Reading order — flat FIRST,
+                // then nested, coalesced with `??`:
+                //   (a) flat: normalizeScientistIntent.ts pushes
+                //       { kind, label, reason } directly onto the array
+                //       (no `ref` field — server/src/ai/
+                //       normalizeScientistIntent.ts:1176-1180);
+                //   (b) nested: OntologyRefProposal (server/src/ai/
+                //       types.ts) carries `ref: { kind, id, namespace,
+                //       label, uri? }` — no `reason` field on `ref`.
+                // Every access is optional-chained and string-checked:
+                // a flat entry has no `ref` (nested reads yield
+                // undefined, not a TypeError) and a nested entry has no
+                // flat `reason` (flat reads yield undefined). An entry
+                // that is neither shape is skipped, not thrown on.
+                const refReason = (p: { ref?: { reason?: unknown } }) => {
+                  const entry = p as { reason?: unknown } & { ref?: { reason?: unknown } }
+                  const reason = entry.reason ?? entry.ref?.reason
+                  return typeof reason === 'string' ? reason : null
+                }
+                const unknownNoun = (result.unresolvedRefs ?? []).find(
+                  (p) => refReason(p as { ref?: { reason?: unknown } }) === 'unknown-noun',
+                )
+                const parts: string[] = []
+                if (relayedDraftUnstaged) parts.push('a record draft that did not mount')
+                if (unknownNoun) {
+                  const entry = unknownNoun as unknown as {
+                    label?: unknown
+                    ref?: { label?: unknown }
+                  }
+                  const refLabel =
+                    typeof entry.label === 'string'
+                      ? entry.label
+                      : typeof entry.ref?.label === 'string'
+                        ? entry.ref.label
+                        : null
+                  parts.push(
+                    `an unresolved reference (${
+                      typeof refLabel === 'string' && refLabel.length > 0 ? refLabel : 'unknown-noun'
+                    }, unknown-noun)`,
+                  )
+                }
+                if (parts.length > 0) {
+                  const nextStep = unknownNoun
+                    ? ' Next step: create a local term for the unresolved reference (the "Create local term" route), then resend the prompt.'
+                    : ' Next step: the proposal channel could not be mounted on this surface — review the preserved draft or resend the prompt.'
+                  setHonestWall(
+                    `Draft produced no events — it delivered only ${parts.join(' and ')} and asked no questions.${nextStep}`,
+                  )
+                }
               }
               // L2-SUITE-A-uifix1 D3+D1 (+ F4 fix1): the bubble claims NOTHING
               // was proposed. It is false when the turn asked a question (the
@@ -1947,9 +2400,16 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
               // additions and appliance jobs ARE proposals, so the "did not propose
               // any changes" bubble would contradict them. The wall above already
               // names them in plain language; the bubble stays silent for them.
+              // onevoice (L2-P1-CREATE-RECORD-LANDS-1): recordCreations too — the
+              // honest wall above NAMES "records to create" this turn, so the
+              // bubble would be a SECOND statement contradicting the delivery it
+              // just named (today both fired on one screen). Extending this same
+              // suppression set keeps the two gates mutually exclusive: when the
+              // wall fired for a records-only turn, the bubble must not also fire.
               const labwareOrApplianceDelivered =
                 (result.labwareAdditions?.length ?? 0) > 0 ||
-                (result.instrumentApplianceJobs?.length ?? 0) > 0
+                (result.instrumentApplianceJobs?.length ?? 0) > 0 ||
+                recordCreationsDelivered
               if (!askedQuestion && !deckLayoutDelivered && !navActionDelivered && !answerDelivered && !labwareOrApplianceDelivered && !handledProposalFrame) {
                 setMessages((prev) => [
                   ...prev,
@@ -2184,33 +2644,84 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
         const adoptedEvents = adoption.eventCount ?? 0
         const adoptedLabware = adoption.labwareCount ?? 0
         const adoptedPlacements = adoption.placementCount ?? 0
+        // L2-P1-RETURN-LEG-1 u4 (LEG B): the applied note NAMES the definition
+        // the placed labware used. The staged labwares are in hand at this
+        // same call site (stagedExtras.previewLabwares) — each entry's
+        // definitionId names the definition its committed entry binds. The
+        // display name is resolved from the labware-definition RECORD STORE
+        // (the single authority — the same read the deck's View-changes row
+        // uses; the static map does not carry registry-bound ids, and a name
+        // is never invented). Names are de-duped (many entries may bind one
+        // definition); the counts wording is kept. A definition whose id does
+        // not resolve is NAMED BY ITS ID — never dropped, never fabricated.
+        // Resolution runs AFTER the adopter returned, so the applied note
+        // names the definition without delaying the adopt.
+        const stagedLabwares = (stagedExtras?.previewLabwares as Record<string, unknown> | undefined) ?? {}
+        const adoptedDefinitionNames = [...new Set(
+          Object.values(stagedLabwares)
+            .map((entry) => {
+              const definitionId = (entry as { definitionId?: unknown })?.definitionId
+              return typeof definitionId === 'string' && definitionId.length > 0 ? definitionId : undefined
+            })
+            .filter((id): id is string => id !== undefined),
+        )]
         const adoptedCommitSha =
           typeof adoption.commitSha === 'string' && adoption.commitSha.length > 0
             ? adoption.commitSha
             : undefined
-        const adoptedSummary = [
-          `Accepted ${adoptedEvents} event${adoptedEvents === 1 ? '' : 's'}`,
-          adoptedLabware > 0 ? `plus ${adoptedLabware} new labware${adoptedLabware === 1 ? '' : 's'}` : null,
-          adoptedPlacements > 0 ? `plus ${adoptedPlacements} placement${adoptedPlacements === 1 ? '' : 's'}` : null,
-          adoptedCommitSha ? `commit ${adoptedCommitSha}` : null,
-        ]
-          .filter(Boolean)
-          .join(' ')
-        setMessages((prev) => [
-          ...prev,
-          { id: generateMessageId(), role: 'system', content: adoptedSummary, timestamp: Date.now() },
-        ])
+        const buildAdoptedSummary = (definitionLabels: Record<string, string>) => {
+          const definitionNames = adoptedDefinitionNames
+            .map((id) => definitionLabels[id] ?? id)
+            .filter((name, index, all) => all.indexOf(name) === index)
+          return [
+            `Accepted ${adoptedEvents} event${adoptedEvents === 1 ? '' : 's'}`,
+            adoptedLabware > 0 ? `plus ${adoptedLabware} new labware${adoptedLabware === 1 ? '' : 's'}` : null,
+            definitionNames.length > 0 ? `using ${definitionNames.join(', ')}` : null,
+            adoptedPlacements > 0 ? `plus ${adoptedPlacements} placement${adoptedPlacements === 1 ? '' : 's'}` : null,
+            adoptedCommitSha ? `commit ${adoptedCommitSha}` : null,
+          ]
+            .filter(Boolean)
+            .join(' ')
+        }
+        if (adoptedDefinitionNames.length > 0) {
+          let labels: Record<string, string> = {}
+          try {
+            const resolutions = await Promise.all(
+              adoptedDefinitionNames.map(async (id) => [id, await apiClient.getLabwareDefinitionDisplay(id)] as const),
+            )
+            for (const [id, display] of resolutions) labels[id] = display
+          } catch {
+            labels = {} // the note names the ids verbatim — never dropped
+          }
+          setMessages((prev) => [
+            ...prev,
+            { id: generateMessageId(), role: 'system', content: buildAdoptedSummary(labels), timestamp: Date.now() },
+          ])
+        } else {
+          setMessages((prev) => [
+            ...prev,
+            { id: generateMessageId(), role: 'system', content: buildAdoptedSummary({}), timestamp: Date.now() },
+          ])
+        }
         return
       }
       if (adoption) {
-        // Refused at the ontology sign-off gate (NOT bypassable): VISIBLE in
-        // the conversation; the ghost STAYS mounted and the staged state
-        // stays (the scientist signs off in the changes panel and retries).
-        // Never silently materialize.
+        // Refused BEFORE any write: VISIBLE in the conversation; the ghost
+        // STAYS mounted and the staged state stays (the scientist resolves it
+        // and retries). Never silently materialize. u3ghostfix D3: the wording
+        // follows the REFUSAL's reason — a ghost-gate refusal is not an
+        // ontology sign-off, and telling the user to sign off terms would be a
+        // false instruction.
         const blocked = adoption.blocked ?? 0
+        const unplaceable = adoption.unplaceable ?? []
+        const named = unplaceable.length > 0 ? unplaceable.join(', ') : `${blocked} placed labware`
+        const content =
+          adoption.reason === 'unplaceable-labware'
+            ? `${named} ${blocked === 1 ? 'was' : 'were'} placed without a resolvable labware definition record — nothing was applied; the ghost stays on the deck.`
+            : `${blocked} ontology terms need sign-off in the changes panel — nothing was applied.`
         setMessages((prev) => [
           ...prev,
-          { id: generateMessageId(), role: 'system', content: `${blocked} ontology terms need sign-off in the changes panel — nothing was applied.`, timestamp: Date.now() },
+          { id: generateMessageId(), role: 'system', content, timestamp: Date.now() },
         ])
         return
       }
@@ -2530,6 +3041,7 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
   // ------------------------------------------------------------------
   const clearHistory = useCallback(() => {
     setMessages([])
+    setStatusRecoveredFrom(null)
     setPreviewEvents([])
     setPreviewLabwareAdditions([])
     setPreviewEventStatesMap(new Map())
@@ -2563,6 +3075,8 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
     hasPreview: previewEvents.length > 0,
     unresolvedRefs,
     honestWall,
+    statusRecoveredFrom,
+    threadUnreadable,
     adoptionError,
     previewStagedLabwareCount,
     inputText,
@@ -2593,6 +3107,10 @@ export function useAiChat({ aiContext, endpoint, scope, scopeStatus, onAcceptEve
           switchThread: switchThread,
           newThread: newThread,
           listThreads: listThreadsForChat,
+          // L2-P1-THREAD-RESTORE-1 u4scope: the resolved (tab, scope) tab id
+          // for the ThreadPicker's resume check (reads the stable ref at
+          // call time — the pane's load closure is stale by construction).
+          tabThreadId: tabThreadId,
         }
       : {}),
   }

@@ -1,0 +1,70 @@
+
+ RUN  v1.6.1 /tmp/cl-generic-labware-fix/app
+
+(node:10) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:10) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/event-editor/right-pane/ai/draftPreview.test.ts  (15 tests) 11ms
+(node:10) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/shared/hooks/useAiChat.acceptDiscard.test.tsx  (2 tests) 126ms
+stderr | src/event-editor/deck/PreviewActionBar.test.tsx > PreviewActionBar Accept persistence > never lets an equipment ADD block the accept
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+(node:10) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/event-editor/deck/PreviewActionBar.test.tsx  (11 tests) 372ms
+ ✓ src/event-editor/right-pane/ai/draftPreview.resolved.test.ts  (5 tests) 6ms
+(node:10) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/event-editor/deck/deckAdoption.test.ts  (4 tests) 4ms
+(node:10) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | src/event-editor/deck/useDeckGhostMount.u1recordsdraft.test.ts > useAiChat — a records-only done hands recordCreations to the draft and skips the empty-success wall/bubble > done with recordCreations + zero events: the draft carries them verbatim; no wall, no bubble
+Warning: An update to TestComponent inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at TestComponent (/mnt/vast/home/brad/git/computable-lab/node_modules/.pnpm/@testing-library+react@16.3.2_@testing-library+dom@10.4.1_@types+react-dom@18.3.7_@type_8105afb30b3aed617b9ca863f1e5e96d/node_modules/@testing-library/react/dist/pure.js:328:5)
+Warning: An update to TestComponent inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://reactjs.org/link/wrap-tests-with-act
+    at TestComponent (/mnt/vast/home/brad/git/computable-lab/node_modules/.pnpm/@testing-library+react@16.3.2_@testing-library+dom@10.4.1_@types+react-dom@18.3.7_@type_8105afb30b3aed617b9ca863f1e5e96d/node_modules/@testing-library/react/dist/pure.js:328:5)
+
+ ✓ src/event-editor/deck/useDeckGhostMount.u1recordsdraft.test.ts  (2 tests) 77ms
+(node:10) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:10) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/types/labwareDefinitionBind.test.ts  (3 tests) 2ms
+ ✓ src/shared/hooks/useAiChat.deckRoute.test.tsx  (3 tests) 182ms
+stderr | src/event-editor/deck/deckAdoption.ghostgate.test.ts > u3ghostfix D1 pin (a) — a proposed-creation accept still mints, as on trunk > adopts, mints exactly ONE labware-instance, and persists the created recordId onto the vessel
+[record creation] 96-well plate was created with no stated source — record where its specification came from.
+
+ ✓ src/event-editor/deck/deckAdoption.ghostgate.test.ts  (14 tests) 8ms
+(node:10) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/shared/hooks/useAiChat.genericPlacement.test.tsx  (1 test) 40ms
+(node:10) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/event-editor/deck/labwareInstanceMint.test.ts  (11 tests) 20ms
+
+ Test Files  11 passed (11)
+      Tests  71 passed (71)
+   Start at  00:46:03
+   Duration  16.96s (transform 849ms, setup 3.16s, collect 4.98s, tests 848ms, environment 21.21s, prepare 1.55s)

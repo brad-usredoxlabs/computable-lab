@@ -1,0 +1,175 @@
+// @vitest-environment node
+import { describe, it, expect } from 'vitest';
+import { buildLocalPlanGraph } from './localPlanGraph.js';
+
+const labwareRef = { kind: 'record', id: 'LBW-1', type: 'labware-instance' };
+const materialRef = { kind: 'record', id: 'MAT-1', type: 'material-instance' };
+const instrumentRef = { kind: 'record', id: 'EQ-1', type: 'equipment' };
+const geometryRef = { kind: 'record', id: 'GEO-1', type: 'labware-geometry' };
+const roleRefs: Record<string, unknown> = { plate: labwareRef, reagent: materialRef, reader: instrumentRef };
+
+const twoStepProtocol = {
+  roles: {
+    labwareRoles: [{ roleId: 'plate' }],
+    materialRoles: [{ roleId: 'reagent' }],
+    instrumentRoles: [{ roleId: 'reader' }],
+  },
+  steps: [
+    {
+      stepId: 'add-compound', label: 'Add compound', ordinal: 1, kind: 'add_material',
+      target: { labwareRole: 'plate' }, wells: 'A1',
+      material: { materialRole: 'reagent' }, volume_uL: 50,
+    },
+    {
+      stepId: 'read-plate', label: 'Read plate', ordinal: 2, kind: 'read',
+      target: { labwareRole: 'plate' }, wells: 'A1', instrumentRole: 'reader',
+    },
+  ],
+};
+
+const fullBindings = {
+  labware: [{ roleId: 'plate', labwareInstanceRef: labwareRef }],
+  materials: [{ roleId: 'reagent', materialRef, lotNumber: 'L-9' }],
+  instruments: [{ roleId: 'reader', instrumentRef }],
+};
+
+function stringValuesDeep(value: unknown): string[] {
+  if (typeof value === 'string') return [value];
+  if (Array.isArray(value)) return value.flatMap(stringValuesDeep);
+  if (value && typeof value === 'object') return Object.values(value).flatMap(stringValuesDeep);
+  return [];
+}
+
+function keysDeep(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap(keysDeep);
+  if (!value || typeof value !== 'object') return [];
+  return Object.entries(value).flatMap(([key, child]) => [key, ...keysDeep(child)]);
+}
+
+function roleStrings(category: string, roleId: string) {
+  return {
+    roles: { [category]: [{ roleId }] },
+    steps: [{ stepId: 'read-plate', kind: 'read', target: { labwareRole: roleId } }],
+  };
+}
+
+/** The step with every Role string replaced by the ref the plan must emit. */
+function substituteRoles(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(substituteRoles);
+  if (!value || typeof value !== 'object') return value;
+  const out: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) {
+    out[key] = key.endsWith('Role') && typeof child === 'string' ? (roleRefs[child] ?? child) : substituteRoles(child);
+  }
+  return out;
+}
+
+describe('buildLocalPlanGraph', () => {
+  it('binds every step role reference to its concrete ref, in step order', () => {
+    const result = buildLocalPlanGraph({ protocolId: 'PRT-1', protocol: twoStepProtocol, bindings: fullBindings });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(`${result.code}: ${result.roleId}`);
+
+    expect(result.events.map((e) => e.stepId)).toEqual(['add-compound', 'read-plate']);
+    expect(result.events.map((e) => e.event_type)).toEqual(['add_material', 'read']);
+
+    const [add, read] = result.events;
+    // D8.4: details are the declared step with ONLY role refs substituted —
+    // every key and every numeric survives at its original path, nothing added.
+    expect(add.details).toEqual(substituteRoles(twoStepProtocol.steps[0]));
+    expect(read.details).toEqual(substituteRoles(twoStepProtocol.steps[1]));
+
+    // No abstract role string survives anywhere in the emitted plan.
+    const emittedStrings = stringValuesDeep(result.events);
+    for (const roleId of ['plate', 'reagent', 'reader']) expect(emittedStrings).not.toContain(roleId);
+
+    // D8.4: no measured value invented; only values the step already carried.
+    const emittedKeys = keysDeep(result.events);
+    for (const invented of ['cells', 'density', 'cellCount']) expect(emittedKeys).not.toContain(invented);
+  });
+
+  it('is deterministic: identical input yields byte-identical events', () => {
+    const first = buildLocalPlanGraph({ protocolId: 'PRT-1', protocol: twoStepProtocol, bindings: fullBindings });
+    const second = buildLocalPlanGraph({ protocolId: 'PRT-1', protocol: twoStepProtocol, bindings: fullBindings });
+    expect(first).toEqual(second);
+    expect(first.ok && first.events.map((e) => e.eventId)).toEqual(['0-add-compound', '1-read-plate']);
+  });
+
+  it('names the unbound role and returns no events (no partial graph)', () => {
+    const result = buildLocalPlanGraph({
+      protocolId: 'PRT-1',
+      protocol: twoStepProtocol,
+      bindings: { labware: fullBindings.labware, instruments: fullBindings.instruments },
+    });
+    expect(result).toEqual({ ok: false, code: 'UNBOUND_ROLE', roleId: 'reagent', stepId: 'add-compound' });
+    expect(result).not.toHaveProperty('events');
+  });
+
+  it('names the role and step when the protocol declares no roles at all', () => {
+    const result = buildLocalPlanGraph({
+      protocolId: 'PRT-1',
+      protocol: { steps: twoStepProtocol.steps },
+      bindings: fullBindings,
+    });
+    expect(result).toEqual({ ok: false, code: 'UNDECLARED_ROLE', roleId: 'plate', stepId: 'add-compound' });
+    expect(result).not.toHaveProperty('events');
+  });
+
+  it('rejects a role reference absent from the declared role set, even when bound', () => {
+    const result = buildLocalPlanGraph({
+      protocolId: 'PRT-1',
+      protocol: {
+        roles: { labwareRoles: [{ roleId: 'plate' }] },
+        steps: [
+          {
+            stepId: 'add-compound', label: 'Add compound', ordinal: 1, kind: 'add_material',
+            target: { labwareRole: 'vessel' }, wells: 'A1',
+            material: { materialRole: 'reagent' }, volume_uL: 50,
+          },
+        ],
+      },
+      bindings: {
+        labware: [
+          { roleId: 'plate', labwareInstanceRef: labwareRef },
+          { roleId: 'vessel', labwareInstanceRef: { kind: 'record', id: 'LBW-2', type: 'labware-instance' } },
+        ],
+        materials: [{ roleId: 'reagent', materialRef }],
+      },
+    });
+    expect(result).toEqual({ ok: false, code: 'UNDECLARED_ROLE', roleId: 'vessel', stepId: 'add-compound' });
+    expect(result).not.toHaveProperty('events');
+  });
+
+  it('prefers the canonical instance ref when the entry also carries a geometry ref', () => {
+    const result = buildLocalPlanGraph({
+      protocolId: 'PRT-1',
+      protocol: roleStrings('labwareRoles', 'plate'),
+      bindings: {
+        labware: [{ roleId: 'plate', labwareGeometryRef: geometryRef, labwareInstanceRef: labwareRef }],
+      },
+    });
+    if (!result.ok) throw new Error(`unexpected failure: ${JSON.stringify(result)}`);
+    // Geometry is NOT the labware instance: the category's canonical ref key wins.
+    expect(result.events[0].details).toEqual({ stepId: 'read-plate', kind: 'read', target: { labwareRole: labwareRef } });
+  });
+
+  it('falls back to the only kind-bearing ref when no canonical ref key is present', () => {
+    const result = buildLocalPlanGraph({
+      protocolId: 'PRT-1',
+      protocol: roleStrings('labwareRoles', 'plate'),
+      bindings: { labware: [{ roleId: 'plate', labwareGeometryRef: geometryRef }] },
+    });
+    if (!result.ok) throw new Error(`unexpected failure: ${JSON.stringify(result)}`);
+    expect(result.events[0].details).toEqual({ stepId: 'read-plate', kind: 'read', target: { labwareRole: geometryRef } });
+  });
+
+  it('refuses an entry whose canonical keys disagree, naming AMBIGUOUS_BINDING', () => {
+    const result = buildLocalPlanGraph({
+      protocolId: 'PRT-1',
+      protocol: roleStrings('labwareRoles', 'plate'),
+      bindings: { labware: [{ roleId: 'plate', labwareInstanceRef: labwareRef, materialRef }] },
+    });
+    expect(result).toEqual({ ok: false, code: 'AMBIGUOUS_BINDING', roleId: 'plate', stepId: 'read-plate' });
+    expect(result).not.toHaveProperty('events');
+  });
+});

@@ -1048,6 +1048,19 @@ $defs:
       intentNotes:
         type: string
         description: "Optional prose: why this step means what it means."
+      targetWells:
+        description: >-
+          The well binding for this intent step (e.g. the destination wells of
+          add_material). Mirrors the scientist-intent arg of the same name; the
+          declared lowering reads it from step.intent for vocabulary args whose
+          declared kind is `wells`. Ajv declares the slot structurally only —
+          the vocabulary decides whether the value is a valid carry.
+        oneOf:
+        - type: array
+          items:
+            type: string
+        - type: string
+          minLength: 1
 
   StepProvenanceRef:
     type: object

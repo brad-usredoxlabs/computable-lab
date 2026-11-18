@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   LABWARE_CATEGORIES,
   LABWARE_TYPE_LABELS,
@@ -25,9 +26,11 @@ import {
   isPlateCategory,
   labwareRowMatches,
   mergeAndRankDeckSources,
+  splitLabDbDeckRows,
   TAB_KINDS,
   type AddDeckSourceItem,
   type AddDeckTab,
+  type AddDeckUnavailableLine,
 } from './addDeckDialogModel'
 
 /**
@@ -96,6 +99,9 @@ export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPi
   const [ontologyCandidates, setOntologyCandidates] = useState<ResolveCandidate[]>([])
   const [loadingOntology, setLoadingOntology] = useState(false)
 
+  // pickerdoor: the door navigates (PreviewActionBar.tsx:2 precedent) — real route, no writes.
+  const navigate = useNavigate()
+
   // The two Exa categories reduce to: equipment tab → 'equipment', else 'labware'.
   // One hook (stable count above the early return); cleared query on tab switch
   // guarantees the next search uses the new tab's category.
@@ -161,6 +167,11 @@ export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPi
             label: h.label,
             isInstrument: false,
             hit: h,
+            // The server's offerability decision, carried VERBATIM. Conditional
+            // spread keeps an absent field ABSENT (pre-marker wire shape — the
+            // row model fails open there); absent is not `offerable: undefined`.
+            ...(h.offerable === undefined ? {} : { offerable: h.offerable }),
+            ...(h.offer_reason === undefined ? {} : { offer_reason: h.offer_reason }),
           })))
         }
       } catch {
@@ -200,21 +211,50 @@ export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPi
   }, [query, activeTab])
 
   // Build the per-tab cross-source row set in the ranked order for rendering.
-  const { rows, byKey } = useMemo(() => {
+  const { rows, byKey, unavailableLines } = useMemo(() => {
     const by: Record<string, DeckRow> = {}
     const catalog: AddDeckSourceItem[] = []
     const labDb: AddDeckSourceItem[] = []
     const exa: AddDeckSourceItem[] = []
     const ontology: AddDeckSourceItem[] = []
+    const unavailable: AddDeckUnavailableLine[] = []
     const trimmed = query.trim().toLowerCase()
 
     // Local labware definitions (plates/labware) AND local equipment records
     // (seeded + previously-minted EQP-…) share the same ranked "lab-db"
     // bucket, so local-first holds regardless of tab. Insulate each from the
     // catalog key-space (LabwareType names) by prefixing with `lab-db:`.
+    const labwareHits = labDbHits.filter((hit) => !hit.isInstrument)
+    // The dialog does NOT decide offerability — it consumes the SERVER's
+    // decision (unit offerfilter) via the row model: `offerable: false` never
+    // becomes a selectable row; it is one labelled, non-bindable line.
+    // Equipment hits (searchRecords) carry no `offerable` and stay fully
+    // choosable below.
+    const split = splitLabDbDeckRows(labwareHits.map((hit) => {
+      const h = hit.hit
+      return {
+        recordId: hit.recordId,
+        label: hit.label,
+        kind: 'labware-definition' as const,
+        ...(h?.definitionId === undefined ? {} : { definitionId: h.definitionId }),
+        ...(h?.offerable === undefined ? {} : { offerable: h.offerable }),
+        ...(h?.offer_reason === undefined ? {} : { offer_reason: h.offer_reason }),
+      }
+    }))
+    const offerableKeys = new Set(split.rows.map((row) => row.key))
+
     for (const hit of labDbHits) {
       if (trimmed && !labwareRowMatches(trimmed, hit.label)) continue
       const key = `lab-db:${hit.recordId}`
+      if (!hit.isInstrument && !offerableKeys.has(key)) {
+        // Non-offerable labware-definition: one labelled, non-bindable line —
+        // never a row, never in the resolution map.
+        const line = split.unavailable.find((line) => line.recordId === hit.recordId)
+        if (line && !unavailable.some((existing) => existing.recordId === line.recordId)) {
+          unavailable.push(line)
+        }
+        continue
+      }
       labDb.push({ key, source: 'lab-db', label: hit.label, kind: hit.isInstrument ? 'instrument' : 'labware' })
       by[key] = {
         source: 'lab-db',
@@ -281,11 +321,15 @@ export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPi
       }
     }
 
-    return { rows: mergeAndRankDeckSources({ catalog, labDb, exa, ontology }), byKey: by }
+    return {
+      rows: mergeAndRankDeckSources({ catalog, labDb, exa, ontology }),
+      byKey: by,
+      unavailableLines: unavailable,
+    }
   }, [activeTab, query, customName, surfaceKind, labDbHits, ontologyCandidates, vendorExa.exaResults])
 
   const isEmptyResult =
-    rows.length === 0 && !vendorExa.loading && !loadingLabDb && !loadingOntology
+    rows.length === 0 && unavailableLines.length === 0 && !vendorExa.loading && !loadingLabDb && !loadingOntology
 
   if (!open) return null
 
@@ -381,6 +425,7 @@ export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPi
   }
 
   const selectedRow = selectedKey ? byKey[selectedKey] : null
+  const trimmedQuery = query.trim()
 
   return (
     <div className="ee-dialog__scrim" role="dialog" aria-modal="true" onClick={onClose}>
@@ -473,9 +518,41 @@ export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPi
               </button>
             )
           })}
+          {unavailableLines.map((line) => (
+            // A named catalogue reference that is NOT this lab's stock: visible,
+            // labelled with the server's reason, and NON-interactive — it never
+            // enters `rows` or the resolution map, so it can never be selected
+            // or placed (server decides offerability; the row model splits it).
+            <span key={line.key} className="ee-dialog__nonbindable" aria-disabled="true">
+              <span className="ee-dialog__nonbindable-label">
+                {line.label}
+                <span className="ee-dialog__vendor-badge">LAB</span>
+              </span>
+              {line.reason ? (
+                <span className="ee-dialog__nonbindable-reason">{line.reason}</span>
+              ) : null}
+            </span>
+          ))}
           {isEmptyResult ? (
             <div className="ee-dialog__empty">
-              {query.trim() ? `No ${activeTab} matches "${query.trim()}".` : `Nothing here yet — type to search.`}
+              {emptyStateCopy(activeTab, trimmedQuery)}
+              {/* pickerdoor: a missing type is a DECLARED absence with a next
+                  step, not a silent "no" (architect-context-l2.md §2.15). Only
+                  the labware tabs have a local create surface to point at; the
+                  prefill carries the user's own words (trimmed + URL-encoded) —
+                  never an invented value. Navigation only: zero POST /records. */}
+              {trimmedQuery && activeTab !== 'equipment' ? (
+                <button
+                  type="button"
+                  className="ee-dialog__create-door"
+                  onClick={() => {
+                    onClose()
+                    navigate(`/lab/labware/new?prefillName=${encodeURIComponent(trimmedQuery)}`)
+                  }}
+                >
+                  Create "{trimmedQuery}"…
+                </button>
+              ) : null}
             </div>
           ) : null}
           {vendorExa.loading ? <div className="ee-dialog__vendor-spinner">…</div> : null}
@@ -486,6 +563,7 @@ export function AddToDeckDialog({ open, contextLabel, surfaceKind, onClose, onPi
             type="button"
             className="ee-dialog__btn ee-dialog__btn--primary"
             disabled={!selectedRow || mintingKey !== null}
+            aria-disabled={!selectedRow || mintingKey !== null}
             onClick={() => void handleSubmit()}
             title="Place the selected item at the point you clicked"
           >
@@ -504,4 +582,17 @@ function sourceHint(source: DeckRow['source']): string {
     case 'exa': return 'Exa'
     case 'ontology': return 'Ontology'
   }
+}
+
+/**
+ * pickerdoor: the empty-state copy agrees in number with the tab's kind.
+ * `plates`/`labware` are plural families ("No plates match"), `equipment`
+ * singular ("No equipment matches") — one helper, not a branch per tab.
+ * A blank query has nothing to name: the resting prompt stays as before.
+ */
+function emptyStateCopy(tab: AddDeckTab, trimmed: string): string {
+  if (!trimmed) return 'Nothing here yet — type to search.'
+  const kind = tab === 'plates' ? 'plates' : tab === 'labware' ? 'labware' : 'equipment'
+  const verb = kind === 'equipment' ? 'matches' : 'match'
+  return `No ${kind} ${verb} "${trimmed}".`
 }

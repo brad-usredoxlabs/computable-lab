@@ -1,0 +1,6 @@
+# L2-JOURNEY-CAPABILITY-CATALOGUE-1 u2mk2 — duplicate exit-marker repair (paperwork only)
+RED at e0e65d7b: the exit-marker grep over ...-u2loader-fix1-report.md returned 2 (lines 58, 59); the malformed line 59 was deleted and §Exit states ONE marker — 0 product, 0 test lines. Provenance: the marker at :4 names 579f2b1d, the commit that carries this report body (the body first appears at 1fbde033; its malformed token order is corrected in the follow-up u2mk3 commit — no amend, no rewrite). This extra file exists because the earlier brief's exit contract demanded a marker for the item variant L2-JOURNEY-CAPABILITY-CATALOGUE-1-u2mk2 that no compliant marker line can satisfy.
+Verify: AC1 → 1 at line 58 (acffe46aa04539ba70472bdd686fd2c81404ab35); AC2 → 0 and 0; typecheck/vitest not run (.ts unchanged).
+L2-JOURNEY-CAPABILITY-CATALOGUE-1 UNIT u2mk2 DONE 579f2b1d3df5aa19ac00ed6aa2f7b9aabf63b5b6
+AC read-backs at this commit: grep -cE 'DONE [0-9a-f]{40}' over this file = 1 (:4); git cat-file -e 579f2b1d:.hermes/plans/reports/L2-JOURNEY-CAPABILITY-CATALOGUE-1-u2mk2-report.md → rc=0; git diff 579f2b1d..HEAD -- server/ app/ schema/ config/ is empty. Chain: body corrected here, the u2mk3 exit marker is appended in a second commit (no amend, no rewrite).
+L2-JOURNEY-CAPABILITY-CATALOGUE-1 UNIT u2mk3 DONE 8fb8ccd55e9cc1e3829062e8908f940e2d3bc7aa

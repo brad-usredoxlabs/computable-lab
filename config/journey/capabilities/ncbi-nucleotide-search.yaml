@@ -1,0 +1,39 @@
+# L2-JOURNEY-GENOMICS-MIN-1 (u1nucsearch) — read-only capability descriptor.
+# external_disclosure is declared: the taxon and marker terms (the journey's
+# parameters) leave the lab in the outbound query. handler_ref must exist in
+# AGENT_ALLOWED_TOOLS (server/src/ai/ToolBridge.ts, Genomics group); the tool
+# is registered unconditionally (server/src/mcp/tools/ncbiTools.ts:152).
+capability_id: journey.ncbi-nucleotide-search
+version: "1.0.0"
+display_name: Search NCBI Nucleotide for a resolved taxon+marker
+justification: >-
+  journey.ncbi-gene-search resolves gene TARGETS against NCBI Gene; it is not
+  a nucleotide search on a taxon+marker (FALSIFY-1 names this, F1) and no
+  journey capability queries NCBI Nucleotide, so searching sequences for a
+  resolved taxon and marker is not configuration of the gene-target resolver.
+ports:
+  input: []
+  output:
+  # The search's output is a STAGED DRAFT (StagedDraftReference): an external
+  # observation that has not been retained is a draft — no record_id, no
+  # receipt_id. Retention is F2 and out of scope here.
+  - version: "1.0.0"
+    draft_id: DRAFT-nucleotide-observation
+implementation:
+  handler_kind: agent_tool
+  handler_ref: ncbi_nucleotide_search
+effects: [read, external_disclosure]
+permissions: [journey.read, network.egress]
+availability: {}
+surfaces: [sequences]
+idempotency: pure
+retry: none
+reconciliation: not_required
+evidence: [audit_event]
+status:
+  declared: true
+  implemented: true
+  # available_now is a claim about ADMISSION (registered tool + allowlist
+  # entry), not about a live call: no receipt exists and none is owed here.
+  available_now: true
+  browser_certified: false

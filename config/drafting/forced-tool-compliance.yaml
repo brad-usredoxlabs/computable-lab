@@ -23,6 +23,27 @@ surfaces:
     retryStatus: Requesting the structured sequence emission…
     nudge: >-
       Return the requested emission with agent_intent. ROUTING RULE: if the latest request names one of this page's declared tabs or a real record id to show or focus, emit intent=workspace_action (a tab request targets {kind:"sequence-tab", tab:"<a declared tab>"}; a record request targets {kind:"sequence-record", recordId:"<the real id>"}). Only a request that changes sequence content uses intent=sequence_action with a schema-valid sequenceAction (create_oligo for new bases and modifications). Chat history full of proposals does not change this rule. Do not claim to have saved or changed anything; no action has executed.
+  # The two surfaces where shorthand drafting actually happens (see
+  # config/drafting/shorthand-drafting.yaml:12-27: the app's AiSurface union
+  # has `run-workspace` / `event-editor`; the deck bridge posts `event-editor`).
+  # Declared here so the bounded zero-tool-call retry is reachable on them —
+  # membership only, no TypeScript branch.
+  - surface: event-editor
+    maxRetries: 1
+    retryStatus: Requesting the event draft emission…
+    nudge: >-
+      Your last reply did not emit the required agent_intent tool call. Emit the requested emission with agent_intent now: for event drafting use intent "event_shorthand" with the scientist-intent YAML document in `shorthand`. A repeated request with no clarification answers is a NEW drafting request; answering with your prior summary is not a drafting action. Do not claim to have saved or changed anything; no action has executed.
+  - surface: run-workspace
+    maxRetries: 1
+    retryStatus: Requesting the event draft emission…
+    nudge: >-
+      Your last reply did not emit the required agent_intent tool call. Emit the requested emission with agent_intent now: for event drafting use intent "event_shorthand" with the scientist-intent YAML document in `shorthand`. A repeated request with no clarification answers is a NEW drafting request; answering with your prior summary is not a drafting action. Do not claim to have saved or changed anything; no action has executed.
+  # DEAD ID, retained not deleted: NO client sends `workspace.deck` — the app's
+  # AiSurface union has `run-workspace` / `event-editor` and the deck bridge
+  # posts `event-editor` (verbatim sibling finding at
+  # config/drafting/shorthand-drafting.yaml:12-14). This entry is kept because
+  # other work cites it (AgentOrchestrator.repeatEcho.test.ts asserts its
+  # presence); its maxRetries and nudge bytes are unchanged.
   - surface: workspace.deck
     maxRetries: 1
     retryStatus: Requesting the draft emission…

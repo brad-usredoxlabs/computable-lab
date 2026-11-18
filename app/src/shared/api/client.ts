@@ -359,7 +359,7 @@ export interface MaterialRefInput {
 
 
 export type MaterialProfileControl = 'app-owned' | 'free-text' | 'ontology-ref' | 'local-material-required' | 'record-ref'
-export type MaterialProfileLayer = 'concept' | 'formulation' | 'instance'
+export type MaterialProfileLayer = 'concept' | 'formulation' | 'instance' | 'vendor-product'
 
 export interface MaterialProfileField {
   path: string
@@ -411,6 +411,14 @@ export interface MaterialSearchItem {
   domain?: string
   /** ontology CURIE of the term (NCBITaxon:10090, CLO:0020273) — picks the rule. */
   curie?: string
+  /**
+   * The record's OWN `material_ref` discriminator (vendor products link to a
+   * material concept through the schema-required ref). ABSENT when the record
+   * carries no ref — never `undefined` (exactOptionalPropertyTypes).
+   */
+  materialRefKind?: 'record' | 'ontology'
+  /** The ref's `id`: a CURIE for `ontology`, a recordId for `record`. */
+  materialRefId?: string
 }
 
 /**
@@ -425,7 +433,7 @@ export interface ResolveCandidate {
   tier: 0 | 1 | 2 | 3 | 4 | 5
   level: 'concept' | 'spec' | 'instance' | 'aliquot' | 'unknown'
   score: number
-  source: 'canonical-term' | 'local-record' | 'oak' | 'ols4' | 'vendor' | 'mint'
+  source: 'canonical-term' | 'local-record' | 'oak' | 'ols4' | 'local-obo' | 'vendor' | 'mint'
   uri?: string
   /** Term definition / description text, when the source ontology or record has one. */
   definition?: string
@@ -656,6 +664,12 @@ export interface MeasurementUploadResponse {
   path: string
   fileName: string
   size: number
+  /** sha256 hex of the stored bytes — present only for binary (device-stored) uploads. */
+  sha256?: string
+  /** Data-reference record id (DREF-######) anchoring the bytes — binary uploads only. */
+  dataReferenceId?: string
+  /** 'text' = git-inbox path (today's behavior); 'binary' = unchanged bytes on the storage device. */
+  mode?: 'text' | 'binary'
 }
 
 /** Match info for a record that matched in a study search result. */
@@ -1463,6 +1477,52 @@ export interface VendorDocumentExtractionResponse {
   draft?: Record<string, unknown>
 }
 
+// Spec-sheet extraction types (mirrors server/src/ingestion/SpecSheetExtractor.ts)
+export interface SpecSheetProposal {
+  targetField: string
+  value: string
+  sourceUrl: string
+  passage: string
+  specId: string
+}
+
+export interface SpecSheetFieldOutcome {
+  targetField: string
+  status: 'extracted' | 'not_present'
+  /** Present ONLY when status is 'extracted'. */
+  passage?: string
+  /** Present ONLY when status is 'not_present'; absent (never undefined) when 'extracted'. */
+  reason?: 'empty_document' | 'no_field_match' | 'no_passage'
+}
+
+export interface SpecSheetExtractSuccess {
+  configured: true
+  proposals: SpecSheetProposal[]
+  // Mirror of the server key; optional because the client's legacy union and
+  // its hand-written mocks predate this field (NoProposals variant: separate item).
+  fieldOutcomes?: SpecSheetFieldOutcome[]
+}
+
+export interface SpecSheetExtractNotConfigured {
+  configured: false
+  reason: 'not_configured'
+  proposals: SpecSheetProposal[]
+}
+
+export interface SpecSheetExtractBlocked {
+  configured: true
+  proposals: SpecSheetProposal[]
+  blocked: {
+    url: string
+    reason: string
+  }
+}
+
+export type SpecSheetExtractResult =
+  | SpecSheetExtractSuccess
+  | SpecSheetExtractNotConfigured
+  | SpecSheetExtractBlocked
+
 export interface MolecularWeightResolutionResponse {
   resolved: boolean
   source: 'chebi' | 'pubchem' | 'formula' | 'unresolved'
@@ -2105,6 +2165,37 @@ export interface AccessPolicyResponse {
   inherited: boolean
 }
 
+// ---- Role-binding proposals (read-only projection; GET /runs/:id/role-binding-proposals) ----
+
+export interface BindingCandidate {
+  recordId: string
+  recordKind: string
+  label: string
+  lotNumber?: string
+}
+
+export interface RoleProposal {
+  roleId: string
+  roleKind: 'labware' | 'material'
+  state: 'proposed' | 'ambiguous' | 'unbound' | 'bound'
+  candidates: BindingCandidate[]
+  bound?: BindingCandidate
+  reason?: string
+}
+
+/** `clarificationRequests` is an OPTIONAL add-on: absent until that leg publishes cards.
+ *  Wire shape: a TOP-LEVEL sibling of `protocols` (server spreads it onto the
+ *  { protocols: [...] } projection), never nested per protocol. */
+export interface RoleBindingProposalsResponse {
+  protocols: Array<{
+    protocolId: string
+    roles: RoleProposal[]
+    protocolNotFound?: boolean
+    reason?: string
+  }>
+  clarificationRequests?: Array<{ roleId?: string; prompt?: string }>
+}
+
 export const apiClient = {
   // ---- Identity / groups / sharing ----
   async getMe(): Promise<MeResponse> {
@@ -2271,6 +2362,47 @@ export const apiClient = {
       records: response.records,
       total: response.total ?? response.records.length,
     }
+  },
+
+  /**
+   * Display name of a labware definition bound by its id — resolved from the
+   * labware-definition RECORD STORE (the single authority for a
+   * registry-bound definition; the static LABWARE_DEFINITIONS map does not
+   * carry registry ids like generic/96_well_plate@v1, and a stored definition
+   * name is never invented client-side). An UNRESOLVABLE id resolves to the
+   * id itself — the caller shows the id verbatim, never a fabricated label
+   * (gate r17 D2 residual / L2-P1-RETURN-LEG-1 u4 AC4).
+   */
+  async getLabwareDefinitionDisplay(definitionId: string): Promise<string> {
+    const { records } = await this.listRecordsByKind('labware-definition', 200)
+    const found = records.find((record) => {
+      const payload = record.payload as Record<string, unknown> | undefined
+      return payload?.id === definitionId
+    })
+    const displayName = found ? found.payload.display_name : undefined
+    return typeof displayName === 'string' && displayName.length > 0 ? displayName : definitionId
+  },
+
+  /**
+   * Find an existing vendor-product record matching vendor + catalog number.
+   * Vendor comparison is case-insensitive and trimmed; catalog number must
+   * match exactly after trimming. Used to keep the vendor-product write
+   * idempotent per (vendor, catalog_number) instead of minting a new id.
+   */
+  async findVendorProductByCatalog(
+    vendor: string,
+    catalogNumber: string
+  ): Promise<RecordEnvelope | null> {
+    const targetVendor = vendor.trim().toLowerCase()
+    const targetCatalog = catalogNumber.trim()
+    if (!targetVendor || !targetCatalog) return null
+    const { records } = await this.listRecordsByKind('vendor-product', 200)
+    return records.find((record) => {
+      const payload = record.payload as Record<string, unknown> | undefined
+      const recordVendor = typeof payload?.vendor === 'string' ? payload.vendor.trim().toLowerCase() : ''
+      const recordCatalog = typeof payload?.catalog_number === 'string' ? payload.catalog_number.trim() : ''
+      return recordVendor === targetVendor && recordCatalog === targetCatalog
+    }) ?? null
   },
 
   /**
@@ -2468,8 +2600,10 @@ export const apiClient = {
      * QMS7-7 (OQ-1 ruling A) adds 'record-drafting' — the third registered
      * adapter on the SAME seam; this transport stays adapter-blind.
      * MATRES-CHAIN (OQ-3(a)) adds 'chain' — the fourth registered adapter on
-     * the SAME adapter-blind seam. */
-    adapter: 'workstate' | 'analysis' | 'record-drafting' | 'chain'
+     * the SAME adapter-blind seam. MATRES-RECV adds 'receiving' — the fifth
+     * registered adapter (config/drafting/adapters.yaml); the stale side was
+     * this closed union, not the server registration. */
+    adapter: 'workstate' | 'analysis' | 'record-drafting' | 'chain' | 'receiving'
     intent: Record<string, unknown>
     draftId?: string
     revision?: number
@@ -2510,7 +2644,16 @@ export const apiClient = {
     draftId: string
     revision: number
     reviewHash: string
-  }): Promise<{ sessionDocument: unknown; summary?: string; resolvedTerms?: unknown }> {
+  }): Promise<{
+    sessionDocument: unknown
+    summary?: string
+    resolvedTerms?: unknown
+    /** Receiving-shaped accepted plan (adapters.ts stage → compiled.result): the
+     * receipt record id and the material-instance record id the server wrote.
+     * Absent-or-value — never a present-but-undefined slot. */
+    recordId?: string
+    instanceRecordId?: string
+  }> {
     return request(`/drafts/accept`, {
       method: 'POST',
       body: JSON.stringify(body),
@@ -2692,15 +2835,20 @@ export const apiClient = {
     deckLayout?: unknown
     editorLayout?: unknown
   }> {
-    const response = await request<RecordResponse>(`/records/${encodeURIComponent(eventGraphId)}`)
-    return response.record.payload as {
-      id: string
-      events: unknown[]
-      labwares: unknown[]
-      runId?: string
-      name?: string
-      deckLayout?: unknown
-      editorLayout?: unknown
+    try {
+      const response = await request<RecordResponse>(`/records/${encodeURIComponent(eventGraphId)}`)
+      return response.record.payload as {
+        id: string
+        events: unknown[]
+        labwares: unknown[]
+        runId?: string
+        name?: string
+        deckLayout?: unknown
+        editorLayout?: unknown
+      }
+    } catch (error) {
+      // A 404 from /records/:id may be a genuinely missing record OR an access denial (the record route denies as NOT_FOUND) — surface it, never re-fetch through an unchecked route.
+      throw error
     }
   },
 
@@ -2964,6 +3112,16 @@ export const apiClient = {
     return request<VendorDocumentExtractionResponse>(`/vendors/${encodeURIComponent(vendorProductId)}/documents/extract`, {
       method: 'POST',
       body: JSON.stringify(payload),
+    })
+  },
+
+  async extractSpecSheetProposals(params: {
+    url: string
+    recordKind: string
+  }): Promise<SpecSheetExtractResult> {
+    return request<SpecSheetExtractResult>('/ingestion/spec-sheet/extract', {
+      method: 'POST',
+      body: JSON.stringify({ url: params.url, recordKind: params.recordKind }),
     })
   },
 
@@ -3293,7 +3451,7 @@ export const apiClient = {
     })
   },
 
-  async uploadRawMeasurementFile(body: { runId?: string; fileName: string; contentBase64: string }): Promise<MeasurementUploadResponse> {
+  async uploadRawMeasurementFile(body: { runId?: string; fileName: string; contentBase64: string; binary?: boolean }): Promise<MeasurementUploadResponse> {
     return request('/measurements/upload-raw', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -3442,12 +3600,27 @@ export const apiClient = {
    * PUT). `deviceId` is the CONFIG storage device id (from GET /config) —
    * never a mount path. `entryRef` names the instrument-sequence-entry the
    * package attaches to; `sampleRef`/`sourceRunRef` ride the package record.
+   * u1matbind (RUN-IS-THE-PROVENANCE-RECORD, 2026-11-14): `entryRef` is
+   * OPTIONAL — the package may instead bind to the MATERIAL that went in via
+   * `materialRef` (the server's RegisterBody already declared it optional;
+   * this is the client side of the same contract — fixing only one side is
+   * the shipped drift this closes). NEITHER may be sent: the server refuses
+   * with the named token MATERIAL_OR_ENTRY_REQUIRED.
+   * u1acqgraph (the door's run-scoped binding): `eventGraphRef` (the run's
+   * method event-graph record) + `assayType` (the measurement schema's
+   * assayType enum) — present for a run-scoped call (eventGraphRef present,
+   * entryRef absent). The handler MINTS the run's ONE measurement record and
+   * REQUIRES `assayType` for that path (ASSAY_TYPE_REQUIRED, never defaulted).
    */
   async registerAcquisitionPackage(body: {
     deviceId: string
     directoryKey: string
-    entryRef: { kind: 'record'; id: string; type: string }
+    entryRef?: { kind: 'record'; id: string; type: string }
     sampleRef?: { kind: 'record'; id: string; type: string; label?: string }
+    materialRef?: { kind: 'record'; id: string; type: string; label?: string }
+    sourceRunRef?: { kind: 'record'; id: string; type: string; label?: string }
+    eventGraphRef?: { kind: 'record'; id: string; type: string }
+    assayType?: 'qpcr' | 'plate_reader' | 'microscopy' | 'gc_fid' | 'gc_ms' | 'flow' | 'other'
   }): Promise<{ packageRecordId: string; packagePayload: Record<string, unknown>; entryRecordId: string }> {
     try {
       return await request<{ packageRecordId: string; packagePayload: Record<string, unknown>; entryRecordId: string }>(
@@ -5365,6 +5538,23 @@ export const apiClient = {
   },
 
   /**
+   * List the compound-class registry (GET /compound-classes).
+   * L2-GC-PEAK-NAMING-1 (u4surface): the /registry "Compounds" tab's data
+   * source. Each candidate's compoundId is a controlled ontology id resolved
+   * per-candidate through getOntologyTerm above.
+   */
+  async getCompoundClasses(): Promise<{
+    classes: Array<{
+      id: string
+      name: string
+      description?: string
+      candidates: Array<{ compoundId: string; name: string; notes?: string }>
+    }>
+  }> {
+    return request('/compound-classes')
+  },
+
+  /**
    * Get a verb-action mapping by verb name.
    * Calls GET /verb-action-map/lookup?verb=<encoded>
    */
@@ -5527,6 +5717,28 @@ export const apiClient = {
       method: 'POST',
       body: JSON.stringify(bindings),
     })
+  },
+
+  /**
+   * Build a plan graph from the planned-run's attached protocol + bindings.
+   * Calls POST /runs/:id/plan-graph
+   * @returns { success: true, graphId, reused? } — throws ApiError on non-2xx.
+   */
+  async buildPlanGraph(plannedRunId: string): Promise<{ success: true; graphId: string; reused?: boolean }> {
+    return request(`/runs/${encodeURIComponent(plannedRunId)}/plan-graph`, {
+      method: 'POST',
+    })
+  },
+
+  /**
+   * Read-only role-binding proposals for a planned-run: one entry per declared
+   * role with its candidate(s). Never writes — a single candidate is PROPOSED,
+   * not bound. 404 when the run is absent or has no attached protocol.
+   */
+  async getRoleBindingProposals(runId: string): Promise<RoleBindingProposalsResponse> {
+    return request<RoleBindingProposalsResponse>(
+      `/runs/${encodeURIComponent(runId)}/role-binding-proposals`,
+    )
   },
 
   // === Sample Map API ===

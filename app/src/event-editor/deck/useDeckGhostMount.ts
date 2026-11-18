@@ -71,15 +71,23 @@ export function useDeckGhostMount(): DeckGhostMount {
       variant,
       events: draft.events,
       labwareAdditions: draft.labwareAdditions,
+      labwareRecords: draft.labwareRecords,
       labwareRequirements: [],
       resolvedLabwares: draft.resolvedLabwares,
       equipmentRequirements: [],
-      recordCreations: [],
+      // L2-P1-CREATE-RECORD-LANDS-1 u1recordsdraft: carry the done's creations
+      // VERBATIM (one data path draft -> preview -> modal; the builder already
+      // forwards them, draftPreview.ts:487 — no re-derivation, no second
+      // channel). `?? []` keeps the builder's default for drafts with none.
+      recordCreations: draft.recordCreations ?? [],
       activeDeckScope,
       existingLabwares: state.labwares,
       existingPlacements: state.placements,
     })
-    if (preview.previewPlacements.length === 0 && preview.previewEvents.length === 0) return
+    // L2-P1-CREATE-RECORD-LANDS-1 u1recordsdraft: a records-only draft (zero
+    // placements/events) is a reviewable proposal — keep it alive so the deck
+    // review modal lists the creations. Nothing staged => still early-returns.
+    if (preview.previewPlacements.length === 0 && preview.previewEvents.length === 0 && (preview.recordCreations ?? []).length === 0) return
     // A follow-up draft while a preview is mounted is a revision: replace the
     // ghosts and append to the revision trail (the deck review modal's chain).
     const previousPreview = state.preview

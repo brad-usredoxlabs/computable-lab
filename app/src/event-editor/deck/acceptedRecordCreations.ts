@@ -61,8 +61,10 @@ export function localRecordIdFor(kind: AiRecordCreationKind, name: string, curie
   return curie && kind === 'material' ? `MAT-${slug || fallback}` : `${prefix}-${slug || fallback}`
 }
 
-/** Compare names loosely enough to catch "the lab bath" vs "Water Bath". */
-function sameEntity(a: string, b: string): boolean {
+/** Compare names loosely enough to catch "the lab bath" vs "Water Bath".
+ *  Exported: the ghost-gate (labwareInstanceMint) projects the exact stamp
+ *  this module performs by name — one comparison, never a second copy. */
+export function sameEntity(a: string, b: string): boolean {
   const normalize = (value: string): string =>
     value
       .toLowerCase()

@@ -94,6 +94,11 @@ vi.mock('../EventEditorContext', () => ({
       commitPreview: mocks.commitPreview,
     },
   }),
+  // HarnessChatPane.tsx:40/312 imports useOptionalEventEditor — the wholesale
+  // mock must export it (an unexported named import throws at the pane's
+  // mount, the same class as listThreads above). Real semantics:
+  // EventEditorContext.tsx:1733.
+  useOptionalEventEditor: () => ({ state: mocks.state, actions: { setPreview: mocks.setPreview, clearPreview: mocks.clearPreview, appendEvent: mocks.appendEvent, commitPreview: mocks.commitPreview } }),
 }))
 
 // The shared adoption core's durable persist seam: the ghost lock asserts
@@ -130,6 +135,11 @@ vi.mock('../../shared/api/client', () => ({
   apiClient: {
     getRecord: vi.fn(),
     getPromptTemplate: vi.fn().mockResolvedValue({ error: 'not found' }),
+    // The shared adoption core (deckAdoption.ts, L2-P1-LABWARE-INSTANCE-
+    // RECORD-1) mints one labware-instance record per placed labware via
+    // apiClient.createRecord — a wholesale mock must export it or the Apply
+    // throws "createRecord is not a function" at the mint.
+    createRecord: vi.fn().mockResolvedValue(undefined),
   },
 }))
 

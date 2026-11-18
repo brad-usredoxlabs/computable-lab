@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
-import { buildVendorDocumentExtraction } from './service.js';
+import { createHash } from 'node:crypto';
+import { describe, expect, it, vi } from 'vitest';
+import type { RecordStore } from '../store/types.js';
+import { attachVendorDocumentExtraction, buildVendorDocumentExtraction } from './service.js';
 import {
   shapeDocumentResult,
   filterAndShapeDocumentResults,
@@ -269,5 +271,263 @@ describe('document result shaping', () => {
       title: 'Assay Protocol',
       sourceUrl: 'https://example.com/assay.pdf',
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PDF arm delegates the page/OCR decision to the shared intake seam
+// (L2-DOC-INTAKE-1 unit 4). No binaries and no real PDF bytes: the injected
+// readPageTexts/ocrPage own everything the shared seam would shell out for.
+// ---------------------------------------------------------------------------
+
+const PDF_PAGE_1_TEXT = [
+  'RPMI 1640 formulation sheet (vendor product document)',
+  'Glucose 2 g/L',
+  'Sodium bicarbonate 2 g/L',
+].join('\n');
+
+function pdfUpload(): { fileName: string; mediaType: string; contentBase64: string } {
+  return {
+    fileName: 'formulation.pdf',
+    mediaType: 'application/pdf',
+    contentBase64: Buffer.from('bytes that are not a real PDF').toString('base64'),
+  };
+}
+
+describe('pdf extraction delegates to the shared intake service', () => {
+  it('OCRs only the page without a text layer and records the method per page', async () => {
+    const ocrPage = vi.fn(async (_filePath: string, _page: number, _config: unknown) => ({
+      text: 'HEPES 4.77 g/L',
+      diagnostics: [],
+    }));
+
+    const result = await buildVendorDocumentExtraction(pdfUpload(), {
+      readPageTexts: async () => ({
+        pages: [
+          { page: 1, text: PDF_PAGE_1_TEXT },
+          { page: 2, text: '' },
+        ],
+        diagnostics: [],
+      }),
+      ocrPage,
+      probeTool: async () => true,
+      loadOcrConfig: async () => ({
+        executable: 'tesseract',
+        language: 'eng',
+        timeoutSeconds: 30,
+        rasterizer: 'pdftoppm',
+        dpi: 200,
+        maxPages: 10,
+      }),
+    });
+
+    expect(result.document).toMatchObject({
+      file_ref: { page_count: 2 },
+      extraction: {
+        method: 'ocr',
+        page_count: 2,
+        ocr_attempted: true,
+        ocr_available: true,
+      },
+    });
+    expect(ocrPage).toHaveBeenCalledTimes(1);
+    expect(ocrPage).toHaveBeenCalledWith(expect.any(String), 2, expect.anything());
+
+    const draft = result.draft as { items: Array<{ component_name: string; source_page: number }> };
+    expect(draft.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ component_name: 'HEPES', source_page: 2 }),
+      ]),
+    );
+  });
+
+  it('records the extraction method per page, not only for the document', async () => {
+    const ocrPage = vi.fn(async (_filePath: string, _page: number, _config: unknown) => ({
+      text: 'HEPES 4.77 g/L',
+      diagnostics: [],
+    }));
+
+    const result = await buildVendorDocumentExtraction(pdfUpload(), {
+      readPageTexts: async () => ({
+        pages: [
+          { page: 1, text: PDF_PAGE_1_TEXT },
+          { page: 2, text: '' },
+        ],
+        diagnostics: [],
+      }),
+      ocrPage,
+      probeTool: async () => true,
+      loadOcrConfig: async () => ({
+        executable: 'tesseract',
+        language: 'eng',
+        timeoutSeconds: 30,
+        rasterizer: 'pdftoppm',
+        dpi: 200,
+        maxPages: 10,
+      }),
+    });
+
+    const extraction = (result.document as { extraction: { pages?: unknown } }).extraction;
+    expect(extraction.pages).toEqual([
+      { page_number: 1, method: 'pdf_text' },
+      { page_number: 2, method: 'ocr' },
+    ]);
+  });
+
+  it('keeps a text-layer-only PDF on pdf_text and never calls OCR', async () => {
+    const ocrPage = vi.fn(async (_filePath: string, _page: number, _config: unknown) => ({
+      text: 'unexpected OCR text',
+      diagnostics: [],
+    }));
+
+    const result = await buildVendorDocumentExtraction(pdfUpload(), {
+      readPageTexts: async () => ({
+        pages: [
+          { page: 1, text: PDF_PAGE_1_TEXT },
+          { page: 2, text: 'L-Glutamine 2 mM\nHEPES 4.77 g/L' },
+        ],
+        diagnostics: [],
+      }),
+      ocrPage,
+      probeTool: async () => true,
+      loadOcrConfig: async () => ({
+        executable: 'tesseract',
+        language: 'eng',
+        timeoutSeconds: 30,
+        rasterizer: 'pdftoppm',
+        dpi: 200,
+        maxPages: 10,
+      }),
+    });
+
+    expect(result.document).toMatchObject({
+      file_ref: { page_count: 2 },
+      extraction: {
+        method: 'pdf_text',
+        ocr_attempted: false,
+        ocr_available: false,
+      },
+    });
+    expect(ocrPage).not.toHaveBeenCalled();
+  });
+
+  // Adversarial c1 defect: a PDF whose fileName carries no `.pdf` suffix must
+  // still be extracted on the strength of its mediaType. Before the fix the
+  // temp file kept the suffixless name, so the shared seam
+  // (extractDocumentPages, which decides on `extension !== '.pdf'`) returned
+  // UNSUPPORTED and the arm reported method 'failed'.
+  it('extracts a PDF whose fileName has no .pdf suffix when mediaType says application/pdf', async () => {
+    const result = await buildVendorDocumentExtraction(
+      { ...pdfUpload(), fileName: 'spec-sheet-no-suffix' },
+      {
+        readPageTexts: async () => ({
+          pages: [{ page: 1, text: PDF_PAGE_1_TEXT }],
+          diagnostics: [],
+        }),
+        ocrPage: async () => ({ text: 'unexpected OCR text', diagnostics: [] }),
+        probeTool: async () => true,
+        loadOcrConfig: async () => ({
+          executable: 'tesseract',
+          language: 'eng',
+          timeoutSeconds: 30,
+          rasterizer: 'pdftoppm',
+          dpi: 200,
+          maxPages: 10,
+        }),
+      },
+    );
+
+    expect(result.document).toMatchObject({
+      file_ref: { page_count: 1 },
+      extraction: { method: 'pdf_text', page_count: 1 },
+    });
+    expect((result.document as { extraction: { method: string } }).extraction.method)
+      .not.toBe('failed');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// L2-DOC-INTAKE-1 (unit dupdoc): attaching the same file bytes to the same
+// vendor product twice must reuse the stored document whose
+// file_ref.sha256 matches, and write nothing. Different bytes still append.
+// ---------------------------------------------------------------------------
+
+const DUP_BYTES = Buffer.from('Glucose 2 g/L\nL-Glutamine 2 mM', 'utf8');
+const DUP_SHA = createHash('sha256').update(DUP_BYTES).digest('hex');
+const DUP_UPLOAD = {
+  fileName: 'acme-hepes-formulation.txt',
+  mediaType: 'text/plain',
+  contentBase64: DUP_BYTES.toString('base64'),
+  documentKind: 'formulation_sheet' as const,
+};
+
+function storedDocument(id: string, sha256?: string): Record<string, unknown> {
+  return {
+    id,
+    file_ref: {
+      file_name: 'acme-hepes-formulation.txt',
+      media_type: 'text/plain',
+      ...(sha256 ? { sha256 } : {}),
+    },
+  };
+}
+
+function vendorProductStore(documents: unknown[]) {
+  const update = vi.fn(async (_options: { envelope: { payload: { documents: unknown[] } } }) => ({ success: true }));
+  const envelope = {
+    recordId: 'VPR-DUP-1',
+    schemaId: 'https://computable-lab.com/schema/computable-lab/vendor-product.schema.yaml',
+    payload: {
+      kind: 'vendor-product',
+      id: 'VPR-DUP-1',
+      name: 'Acme HEPES',
+      vendor: 'Acme',
+      catalog_number: 'AC-1',
+      documents,
+    },
+    meta: { createdAt: '2026-01-01T00:00:00.000Z' },
+  };
+  return {
+    store: { get: vi.fn(async () => envelope), update } as unknown as RecordStore,
+    update,
+  };
+}
+
+describe('attach vendor document extraction is idempotent on file sha256', () => {
+  it('reuses the stored document when the same file bytes are attached again', async () => {
+    const { store, update } = vendorProductStore([storedDocument('VDOC-EXISTING', DUP_SHA)]);
+
+    const result = await attachVendorDocumentExtraction(store, 'VPR-DUP-1', DUP_UPLOAD);
+
+    expect(result.document).toMatchObject({ id: 'VDOC-EXISTING', file_ref: { sha256: DUP_SHA } });
+    expect(result.duplicateOf).toBe('VDOC-EXISTING');
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('appends a document for a genuinely different file', async () => {
+    const { store, update } = vendorProductStore([storedDocument('VDOC-EXISTING', DUP_SHA)]);
+
+    const result = await attachVendorDocumentExtraction(store, 'VPR-DUP-1', {
+      ...DUP_UPLOAD,
+      fileName: 'acme-hepes-formulation-v2.txt',
+      contentBase64: Buffer.from('Glucose 4.5 g/L', 'utf8').toString('base64'),
+    });
+
+    expect(result.document.id).not.toBe('VDOC-EXISTING');
+    expect(result.duplicateOf).toBeUndefined();
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update.mock.calls[0]?.[0].envelope.payload.documents).toHaveLength(2);
+  });
+
+  it('still appends manual documents that carry no sha256 on either side', async () => {
+    const { store, update } = vendorProductStore([storedDocument('VDOC-MANUAL-1')]);
+
+    await attachVendorDocumentExtraction(store, 'VPR-DUP-1', {
+      fileName: 'acme-hepes-formulation.txt',
+      mediaType: 'text/plain',
+    });
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update.mock.calls[0]?.[0].envelope.payload.documents).toHaveLength(2);
   });
 });

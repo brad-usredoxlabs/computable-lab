@@ -101,3 +101,43 @@ terms:
       cas: 112-39-0
       chain: 16:0
       species: methyl-ester
+  - kind: ontology-term
+    id: FAME-LOCAL:methyl-myristate-n14
+    source: manual
+    label: "Methyl myristate (FAME, 14:0-OMe)"
+    definition: "Methyl ester (FAME) of myristic acid; the 14:0 GC-FID standard species."
+    meta:
+      chebi_id: CHEBI:89199
+      cas: 124-10-7
+      chain: 14:0
+      species: methyl-ester
+  - kind: ontology-term
+    id: FAME-LOCAL:methyl-pentadecanoate-n15
+    source: manual
+    label: "Methyl pentadecanoate (FAME, 15:0-OMe)"
+    definition: "Methyl ester (FAME) of pentadecanoic acid; the 15:0 GC-FID standard species."
+    meta:
+      chebi_id: CHEBI:142657
+      cas: 7132-64-1
+      chain: 15:0
+      species: methyl-ester
+  - kind: ontology-term
+    id: FAME-LOCAL:methyl-heptadecanoate-n17
+    source: manual
+    label: "Methyl heptadecanoate (FAME, 17:0-OMe)"
+    definition: "Methyl ester (FAME) of heptadecanoic acid; the 17:0 GC-FID standard species."
+    meta:
+      chebi_id: CHEBI:136920
+      cas: 1731-92-6
+      chain: 17:0
+      species: methyl-ester
+  - kind: ontology-term
+    id: FAME-LOCAL:methyl-arachidate-n20
+    source: manual
+    label: "Methyl arachidate (FAME, 20:0-OMe)"
+    definition: "Methyl ester (FAME) of arachidic acid; the 20:0 GC-FID standard species."
+    meta:
+      chebi_id: CHEBI:143582
+      cas: 1120-28-1
+      chain: 20:0
+      species: methyl-ester

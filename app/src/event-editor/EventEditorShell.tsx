@@ -32,6 +32,27 @@ export function EventEditorShell() {
     )
   }
 
+  if (state.loadState === 'missing') {
+    // danglingplan: 404 on the plan graph is a stale pointer — name the missing
+    // graph and the way back to the run (neutral .splash, not the red --error).
+    return (
+      <AppShell brand={brand} bare>
+        <div className="event-editor">
+          <div className="splash">
+            This surface points at plan graph <span>{state.missingGraphId ?? 'unknown graph'}</span>, which
+            does not exist yet. Rebuild the plan graph from the run workspace.
+            {state.runId ? (
+              <>
+                <br />
+                <a href={`/runs/${state.runId}`}>Back to run {state.runId}</a>
+              </>
+            ) : null}
+          </div>
+        </div>
+      </AppShell>
+    )
+  }
+
   if (state.loadState === 'error') {
     return (
       <AppShell brand={brand} bare>

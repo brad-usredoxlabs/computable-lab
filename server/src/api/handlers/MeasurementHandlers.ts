@@ -27,6 +27,16 @@ import {
   type InstrumentExecutionReadiness,
   type InstrumentApplianceJob,
 } from '../../compiler/artifacts/InstrumentApplianceJob.js';
+import { ArtifactBlobStore, createArtifactBlobStoreRecorder } from '../../ingestion/ArtifactBlobStore.js';
+import { StorageError } from '../../storage/types.js';
+
+/**
+ * Raw-upload decode ceiling in DECODED bytes (L2-GC-RAW-BINARY-1 binbytes, assumption
+ * AS-GC-MAXUPLOAD): server.ts:213 bodyLimit is 25 MB of raw HTTP body and base64
+ * inflates a payload 4/3, so a 25 MB body decodes to at most ~18.75 MB — anything
+ * larger is refused as FILE_TOO_LARGE rather than stored truncated.
+ */
+export const MAX_RAW_UPLOAD_BYTES = 18 * 1024 * 1024;
 
 type ActiveReadRequestBody = {
   adapterId: 'molecular_devices_gemini' | 'abi_7500_qpcr' | 'agilent_6890n_gc' | 'metrohm_761_ic';
@@ -155,7 +165,8 @@ export function createMeasurementHandlers(ctx: AppContext) {
   return {
     /**
      * POST /measurements/upload-raw
-     * Upload a text-based instrument export into the repo-backed inbox.
+     * Upload a text-based instrument export into the repo-backed inbox; non-UTF8 instrument files
+     * (e.g. Agilent GC-FID .ch / ANDI .cdf) are stored UNCHANGED on the device via the existing blob store.
      */
     async uploadRawMeasurementFile(
       request: FastifyRequest<{
@@ -163,19 +174,56 @@ export function createMeasurementHandlers(ctx: AppContext) {
           runId?: string;
           fileName?: string;
           contentBase64?: string;
+          binary?: boolean;
         };
       }>,
       reply: FastifyReply,
-    ): Promise<{ success: true; path: string; fileName: string; size: number } | ApiError> {
+    ): Promise<
+      | { success: true; path: string; fileName: string; size: number; sha256: string; dataReferenceId: string; mode: 'binary' }
+      | { success: true; path: string; fileName: string; size: number; mode: 'text' }
+      | ApiError
+    > {
       const fileName = typeof request.body.fileName === 'string' ? request.body.fileName.trim() : '';
       const contentBase64 = typeof request.body.contentBase64 === 'string' ? request.body.contentBase64.trim() : '';
       if (!fileName || !contentBase64) {
         reply.status(400);
         return { error: 'BAD_REQUEST', message: 'fileName and contentBase64 are required' };
       }
+      const buffer = Buffer.from(contentBase64, 'base64');
+      // Named refusals BEFORE the branch (L2-GC-RAW-BINARY-1 binbytes): an empty decode and an
+      // oversize upload are refused, never silently stored or truncated.
+      if (buffer.length === 0) {
+        reply.status(400);
+        return { error: 'EMPTY_FILE', message: 'contentBase64 decoded to zero bytes' };
+      }
+      if (buffer.length > MAX_RAW_UPLOAD_BYTES) {
+        reply.status(400);
+        return { error: 'FILE_TOO_LARGE', message: `upload is ${buffer.length} bytes; the maximum is ${MAX_RAW_UPLOAD_BYTES} bytes` };
+      }
+      // Branch on the UTF-8 round-trip: bytes that cannot round-trip are instrument files —
+      // toString('utf-8') substitutes U+FFFD and would corrupt them. Those are stored unchanged
+      // through the existing device-backed blob store (single sha256/data-reference writer); an
+      // explicit binary: true also forces the device path.
+      const text = buffer.toString('utf8');
+      const isBinary = !Buffer.from(text, 'utf8').equals(buffer) || request.body.binary === true;
+      if (isBinary) {
+        const safeFileName = fileName.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || `measurement${extname(fileName) || '.bin'}`;
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+        try {
+          const blobStore = new ArtifactBlobStore(ctx.storageService, 'measurements', createArtifactBlobStoreRecorder(ctx.store));
+          const result = await blobStore.save({ artifactId: `${stamp}-${safeFileName}`, fileName: safeFileName, contentBase64 });
+          reply.status(201);
+          return { success: true, path: result.storedPath, fileName: safeFileName, size: result.sizeBytes, sha256: result.sha256, dataReferenceId: result.drefId, mode: 'binary' };
+        } catch (err) {
+          if (err instanceof StorageError) {
+            reply.status(400);
+            return { error: `STORAGE_${err.code}`, message: err.message };
+          }
+          reply.status(500);
+          return { error: 'STORE_FAILED', message: err instanceof Error ? err.message : 'Failed to store uploaded binary measurement file' };
+        }
+      }
       try {
-        const buffer = Buffer.from(contentBase64, 'base64');
-        const content = buffer.toString('utf-8');
         const runSegment = typeof request.body.runId === 'string' && request.body.runId.trim() ? request.body.runId.trim() : 'manual';
         const safeFileName = fileName.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || `measurement${extname(fileName) || '.txt'}`;
         const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -187,7 +235,7 @@ export function createMeasurementHandlers(ctx: AppContext) {
         }
         const result = await ctx.repoAdapter.createFile({
           path,
-          content,
+          content: text,
           message: `Upload raw measurement file ${safeFileName}`,
         });
         if (!result.success) {
@@ -195,7 +243,7 @@ export function createMeasurementHandlers(ctx: AppContext) {
           return { error: 'CREATE_FAILED', message: result.error ?? 'Failed to store uploaded measurement file' };
         }
         reply.status(201);
-        return { success: true, path, fileName: safeFileName, size: buffer.length };
+        return { success: true, path, fileName: safeFileName, size: buffer.length, mode: 'text' };
       } catch (err) {
         reply.status(400);
         return {

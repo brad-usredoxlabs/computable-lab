@@ -3,6 +3,8 @@
  *
  * Creates a planned-run draft record from an existing local-protocol.
  * This is the backend half of the "Plan execution" handoff from Protocol IDE.
+ *
+ * Supports both singular ref (back-compat) and ordered array of refs (u2).
  */
 
 import { RecordRevisionService, revisionRef } from '../revisions/RecordRevisionService.js';
@@ -38,39 +40,65 @@ export class PlannedRunFromLocalProtocolService {
   constructor(private store: RecordStore) {}
 
   /**
-   * Create a planned-run draft from a local-protocol record.
+   * Create a planned-run draft from a local-protocol record or ordered list of refs.
    *
-   * @param localProtocolRef - The recordId of the local-protocol to base the plan on
+   * @param localProtocolRef - Single recordId string (back-compat) or ordered string[] of ids
    * @param options - Optional overrides for title and recordId prefix
    * @returns Result with the created envelope or an error
    */
   async createFromLocalProtocol(
-    localProtocolRef: string,
+    localProtocolRef: string | string[],
     options: CreatePlannedRunOptions = {},
   ): Promise<CreatePlannedRunResult> {
-    // Validate input
-    if (!localProtocolRef || localProtocolRef.trim().length === 0) {
+    // Normalise to ordered, de-duplicated array
+    let refs: string[];
+    if (typeof localProtocolRef === 'string') {
+      if (!localProtocolRef || localProtocolRef.trim().length === 0) {
+        return { ok: false, reason: 'localProtocolRef required', status: 400 };
+      }
+      refs = [localProtocolRef.trim()];
+    } else if (Array.isArray(localProtocolRef)) {
+      if (localProtocolRef.length === 0) {
+        return { ok: false, reason: 'localProtocolRef required', status: 400 };
+      }
+      // De-dupe preserving order
+      const seen = new Set<string>();
+      refs = [];
+      for (const id of localProtocolRef) {
+        if (id && !seen.has(id)) {
+          seen.add(id);
+          refs.push(id);
+        }
+      }
+      if (refs.length === 0) {
+        return { ok: false, reason: 'localProtocolRef required', status: 400 };
+      }
+    } else {
       return { ok: false, reason: 'localProtocolRef required', status: 400 };
     }
 
-    // Look up the local-protocol
-    const localProtocolEnvelope = await this.store.get(localProtocolRef);
-    if (!localProtocolEnvelope) {
-      return { ok: false, reason: 'local-protocol not found', status: 404 };
+    // Validate EVERY id
+    const resolvedProtocols: Array<{ envelope: RecordEnvelope; id: string }> = [];
+    for (const id of refs) {
+      const envelope = await this.store.get(id);
+      if (!envelope) {
+        return { ok: false, reason: `local-protocol not found: ${id}`, status: 404 };
+      }
+      const payload = envelope.payload as Record<string, unknown>;
+      if (payload.kind !== 'local-protocol') {
+        return {
+          ok: false,
+          reason: `resolved record is not a local-protocol (id=${id}, kind=${payload.kind})`,
+          status: 400,
+        };
+      }
+      resolvedProtocols.push({ envelope, id });
     }
 
-    // Verify it's actually a local-protocol
-    const payload = localProtocolEnvelope.payload as Record<string, unknown>;
-    if (payload.kind !== 'local-protocol') {
-      return {
-        ok: false,
-        reason: `resolved record is not a local-protocol (kind=${payload.kind})`,
-        status: 400,
-      };
-    }
-
-    // Derive title
-    const sourceTitle = (payload.title as string) ?? 'Untitled local-protocol';
+    // Derive title from the first (lead) protocol
+    const lead = resolvedProtocols[0]!;
+    const leadPayload = lead.envelope.payload as Record<string, unknown>;
+    const sourceTitle = (leadPayload.title as string) ?? 'Untitled local-protocol';
     const title = options.title ?? `Plan: ${sourceTitle}`;
 
     // Generate recordId
@@ -78,53 +106,65 @@ export class PlannedRunFromLocalProtocolService {
     const shortId = randomUUID().replace(/-/g, '').slice(0, 8);
     const recordId = `${prefix}${slugifyRecordLabel(title)}-${shortId}`;
 
-    const sourceLinks = payload.links && typeof payload.links === 'object'
-      ? payload.links as { studyId?: string; experimentId?: string; runId?: string }
-      : {};
-    const links = {
-      ...(sourceLinks.studyId ? { studyId: sourceLinks.studyId } : {}),
-      ...(sourceLinks.experimentId ? { experimentId: sourceLinks.experimentId } : {}),
-      ...(sourceLinks.runId ? { runId: sourceLinks.runId } : {}),
-      ...(options.links?.studyId ? { studyId: options.links.studyId } : {}),
-      ...(options.links?.experimentId ? { experimentId: options.links.experimentId } : {}),
-      ...(options.links?.runId ? { runId: options.links.runId } : {}),
-    };
+    // Merge links from all protocols + options (later sources override)
+    const mergedLinks: { studyId?: string; experimentId?: string; runId?: string } = {};
+    for (const { envelope } of resolvedProtocols) {
+      const p = envelope.payload as Record<string, unknown>;
+      const srcLinks = p.links && typeof p.links === 'object'
+        ? p.links as { studyId?: string; experimentId?: string; runId?: string }
+        : {};
+      if (srcLinks.studyId) mergedLinks.studyId = srcLinks.studyId;
+      if (srcLinks.experimentId) mergedLinks.experimentId = srcLinks.experimentId;
+      if (srcLinks.runId) mergedLinks.runId = srcLinks.runId;
+    }
+    if (options.links?.studyId) mergedLinks.studyId = options.links.studyId;
+    if (options.links?.experimentId) mergedLinks.experimentId = options.links.experimentId;
+    if (options.links?.runId) mergedLinks.runId = options.links.runId;
 
     const revisions = new RecordRevisionService(this.store);
-    const pinnedLocal = await revisions.pinInheritance(localProtocolEnvelope, options.actor ?? 'system');
-    const snapshot = await revisions.capture(pinnedLocal, options.actor ?? 'system', 'derivation');
+    const actor = options.actor ?? 'system';
+
+    // Pin and snapshot every protocol, capturing revisionRef per ref
+    const refEntries: Array<{ kind: string; type: string; id: string; revisionRef: { kind: string; type: string; id: string } }> = [];
+    for (const { envelope, id } of resolvedProtocols) {
+      const pinned = await revisions.pinInheritance(envelope, actor);
+      const snapshot = await revisions.capture(pinned, actor, 'derivation');
+      refEntries.push({
+        kind: 'record',
+        type: 'local-protocol',
+        id,
+        revisionRef: revisionRef(snapshot.recordId),
+      });
+    }
 
     // Build the envelope
+    const payload: Record<string, unknown> = {
+      kind: 'planned-run',
+      recordId,
+      title,
+      protocolLayer: 'lab',
+      sourceType: 'local-protocol',
+      sourceRef: refEntries[0],
+      localProtocolRefs: refEntries,
+      ...(Object.keys(mergedLinks).length > 0 ? { links: mergedLinks } : {}),
+      state: 'draft',
+      bindings: {
+        labware: [],
+        materials: [],
+        contexts: [],
+      },
+    };
+
+    // Legacy singular: write ONLY when list has exactly one entry
+    if (refEntries.length === 1) {
+      payload.localProtocolRef = refEntries[0];
+    }
+
     const envelope: RecordEnvelope = {
       recordId,
       schemaId:
         'https://computable-lab.com/schema/computable-lab/planned-run.schema.yaml',
-      payload: {
-        kind: 'planned-run',
-        recordId,
-        title,
-        protocolLayer: 'lab',
-        sourceType: 'local-protocol',
-        sourceRef: {
-          kind: 'record',
-          type: 'local-protocol',
-          id: localProtocolRef,
-          revisionRef: revisionRef(snapshot.recordId),
-        },
-        localProtocolRef: {
-          kind: 'record',
-          type: 'local-protocol',
-          id: localProtocolRef,
-          revisionRef: revisionRef(snapshot.recordId),
-        },
-        ...(Object.keys(links).length > 0 ? { links } : {}),
-        state: 'draft',
-        bindings: {
-          labware: [],
-          materials: [],
-          contexts: [],
-        },
-      },
+      payload,
     };
 
     // Persist

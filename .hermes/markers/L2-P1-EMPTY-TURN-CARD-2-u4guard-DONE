@@ -1,0 +1,9 @@
+L2-P1-EMPTY-TURN-CARD-2-u4guard marker — real commit SHAs from git (branch cl/lane2-etc2-u4guard-l2t2590, base 515c43a94764c0b11409610bead39a8f6282e2e7):
+
+e40e4d7d3 report(L2-P1-EMPTY-TURN-CARD-2 u4): u4guard AC map, RED->GREEN outputs, baselines
+7c6e02fd6 fix(L2-P1-EMPTY-TURN-CARD-2 u4): the final-answer empty-turn guard reaches the named-absence CARD on notes-bearing turns (card beside the notes, no error)
+3689f268c test(L2-P1-EMPTY-TURN-CARD-2 u4): RED — notes-bearing empty turn drops the absence card
+515c43a94 handoff l2t2585: gate r9 FIX-FUNCTIONAL (D2-D7), PROBE-TIERS u1probe + DECK-ROUTE u1deckmount dispatched (slots 0/1), Brad card pending on LBW-THERMO residue
+d983e5263 context(l2): the prompt ladder is a lane instrument, never an acceptance
+
+report-commit: e40e4d7d30ba802ba7236c20cc1eeb46e9b42acf

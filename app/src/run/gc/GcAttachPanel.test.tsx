@@ -121,6 +121,30 @@ describe('GcAttachPanel — register (click-only; mount never registers)', () =>
     await waitFor(() => expect(onAttached).toHaveBeenCalledWith('ACQP-000042'))
   })
 
+  // D4 (u1passrun): the run is the provenance record — when the entry's OWN
+  // runRef is handed in, it rides the register body VERBATIM (the server door
+  // already forwards body.sourceRunRef onto the ACQP payload).
+  it('a sourceRunRef prop rides the register body verbatim (run provenance reaches the ACQP)', async () => {
+    render(
+      <GcAttachPanel
+        entryId={ENTRY}
+        onAttached={vi.fn()}
+        sourceRunRef={{ kind: 'record', id: 'RUN-1', type: 'run' }}
+      />,
+    )
+    const sel = (await screen.findByTestId(`gc-attach-device-${ENTRY}`)) as HTMLSelectElement
+    fireEvent.change(sel, { target: { value: 'gc-fid-nas' } })
+    await typeKey('2026-10-28/RES35077-4.D')
+    fireEvent.click(screen.getByTestId(`gc-attach-register-${ENTRY}`))
+    await waitFor(() => expect(apiClient.registerAcquisitionPackage).toHaveBeenCalledTimes(1))
+    expect(apiClient.registerAcquisitionPackage).toHaveBeenCalledWith({
+      deviceId: 'gc-fid-nas',
+      directoryKey: '2026-10-28/RES35077-4.D',
+      entryRef: { kind: 'record', id: ENTRY, type: 'instrument-sequence-entry' },
+      sourceRunRef: { kind: 'record', id: 'RUN-1', type: 'run' },
+    })
+  })
+
   it('a missing key renders a NAMED reason (never a silent no-op, never a dead disabled button)', async () => {
     render(<GcAttachPanel entryId={ENTRY} onAttached={vi.fn()} />)
     await screen.findByTestId(`gc-attach-device-${ENTRY}`)

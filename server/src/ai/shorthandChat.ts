@@ -45,6 +45,8 @@ import type {
   ScientistIntent,
   ScientistIntentUnresolvedFact,
 } from '../compiler/scientistIntent/types.js';
+import type { ClarificationJourneyFact } from '../compiler/resolution/types.js';
+import { notALocalTermReason } from '../compiler/journey/journeyDeclarationDoors.js';
 import { defaultScientistIntentVocabulary } from '../compiler/scientistIntent/vocabulary.js';
 import type { LabStateSnapshot } from '../compiler/state/LabState.js';
 import { canonicalLabelKey, localMaterialIdForLabel } from '../materials/termId.js';
@@ -520,7 +522,7 @@ export function composeSpineWithReuseBindings(
     const key = b.label.trim().toLowerCase();
     if (!key || !b.ref.trim()) continue;
     const set = refsByLabel.get(key) ?? new Set<string>();
-    set.add(b.ref.trim());
+    set.add(recordIdFromCurie(b.ref.trim()));
     refsByLabel.set(key, set);
   }
   if (refsByLabel.size === 0) return spine;
@@ -538,7 +540,7 @@ export function composeSpineWithReuseBindings(
 /** Unwrap the spine's declared local CURIE ('local:<recordId>',
  *  resolve/providers/records.ts:77) into the record identity. Generic CURIE
  *  plumbing, the resolveNounsPass precedent — not a local invention. */
-function recordIdFromCurie(curie: string): string {
+export function recordIdFromCurie(curie: string): string {
   const prefix = 'local:';
   return curie.startsWith(prefix) ? curie.slice(prefix.length) : curie;
 }
@@ -803,6 +805,36 @@ function factReadings(fact: ScientistIntentUnresolvedFact): readonly Composition
   return Array.isArray(readings) && readings.length > 0 ? readings as readonly CompositionReading[] : undefined;
 }
 
+/**
+ * W28-OPTIONBIND-1 (ruling scientistIntent/types.ts:119-127): the
+ * AMBIGUOUS-NOUN option arm (the structural candidate read — the twin of
+ * `factReadings`). The engine attaches ordered candidates to an
+ * ambiguous-noun fact (`fact.candidates` — sortCandidates + candidateFact;
+ * NOTHING in the compiler changes). A candidate `ref` is the engine's
+ * STORE-BACKED record id ONLY when the engine emitted one (tier<=1 CURIE
+ * naming a record; mint affordances and tier>1 hits carry none): ONLY a
+ * candidate carrying a NON-EMPTY string ref becomes an option — `id` is
+ * the candidate's ref (the engine's record id, never an invented one),
+ * `label` the candidate's own label, in candidate order. A candidate
+ * WITHOUT a string ref renders NO option (anti-fabrication: an option
+ * button must carry a real record handle — the pin at
+ * resolutionEngine.optionRef.test.ts:7). No candidates => the empty set,
+ * so the unknown-noun card keeps `options: []` byte-identically.
+ */
+function factCandidateOptions(fact: ScientistIntentUnresolvedFact): Array<{ id: string; label: string; ref: { kind: 'record'; id: string } }> {
+  const candidates = fact.candidates;
+  if (candidates === undefined || candidates.length === 0) return [];
+  const options: Array<{ id: string; label: string; ref: { kind: 'record'; id: string } }> = [];
+  for (const candidate of candidates) {
+    if (typeof candidate.ref === 'string' && candidate.ref.length > 0) {
+      // The card returns option.ref as answer.ref. optionId alone identifies
+      // a button; the answer fold consumes this explicit record identity.
+      options.push({ id: candidate.ref, label: candidate.label, ref: { kind: 'record', id: candidate.ref } });
+    }
+  }
+  return options;
+}
+
 /** The bar's own data-derived question text, when the producer attached one
  *  (the same generic read — the fact type's declared envelope is
  *  {label, reason, actionLocation}; the producer clarification's optional
@@ -810,6 +842,18 @@ function factReadings(fact: ScientistIntentUnresolvedFact): readonly Composition
 function factMessage(fact: ScientistIntentUnresolvedFact): string | undefined {
   const message = (fact as unknown as Record<string, unknown>)['message'];
   return typeof message === 'string' && message.trim().length > 0 ? message : undefined;
+}
+
+/**
+ * L2-NOUN-CREATION-JOURNEY-1 (unit u1journey): the DECLARED creation journey a
+ * fact carries — the same generic structural read as `factReadings`
+ * (the engine projected it from config/journey/declarations/noun-create.yaml;
+ * the fact envelope itself is untouched, so a fact without a journey maps
+ * byte-identically to today's card).
+ */
+function factJourney(fact: ScientistIntentUnresolvedFact): ClarificationJourneyFact | undefined {
+  const journey = (fact as unknown as Record<string, unknown>)['journey'];
+  return journey !== null && typeof journey === 'object' ? journey as ClarificationJourneyFact : undefined;
 }
 
 /** The option snippet for one reading: its COMPUTED final fractions rendered
@@ -938,8 +982,9 @@ export function answeredClarificationLabelsFromBatch(
  * readings (the data the bar itself attached) maps to menuProvider 'choice'
  * with its readings as the option set (id = reading id, label = the reading's
  * own label, snippet = the computed final fractions + note; ARRAY order — the
- * server never pre-picks). Mint suppression falls out of the EXISTING
- * `menuProvider !== 'choice' && mintable` expression — zero new policy. The
+ * server never pre-picks). The allowCreateLocal flag follows the mintability
+ * gate (nounShape DATA via isMintableLabel) — a mintable reading card offers
+ * both exits. The
  * prompt is the fact's OWN `message` (already data-derived), not the noun
  * template. kind stays from the domain map. A fact WITHOUT readings renders
  * byte-identically to today.
@@ -999,6 +1044,13 @@ export function clarificationsFromUnresolvedFacts(
     // The reading arm is STRUCTURAL (factReadings): a readings-bearing
     // fact is a choice card; every other fact keeps the domain map verbatim.
     const readings = factReadings(fact);
+    // W28-OPTIONBIND-1 (r10 DEFECT 1): a NON-reading fact carrying the
+    // engine's ordered candidates (the ambiguous-noun card) offers the
+    // ref-carrying candidates AS its selectable options — option id = the
+    // engine's store-backed record id (the candidate ref); ref-less
+    // candidates render nothing (never an invented id). The readings arm
+    // below stays byte-identical; no candidates keeps `options: []`.
+    const candidateOptions = factCandidateOptions(fact);
     const menuProvider = readings
       ? 'choice'
       : domain === 'labware' ? '/l' : domain === 'material' ? '/m' : 'choice';
@@ -1012,7 +1064,7 @@ export function clarificationsFromUnresolvedFacts(
     // For plain strings, humanLabel is the original label.
     const displayLabelSource = humanLabel ?? fact.reason;
     const mintable = isMintableLabel(displayLabelSource, nounShape);
-    const allowCreateLocal = menuProvider !== 'choice' && mintable;
+    const allowCreateLocal = mintable;
     // D3 (CARD1-D3 ruling l2t1430 §2 rule 3 / §3 read path (i)): the DISPLAYED
     // label token is the canonical label — the record TITLE when a local-term
     // record for this identity is GROUNDED (STAGE A, resolved by the store-GET
@@ -1118,6 +1170,16 @@ export function clarificationsFromUnresolvedFacts(
         assumedPrompt = entry.question;
       }
     }
+    const journey = factJourney(fact);
+    // L2-NOUN-CREATION-JOURNEY-1 (unit u1journey): an unbound material noun's
+    // fact carries the DECLARED journey. The card states the miss in the
+    // server's own words and offers one door per declared alternative — the
+    // "Which wells?" face is not this fact's answer (a well range cannot
+    // identify a material). Reads the journey structurally, like the
+    // reading/candidate arms: a fact without a journey maps byte-identically.
+    const journeyAbsence = journey !== undefined && candidateOptions.length === 0 && readings === undefined
+      ? { mention: journey.candidateLabel, reason: notALocalTermReason(journey.candidateLabel) }
+      : undefined;
     return {
       id: factRequestId(fact),
       kind,
@@ -1142,14 +1204,21 @@ export function clarificationsFromUnresolvedFacts(
       // search (real records + ontologies) is the only menu. The bar's own
       // candidates ride on `unresolvedFact`, untouched. A READING fact's
       // options ARE the bar's own readings (Ruling 2): the scientist chooses
-      // a READING, seeing what each does to the fractions.
-      options: (readings ?? []).map((reading) => ({
-        id: reading.id,
-        label: reading.label,
-        snippet: readingOptionSnippet(reading, fractionConfig),
-      })),
+      // a READING, seeing what each does to the fractions. W28-OPTIONBIND-1
+      // (r10 DEFECT 1): a NON-reading fact carrying engine candidates offers
+      // the ref-carrying candidates as the options (id = the engine's
+      // store-backed record id); no candidates => `[]`.
+      options: readings
+        ? readings.map((reading) => ({
+            id: reading.id,
+            label: reading.label,
+            snippet: readingOptionSnippet(reading, fractionConfig),
+          }))
+        : candidateOptions,
       allowCreateLocal,
       unresolvedFact: fact,
+      ...(journey !== undefined ? { journey } : {}),
+      ...(journeyAbsence !== undefined ? { absence: journeyAbsence } : {}),
       ...(clarifyControl !== undefined ? { clarifyControl } : {}),
     };
   });
@@ -1417,9 +1486,15 @@ export function foldAnswersIntoShorthand(
   // generic `id` read — never a mint, never invented): an answer that carries
   // no record ref records no binding.
   const bindings: AcceptedShorthandBinding[] = [];
-  const refIdOf = (answer: AgentClarificationAnswer): string | null => {
+  const refIdOf = (answer: AgentClarificationAnswer, fact: ScientistIntentUnresolvedFact): string | null => {
     const id = (answer.ref as { id?: unknown } | undefined)?.id;
-    return typeof id === 'string' && id.trim().length > 0 ? id.trim() : null;
+    if (typeof id === 'string' && id.trim().length > 0) return id.trim();
+    // Saved cards predating the ref carrier only return optionId. Recover
+    // identity from the held compiler fact, never from an arbitrary button
+    // id or its display label. The orchestrator still verifies store presence.
+    const candidate = fact.candidates?.find((entry) =>
+      typeof entry.ref === 'string' && entry.ref.length > 0 && entry.ref === answer.optionId);
+    return candidate?.ref ?? null;
   };
   for (const answer of answers) {
     const requestId = answer.requestId ?? '';
@@ -1432,6 +1507,29 @@ export function foldAnswersIntoShorthand(
       const legacy = /^unresolved-(\d+)$/.exec(requestId);
       if (legacy) {
         fact = held.clarifications[Number(legacy[1]) - 1];
+      }
+      // u5optbind (r13 defect 1): the card's emitted id is the ASK-TURN
+      // fact's content id. When the recompile re-derives that fact under a
+      // DIFFERENT label (the chosen label spliced in — the noun still bars
+      // because the identity never reached the compiler as a record), the
+      // RE-HELD fact mints a NEW content id and the exact-key join above
+      // misses. The answer's label IS the scientist's pick — the re-held
+      // fact's own label. Accept the content match only when the answer's
+      // label canonically names EXACTLY ONE held fact's label: the content
+      // is verified (the pick names that fact) and uniqueness keeps it a
+      // never-guess (two facts carrying the same canonical label ⇒ null,
+      // never picked — never a positional answer). Content ids ONLY: the
+      // legacy digits arm above and any non-content id keep their current
+      // behaviour byte-identically.
+      if (!fact && requestId.startsWith('unresolved-c-')) {
+        const answerLabel = typeof answer.label === 'string' ? answer.label.trim() : '';
+        if (answerLabel.length > 0) {
+          const key = canonicalLabelKey(answerLabel);
+          const contentMatches = held.clarifications.filter(
+            (candidate) => canonicalLabelKey(candidate.label) === key,
+          );
+          if (contentMatches.length === 1) fact = contentMatches[0];
+        }
       }
     }
     if (!fact) return null;
@@ -1533,10 +1631,16 @@ export function foldAnswersIntoShorthand(
     }
     answered.add(fact);
     answeredSlots.push({ actionIndex: loc.actionIndex, argument: loc.argument, label });
-    const refId = refIdOf(answer);
+    const refId = refIdOf(answer, fact);
     if (refId) {
-      bindings.push({ label: fact.label, ref: refId });
-      if (label !== fact.label) bindings.push({ label, ref: refId });
+      // REVISE-GHOST-1 / L2-NOUN-RESOLUTION-POLICY-1 A1: store the ref as a
+      // local CURIE. The bindingsToAnsweredSlots mapper calls recordIdFromCurie
+      // to unwrap it — bare ids are also accepted but the binding contract
+      // declares CURIE form (the spine's declared local CURIE, the interface
+      // doc at line 152).
+      const refCurie = refId.startsWith('local:') ? refId : `local:${refId}`;
+      bindings.push({ label: fact.label, ref: refCurie });
+      if (label !== fact.label) bindings.push({ label, ref: refCurie });
     }
   }
   if (answered.size === 0) return null;
@@ -1634,6 +1738,20 @@ export function foldNullArm(
     if (!fact) {
       const legacy = /^unresolved-(\d+)$/.exec(requestId);
       if (legacy) fact = held.clarifications[Number(legacy[1]) - 1];
+      // u5optbind (r13 defect 1): the byte-mirror of the fold's content-join
+      // arm (the SAME expressions — one edit here must be one edit there,
+      // the Leg-1 mirror discipline). Content ids only; uniqueness required
+      // (never a positional / never-guess arm).
+      if (!fact && requestId.startsWith('unresolved-c-')) {
+        const answerLabel = typeof answer.label === 'string' ? answer.label.trim() : '';
+        if (answerLabel.length > 0) {
+          const key = canonicalLabelKey(answerLabel);
+          const contentMatches = held.clarifications.filter(
+            (candidate) => canonicalLabelKey(candidate.label) === key,
+          );
+          if (contentMatches.length === 1) fact = contentMatches[0];
+        }
+      }
     }
     if (!fact) return { arm: 'join-miss', requestId };
     const label = typeof answer.label === 'string' && answer.label.trim().length > 0

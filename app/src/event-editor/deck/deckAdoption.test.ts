@@ -43,6 +43,16 @@ vi.mock('./acceptedRecordCreations', () => ({
     return { warnings: [] }
   }),
 }))
+// u2ghostgate: P1 now carries a resolvable recordId (see PREVIEW below), so the
+// REAL mint (imported by deckAdoption, not mocked here) actually mints an
+// instance via apiClient.createRecord. Stub it so the ordering lock never hits
+// the network (the mint's createRecord contract is tested in
+// labwareInstanceMint.test.ts).
+vi.mock('../../shared/api/client', () => ({
+  apiClient: {
+    createRecord: vi.fn(async (_schemaId: string, _payload: Record<string, unknown>) => ({ recordId: 'RECORDED' })),
+  },
+}))
 
 const STATE = {
   eventGraphId: 'EG-1',
@@ -55,7 +65,10 @@ const STATE = {
 
 const PREVIEW = {
   previewEvents: [{ eventId: 'EVT-NEW' }] as PlateEvent[],
-  previewLabwares: { P1: { labwareId: 'P1' } } as unknown as Record<string, Labware>,
+  // u2ghostgate: P1 must carry a resolvable DEFINITION record id, else the new
+  // ghost-gate (deckAdoption step 1b) refuses it — and this test locks the
+  // materialize/persist ORDERING of a resolvable accept, not the refusal.
+  previewLabwares: { P1: { labwareId: 'P1', recordId: 'LBW-P1' } } as unknown as Record<string, Labware>,
   previewPlacements: [{ placementId: 'PL-1' }] as EventEditorPlacement[],
 }
 
@@ -108,7 +121,7 @@ describe('deckAdoption.adoptStagedPreview — shared adoption order + gate', () 
         },
       },
     )
-    expect(result).toEqual({ adopted: false, blocked: 1 })
+    expect(result).toEqual({ adopted: false, blocked: 1, reason: 'ontology-signoff' })
     // NOTHING materialized — no creations, no mint, no persist, no commit.
     expect(callOrder).toEqual([])
     expect(commitCalls).toBe(0)

@@ -19,7 +19,10 @@ function asString(v: unknown): string | undefined {
 export function normalizeClarificationKind(raw: unknown): AgentClarificationKind {
   const value = typeof raw === 'string' ? raw.toLowerCase() : '';
   if (value.includes('aliquot')) return 'aliquot';
-  if (value.includes('labware') || value.includes('plate') || value.includes('tube') || value.includes('reservoir')) return 'labware';
+  // FIX-2b (L2-P1-EMPTY-TURN-CARD-2 u2mentionfix): rack/vial/cryobox are labware
+  // records as plate/tube/reservoir are — one shared vocabulary, no local list.
+  // `well` stays out: it is an ADDRESS inside a record (well-selection below).
+  if (value.includes('labware') || value.includes('plate') || value.includes('tube') || value.includes('reservoir') || value.includes('rack') || value.includes('vial') || value.includes('cryobox')) return 'labware';
   if (value.includes('vendor')) return 'vendor-product';
   if (value.includes('equipment') || value.includes('instrument')) return 'equipment';
   if (value.includes('material') || value.includes('reagent') || value.includes('cell')) return 'material';
@@ -243,6 +246,21 @@ export function clarificationRequestsFromAssurance(
       b.code.includes('QUANTITY') ? 'parameter'
         : b.mention ?? b.code,
     );
+    // L2-P1-CREATE-DOOR-1 (unit absdoor): a binding blocker with NO candidates
+    // is a miss this lab's records do not hold — declare it as a NAMED
+    // unresolved slot (context §2.7: identity is a record id, never a name; a
+    // miss is a named unresolved slot). `absence` rides a conditional spread
+    // (exactOptionalPropertyTypes: the key is ABSENT, never `undefined`) and
+    // is emitted ONLY when there is no candidate to bind. The reason is ONE
+    // server-side phrase matching the shipped slash-menu diagnostic
+    // (app/src/shared/taptab/slashMenu/resolvers.ts:568: "Not in this lab's
+    // records: <label>") — the client renders the server's words verbatim and
+    // never composes its own sentence about absence.
+    const hasCandidates = b.code === 'AMBIGUOUS_BINDING' && (b.candidateIds?.length ?? 0) > 0;
+    const absence =
+      b.code === 'AMBIGUOUS_BINDING' && !hasCandidates && b.mention !== undefined && b.mention !== ''
+        ? { mention: b.mention, reason: `Not in this lab's records: ${b.mention}` }
+        : undefined;
     const request: AgentClarificationRequest = {
       id: `assurance-${startIndex + i + 1}`,
       kind,
@@ -250,12 +268,219 @@ export function clarificationRequestsFromAssurance(
       menuProvider: menuProviderForKind(kind),
       options: [],
       ...(b.mention ? { query: b.mention, snippet: b.mention } : {}),
+      ...(absence ? { absence } : {}),
     };
     // For a material ambiguity with known candidates, surface them as options.
-    if (b.code === 'AMBIGUOUS_BINDING' && b.candidateIds?.length) {
-      request.options = b.candidateIds.map((cid) => ({ id: cid, label: cid }));
+    if (hasCandidates) {
+      request.options = b.candidateIds!.map((cid) => ({ id: cid, label: cid }));
     }
     requests.push(request);
   }
   return requests;
+}
+
+/**
+ * L2-P1-EMPTY-TURN-CARD-2 (u1emptycard) — the empty-turn guard's NAMED ABSENCE card.
+ * When the turn ends having produced NOTHING (the empty-turn guard) and the user's
+ * sentence names a labware noun with NO store/deck match, the done result ALSO
+ * carries one typed clarificationRequest declaring the absence — the client's
+ * existing typed-clarification arm renders the card beside the named-cause error
+ * (no client change). Gate defect D1 of PROMPT1-GATE-20261114T192103Z (2nd
+ * occurrence): the prompt-1 manifest utterance ended "No events generated." with
+ * zero records. The probe is a STORE/DECK EXISTENCE lookup only (the composed
+ * `searchLabwareByHint`, the same lookup the compile uses) — resolution is never
+ * re-asked. Deterministic extraction: strip the leading action verb, split on the
+ * corpus delimiter set (`,` and standalone `and`), drop parentheticals / trailing
+ * location phrases / pure well-deck-volume-count noise; keep phrases carrying a
+ * labware head noun. The FIRST candidate (longest first) whose probe returns ZERO
+ * matches is the named absence — at most ONE request. Every candidate matches, or
+ * none extract, returns [] — an EXISTING-labware turn gets no new card (AC3).
+ */
+/** `[Answered clarifications]` trailer appendClarificationAnswersToPrompt appends (AgentOrchestrator.ts:278-292) — authoritative answer data, never user wording; must not leak into a mention. */
+const ANSWERED_CLARIFICATIONS_TRAILER = /\n\s*\[Answered clarifications\][\s\S]*$/;
+
+/** Leading action verbs: place/add/create/set up/put/run (the corpus's placement verbs). */
+const EMPTY_TURN_ACTION_VERB = /^(?:place|add|create|set up|put|run)\s+/i;
+
+/** Labware head nouns (existing vocabulary); `well` inside "black-walled" is not a well (trailing-letter guard). */
+const EMPTY_TURN_LABWARE_HEAD =
+  /\b(?:plate|plates|tube|rack|racks|reservoir|reservoirs|vial|cryobox|well)(?![a-z])/i;
+
+/** A fragment that is pure well/deck/volume/count noise - never a noun. */
+const EMPTY_TURN_NOISE =
+  /^\d+\s*[-]?\s*(?:well|wells|plate|plates|tube|tubes|row|rows|column|columns|channel|channels|slot|slots|microliter|microliters|micro|ml|ul|uL|mL)(?:\s*[-,]?\s*\S*)?$/i;
+
+/**
+ * Extract candidate labware noun phrases from a user sentence.
+ * Deterministic: strip the leading action verb, drop parentheticals + the
+ * answered-clarifications trailer, split on `,` and standalone `and`, strip
+ * leading determiners and trailing location phrases, keep labware-head nouns
+ * that are not pure well/deck/volume/count noise.
+ */
+export function extractEmptyTurnLabwarePhrases(sentence: string): string[] {
+  if (typeof sentence !== 'string') return [];
+  const text = sentence.replace(ANSWERED_CLARIFICATIONS_TRAILER, '');
+  const noParenthetical = text.replace(/\([^)]*\)/g, ' ').replace(/\[[^\]]*\]/g, ' ');
+  const withoutVerb = noParenthetical.replace(EMPTY_TURN_ACTION_VERB, '');
+  const fragments = withoutVerb
+    .split(/,|and(?=\s)/)
+    .map((fragment) => fragment.trim().replace(/[.;!?]+$/, '').trim())
+    // L2-P1-EMPTY-TURN-CARD-2 u2mentionfix (FIX-4): an UNKNOWN leading verb is a
+    // residue word, not part of the noun ("Take the plate from the rack" — the
+    // known-verb strip above only sees the sentence's first verb). Drop exactly
+    // ONE leading word when a determiner follows; the determiner-strip arm
+    // below then removes the determiner itself. Placed BEFORE that arm so the
+    // mention starts at the noun ("plate ..."), never at the verb or "the".
+    .map((fragment) => fragment.replace(/^[A-Za-z]+\s+(?=(?:a|an|the)\s)/i, '').trim())
+    // Leading determiners aren't part of the noun ("a Thermo ..." → "Thermo ...").
+    .map((fragment) => fragment.replace(/^(?:a|an|the)\s+/i, '').trim())
+    // Trailing location phrases (on the deck, into well A1) aren't part of the noun
+    // — but ONLY when the remainder still names a labware noun. In "Add 10 uL to
+    // the reservoir." / "Place it in the plate." the strip would delete the ONLY
+    // noun, so the fragment is kept whole (the noun is what the card names).
+    .map((fragment) => {
+      const locationless = fragment.replace(/\s+(?:on|onto|into|in|at|to)\b[\s\S]*$/, '').trim();
+      return locationless.length > 0 && EMPTY_TURN_LABWARE_HEAD.test(locationless)
+        ? locationless
+        : fragment;
+    })
+    .filter(
+      (fragment) =>
+        fragment.length > 0 &&
+        EMPTY_TURN_LABWARE_HEAD.test(fragment) &&
+        !EMPTY_TURN_NOISE.test(fragment),
+    );
+  return fragments;
+}
+
+/** Prepositions that open a trailing location phrase inside a kept-whole clause. */
+const EMPTY_TURN_LOCATION_PREPOSITION = /\b(?:on|onto|into|in|at|to|from)\b/gi;
+
+/**
+ * Probe forms for ONE candidate: the candidate, its prepositional TAIL (text
+ * after the last on|onto|into|in|at|to|from, determiner stripped) and its bare
+ * head-noun WORD. The lookup's name tier is `name.includes(hint)`
+ * (labwareLookup.ts:135), so a kept-whole CLAUSE ("sample into the 96-well
+ * plate") is longer than any record name and can never match even when the lab
+ * HOLDS the plate. The tail and head word are what a name can contain, and the
+ * head word absorbs hyphen/space drift ("96-well plate" vs "Generic 96 Well
+ * Plate"). Head-word probing deliberately UNDER-requests beside an existing
+ * labware (friction-first: a missed absence card costs a re-ask; a false one
+ * invents a gap the lab does not have).
+ */
+function emptyTurnProbeForms(candidate: string): string[] {
+  const forms = [candidate];
+  const found = [...candidate.matchAll(EMPTY_TURN_LOCATION_PREPOSITION)];
+  const last = found[found.length - 1];
+  const tail = last
+    ? candidate
+        .slice((last.index ?? 0) + last[0].length)
+        .trim()
+        .replace(/^(?:a|an|the)\s+/i, '')
+        .trim()
+    : '';
+  if (tail.length > 0 && EMPTY_TURN_LABWARE_HEAD.test(tail) && !EMPTY_TURN_NOISE.test(tail)) {
+    forms.push(tail);
+  }
+  const headWord = new RegExp(EMPTY_TURN_LABWARE_HEAD.source, 'i').exec(candidate);
+  if (headWord) forms.push(headWord[0]);
+  const unique = new Map<string, string>();
+  for (const form of forms) if (form.trim()) unique.set(form.trim().toLowerCase(), form);
+  return [...unique.values()];
+}
+
+/**
+ * Given the user turn text and the composed `searchLabwareByHint`, return
+ * `AgentClarificationRequest[]` with AT MOST ONE request: a NAMED ABSENCE for
+ * the FIRST candidate (longest first) the store/deck lookup returns ZERO
+ * matches for. Every candidate matches, or none extract, returns []. Same
+ * absence vocabulary as clarificationRequestsFromAssurance: absence.mention =
+ * trimmed original-casing noun, reason = `Not in this lab's records: <mention>`,
+ * options empty, query/snippet = mention, kind via normalizeClarificationKind.
+ *
+ * L2-P1-ABSENCE-PROBE-TIERS-1 (u1probe), decision
+ * ABSENCE-RENDERING-AND-PROBE-TIERS-l2-20261114 ruling 2 — an absence
+ * assertion requires a probe across BOTH tiers before it is made. The
+ * DEFINITION tier (`searchDefinitionByHint`, optional) is consulted only after
+ * the record tier missed every probe form of a candidate:
+ *   - record hit            -> held, no absence (unchanged);
+ *   - definition-only hit   -> reason =
+ *     `A definition exists in the registry, with no record in this lab's
+ *      store (not lab stock): <mention>` (the approved starter-pack wording);
+ *   - neither               -> the verbatim
+ *     `Not in this lab's records: <mention>` (unchanged).
+ */
+export async function emptyTurnAbsenceRequests(
+  turnText: string,
+  searchLabwareByHint: (hint: string) => Promise<Array<{ recordId: string; title: string }>>,
+  searchDefinitionByHint?: (hint: string) => Promise<Array<{ recordId: string; title: string }>>,
+): Promise<AgentClarificationRequest[]> {
+  const candidates = extractEmptyTurnLabwarePhrases(turnText);
+  if (candidates.length === 0) return [];
+  // Longest first. Each candidate is probed by ITSELF, by its prepositional
+  // tail and by its bare head-noun word (see emptyTurnProbeForms), so a record
+  // the lab HOLDS is never falsely declared absent.
+  const ordered = [...candidates].sort(
+    (a, b) => b.length - a.length || candidates.indexOf(a) - candidates.indexOf(b),
+  );
+  for (const candidate of ordered) {
+    // Absent ONLY if EVERY probe form misses; a hit on any form means held.
+    let held = false;
+    for (const form of emptyTurnProbeForms(candidate)) {
+      const matches = await searchLabwareByHint(form);
+      if (matches.length > 0) {
+        held = true;
+        break;
+      }
+    }
+    if (!held) {
+      // DEFINITION tier (ruling 2: both tiers probed BEFORE any absence is
+      // made). Consulted only after the record tier missed every form, with
+      // the SAME forms — a definition hit means the lab KNOWS the labware;
+      // the wording is then "in the registry, not lab stock", never
+      // "not in this lab's records". Absent tier => state 3, verbatim.
+      let definitionHeld = false;
+      if (searchDefinitionByHint) {
+        const headWord = new RegExp(EMPTY_TURN_LABWARE_HEAD.source, 'i').exec(candidate);
+        const bareHead = headWord ? headWord[0].toLowerCase() : null;
+        for (const form of emptyTurnProbeForms(candidate)) {
+          // Ruling 2: a BARE head-word hit ("plate" via name.includes) proves
+          // nothing about THIS noun, so it cannot ground a registry claim.
+          if (bareHead && form.toLowerCase() === bareHead) continue;
+          const matches = await searchDefinitionByHint(form);
+          if (matches.length > 0) {
+            definitionHeld = true;
+            break;
+          }
+        }
+      }
+      const mention = candidate.trim();
+      if (!mention) return [];
+      // FIX-2a: the candidate PASSED the labware-head test upstream, so the ask
+      // IS a labware ask — never re-derive it from a bare noun.
+      const kind: AgentClarificationKind = EMPTY_TURN_LABWARE_HEAD.test(mention)
+        ? 'labware'
+        : normalizeClarificationKind(mention);
+      const request: AgentClarificationRequest = {
+        id: 'empty-turn-absence-1',
+        kind,
+        // Harness-authored (filterModelClarifications keeps origin 'harness' verbatim).
+        prompt: 'Pick the record this step names.',
+        origin: 'harness',
+        entityType: kind,
+        menuProvider: menuProviderForKind(kind),
+        options: [],
+        query: mention,
+        snippet: mention,
+        absence: {
+          mention,
+          reason: definitionHeld
+            ? `A definition exists in the registry, with no record in this lab's store (not lab stock): ${mention}`
+            : `Not in this lab's records: ${mention}`,
+        },
+      };
+      return [request];
+    }
+  }
+  return [];
 }

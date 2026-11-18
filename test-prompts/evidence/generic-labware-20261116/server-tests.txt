@@ -1,0 +1,366 @@
+
+ RUN  v1.6.1 /tmp/cl-generic-labware-fix/server
+
+ ✓ src/compiler/scientistIntent/compositionFractions.test.ts  (24 tests) 385ms
+ ✓ src/compiler/scientistIntent/wellsetResolver.test.ts  (33 tests) 466ms
+ ✓ src/compiler/resolution/spine4Registration.test.ts  (19 tests) 600ms
+ ✓ src/compiler/resolution/resolveNounsPass.test.ts  (29 tests) 692ms
+ ✓ src/compiler/resolution/nounResolution.test.ts  (16 tests) 103ms
+ ✓ src/compiler/scientistIntent/declaredArgumentReachability.test.ts  (41 tests) 474ms
+ ✓ src/compiler/resolution/compositionArgResolution.test.ts  (15 tests) 452ms
+ ✓ src/compiler/scientistIntent/scientistIntent.test.ts  (31 tests) 692ms
+ ✓ src/compiler/scientistIntent/rolesSeam.test.ts  (20 tests) 472ms
+ ❯ src/compiler/scientistIntent/goldens/goldenIntentToClarification.test.ts  (8 tests | 3 failed) 489ms
+   ❯ src/compiler/scientistIntent/goldens/goldenIntentToClarification.test.ts > golden.intent-to-clarification.unresolvable-mixture-component > golden.intent-to-clarification.unresolvable-mixture-component
+     → expected [ { label: 'plate', …(3) }, …(3) ] to have a length of 3 but got 4
+   ❯ src/compiler/scientistIntent/goldens/goldenIntentToClarification.test.ts > golden.intent-to-clarification.mixfrac-canonical-ambiguous > golden.intent-to-clarification.mixfrac-canonical-ambiguous
+     → expected [ { label: 'plate', …(3) }, …(2) ] to have a length of 2 but got 3
+   ❯ src/compiler/scientistIntent/goldens/goldenIntentToClarification.test.ts > golden.intent-to-clarification.mixfrac-on-top > golden.intent-to-clarification.mixfrac-on-top
+     → expected [ { label: 'plate', …(3) }, { …(5) } ] to have a length of 1 but got 2
+ ✓ src/compiler/scientistIntent/realizeScientistIntent.test.ts  (18 tests) 496ms
+ ✓ src/compiler/scientistIntent/compositionDecomposition.test.ts  (12 tests) 240ms
+ ✓ src/compiler/resolution/resolveNounsPass.stagnantHedge.test.ts  (11 tests) 555ms
+ ✓ src/compiler/resolution/resolveNounsPass.paramFold.test.ts  (14 tests) 675ms
+ ❯ src/compiler/scientistIntent/realizationGolden.test.ts  (7 tests | 2 failed) 1200ms
+   ❯ src/compiler/scientistIntent/realizationGolden.test.ts > W2-7 T1 golden — family + robot answers -> local-protocol -> intent YAML -> run graph > realizeAndCompile -> compileScientistIntent outcome complete + non-empty events (AC1)
+     → expected 'needs-clarification' to be 'complete' // Object.is equality
+   ❯ src/compiler/scientistIntent/realizationGolden.test.ts > W2-7 T2 determinism — identical inputs => byte-identical output (AC2) > two full-chain runs + a fresh-policy-reload run are byte-equal
+     → expected 0 to be greater than 0
+stdout | src/compiler/scientistIntent/realizationGolden.test.ts > W2-7 T1 golden — family + robot answers -> local-protocol -> intent YAML -> run graph > realizeAndCompile -> compileScientistIntent outcome complete + non-empty events (AC1)
+W27_CLARIFICATIONS [
+ {
+  "label": "wash_solution",
+  "reason": "unknown-noun",
+  "candidates": [
+   {
+    "label": "Create local term “wash_solution”",
+    "confidence": 0.05
+   }
+  ],
+  "actionLocation": {
+   "actionIndex": 3,
+   "action": "wash",
+   "argument": "material"
+  }
+ }
+]
+
+ ✓ src/compiler/scientistIntent/goldens/goldenRolesSeam.test.ts  (7 tests) 251ms
+stdout | src/compiler/scientistIntent/mixtureRedundancy.test.ts > SH-QA-3 T1: redundant top-level material + composition compiles CLEAN (no noun question) > T1: outcome complete, zero clarifications, the sentence is never asked as a noun
+SH-QA-3 redundancy strip: removed the redundant top-level noun "50/50 Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells" at actions[0].material — the composition riding the same action carries its components; the mixture label is derived from them.
+
+stdout | src/compiler/scientistIntent/mixtureRedundancy.test.ts > SH-QA-3 T2 EQUIVALENCE: the stripped compile deep-equals the composition-only good path > T2: same event count + details; the mixture material_ref is the DERIVED componentLabels.join, NOT the sentence
+SH-QA-3 redundancy strip: removed the redundant top-level noun "50/50 Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells" at actions[0].material — the composition riding the same action carries its components; the mixture label is derived from them.
+
+stdout | src/compiler/scientistIntent/mixtureRedundancy.test.ts > SH-QA-3 T3 declared-form twin: the action-level many-arg strips identically > T3: action-level composition (vocabulary many-arg) + the sentence -> same strip, same events
+SH-QA-3 redundancy strip: removed the redundant top-level noun "50/50 Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells" at actions[0].material — the composition riding the same action carries its components; the mixture label is derived from them.
+
+stdout | src/compiler/scientistIntent/mixtureRedundancy.test.ts > SH-QA-3 T5 idempotence / round-trip: recompiling the stripped doc strips nothing further > T5: compile(strippedDoc) events == compile(doc) events; a second strip is empty
+SH-QA-3 redundancy strip: removed the redundant top-level noun "50/50 Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells" at actions[0].material — the composition riding the same action carries its components; the mixture label is derived from them.
+
+ ✓ src/compiler/scientistIntent/mixtureRedundancy.test.ts  (10 tests) 460ms
+ ✓ src/compiler/scientistIntent/hedgeOptionality.test.ts  (17 tests) 285ms
+ ✓ src/compiler/scientistIntent/vocabulary.test.ts  (23 tests) 472ms
+ ✓ src/compiler/scientistIntent/cueResolutionGate.test.ts  (13 tests) 518ms
+ ✓ src/compiler/scientistIntent/scientistIntentContract.test.ts  (15 tests) 107ms
+ ✓ src/compiler/resolution/resolutionEngine.optionRef.test.ts  (9 tests) 76ms
+ ✓ src/compiler/scientistIntent/compositionRoles.test.ts  (14 tests) 65ms
+ ❯ src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts  (6 tests | 3 failed) 351ms
+   ❯ src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts > golden.intent-to-graph.mixfrac-canonical-flat > golden.intent-to-graph.mixfrac-canonical-flat
+     → expected 422 to be 200 // Object.is equality
+   ❯ src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts > golden.intent-to-graph.cells-rate-per-volume (CELLRATE-1) > the canonical rate utterance round-trips as DECLARED RATE DATA — counter_density declared, NO count key, no computed total (THE WALL)
+     → expected 422 to be 200 // Object.is equality
+   ❯ src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts > golden.manifest.versions-current > golden.manifest.versions-current
+     → expected [ Array(1) ] to deeply equal []
+ ✓ src/compiler/scientistIntent/wellsDoorCoextensivity.target1.test.ts  (17 tests) 295ms
+ ✓ src/compiler/resolution/resolveNounsPass.answeredNouns.test.ts  (8 tests) 523ms
+ ✓ src/compiler/resolution/resolutionEngine.declarationPrecedence.test.ts  (9 tests) 12ms
+ ✓ src/compiler/scientistIntent/wellsetTokenPromptData.test.ts  (6 tests) 89ms
+ ✓ src/compiler/scientistIntent/clarificationContract.test.ts  (15 tests) 296ms
+ ✓ src/compiler/scientistIntent/vocabularyMirrorDrift.test.ts  (8 tests) 16ms
+ ✓ src/compiler/resolution/nounCoverage.test.ts  (9 tests) 223ms
+ ✓ src/compiler/resolution/eligibility/elig-ac2-tier-legality.test.ts  (3 tests) 227ms
+ ✓ src/compiler/scientistIntent/promptShapeParity.test.ts  (9 tests) 182ms
+stdout | src/compiler/scientistIntent/promptShapeParity.test.ts > one-shot shape acceptance on both Brad prompts (headless) > prompt 1 (the 50uL mixture) parses on the FIRST pass — no shape rejection, no re-ask
+SH-QA-3 redundancy strip: removed the redundant top-level noun "HepG2 cells in Thermo trypsin-EDTA / Thermo DMEM + FBS" at actions[0].material — the composition riding the same action carries its components; the mixture label is derived from them.
+
+ ❯ src/compiler/scientistIntent/noBypass.test.ts  (7 tests | 1 failed) 35ms
+   ❯ src/compiler/scientistIntent/noBypass.test.ts > W2-7 T7 no-bypass closure (AC5, §6) > (b) compileScientistIntent import-set closure: only the known production files + W2-7 realization files
+     → expected [ 'ai/AgentOrchestrator.ts' ] to deeply equal []
+ ✓ src/compiler/scientistIntent/expectedDomainLiftPin.test.ts  (4 tests) 129ms
+ ✓ src/compiler/resolution/spine4ProductionWiring.test.ts  (4 tests) 244ms
+stdout | src/compiler/scientistIntent/wellsetSeededDrive.test.ts > WELLSET-RESOLVER-1 FIX2 D13 — seeded-priorState AC2 drive: NON-EMPTY union on the mix event > prior-seeded A1:H1 + same-doc add A2:H2 + token mix => mix ships the 16-well union + LWI-1 binding (never []==[])
+[D13-SEEDED-DRIVE] outcome: complete
+[D13-SEEDED-DRIVE] clarifications: []
+[D13-SEEDED-DRIVE] mix count: 1 with computed_wells: 1
+[D13-SEEDED-DRIVE] computed_wells: ["A1","A2","B1","B2","C1","C2","D1","D2","E1","E2","F1","F2","G1","G2","H1","H2"]
+[D13-SEEDED-DRIVE] details: {"volume":75,"cycles":3,"labwareId":"LWI-1","wellColumns":[["A1","B1","C1","D1","E1","F1","G1","H1"],["A2","B2","C2","D2","E2","F2","G2","H2"]],"channels":8}
+
+ ✓ src/compiler/scientistIntent/wellsetSeededDrive.test.ts  (1 test) 124ms
+ ✓ src/compiler/resolution/hintParity.test.ts  (8 tests) 5ms
+ ✓ src/compiler/resolution/eligibility/elig-ac4-incomplete.test.ts  (6 tests) 338ms
+ ✓ src/compiler/resolution/eligibility/elig-ac1-suppression.test.ts  (2 tests) 86ms
+ ✓ src/compiler/scientistIntent/vocabularyRipOut.test.ts  (8 tests) 238ms
+ ✓ src/compiler/resolution/eligibility/elig-ac5-offline-byte-stable.test.ts  (3 tests) 214ms
+ ✓ src/compiler/resolution/assumedQuantities.test.ts  (6 tests) 142ms
+ ✓ src/compiler/scientistIntent/declaredDomains.test.ts  (8 tests) 189ms
+ ✓ src/compiler/resolution/eligibility/elig-fix1-payload-role.test.ts  (1 test) 104ms
+ ✓ src/compiler/scientistIntent/vocabularyIdentityCollapse.test.ts  (5 tests) 419ms
+ ✓ src/compiler/resolution/eligibility/elig-ac3-catalog-scope.test.ts  (4 tests) 374ms
+ ✓ src/compiler/resolution/eligibility/elig-fix1-custody-guard.test.ts  (4 tests) 246ms
+ ✓ src/compiler/resolution/resolutionEngine.tierPrecedence.test.ts  (5 tests) 8ms
+stdout | src/ai/shorthandChat.genericPlacement.test.ts > generic placement through the real compiler and chat answer contract > carries the selected definition into fold compilation (legacy saved card: false)
+[agent 94j6te] shorthand answer folded deterministically onto the held intent (run:RUN-generic-placement-test) — no model call
+[agent-summary] {"traceId":"94j6te","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":73,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent 94j6te] done shorthand-fold success=true events=1 elapsedMs=73
+
+stderr | src/ai/shorthandChat.genericPlacement.test.ts > generic placement through the real compiler and chat answer contract > carries the selected definition into fold compilation (legacy saved card: false)
+[agent 94j6te] fold-path 1 clarification answer(s) could not be bound to an event: unresolved-c-850867123f
+
+stdout | src/ai/shorthandChat.genericPlacement.test.ts > generic placement through the real compiler and chat answer contract > carries the selected definition into fold compilation (legacy saved card: true)
+[agent gshz2e] shorthand answer folded deterministically onto the held intent (run:RUN-generic-placement-test) — no model call
+[agent-summary] {"traceId":"gshz2e","surface":"run-workspace","model":"test-model","success":true,"elapsedMs":63,"turns":[],"totals":{"turns":0,"toolCalls":0,"promptTokens":0,"completionTokens":0,"totalTokens":0},"resolvedMentions":0,"bypass":null}
+[agent gshz2e] done shorthand-fold success=true events=1 elapsedMs=63
+
+stderr | src/ai/shorthandChat.genericPlacement.test.ts > generic placement through the real compiler and chat answer contract > carries the selected definition into fold compilation (legacy saved card: true)
+[agent gshz2e] fold-path 1 clarification answer(s) could not be bound to an event: unresolved-c-850867123f
+
+ ✓ src/ai/shorthandChat.genericPlacement.test.ts  (4 tests) 342ms
+ ❯ src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts  (3 tests | 1 failed) 348ms
+   ❯ src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts > SH-QA-3 golden replay (in-test fixture, NO bless): the redundant-material doc compiles like the good path > the MANIFEST did not move: manifestHashMismatches is empty (B4)
+     → expected [ Array(1) ] to deeply equal []
+stdout | src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts > SH-QA-3 golden replay (in-test fixture, NO bless): the redundant-material doc compiles like the good path > payload is 200 complete-shaped, clarifications ABSENT, zero writes
+SH-QA-3 redundancy strip: removed the redundant top-level noun "50/50 Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells" at actions[0].material — the composition riding the same action carries its components; the mixture label is derived from them.
+
+stdout | src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts > SH-QA-3 golden replay (in-test fixture, NO bless): the redundant-material doc compiles like the good path > the stripped compile emits the SAME events as the composition-only canned output (the paste-#3 good path)
+SH-QA-3 redundancy strip: removed the redundant top-level noun "50/50 Trypsin-EDTA/DMEM + 10% FBS with HepG2 cells" at actions[0].material — the composition riding the same action carries its components; the mixture label is derived from them.
+
+ ✓ src/compiler/resolution/canonicalLabelPolicy.test.ts  (5 tests) 87ms
+ ✓ src/compiler/scientistIntent/vocabularyContractBlock.test.ts  (4 tests) 122ms
+ ❯ src/compiler/scientistIntent/goldens/goldenNoRebless.target1.test.ts  (1 test | 1 failed) 15ms
+   ❯ src/compiler/scientistIntent/goldens/goldenNoRebless.target1.test.ts > L2-CLARIFY-TARGET-1 (R1.7) — golden safety pin: no re-bless > the three MANIFEST treeState files are byte-unchanged by this fix (actual == manifest pin == literal base hash)
+     → schema/scientist-intent/scientist-intent-vocabulary.yaml drifted from its MANIFEST treeState pin (manifest d39fd67b18c8d82486d7f43900b0114284884f4654ede016a2a56e1112185fab vs actual 5c2e67118f3d6021d45551c68f53e4dacd91ec99e31a8258581b2ac0fc1ce590): expected '5c2e67118f3d6021d45551c68f53e4dacd91e…' to be 'd39fd67b18c8d82486d7f43900b0114284884…' // Object.is equality
+ ✓ src/compiler/scientistIntent/declaredWellsLowering.test.ts  (2 tests) 535ms
+ ✓ src/compiler/scientistIntent/domainSetDeclaration.test.ts  (3 tests) 194ms
+ ✓ src/compiler/scientistIntent/deckReviewFold.test.ts  (9 tests) 19ms
+ ✓ src/ai/shorthandChat.ambiguousOptions.test.ts  (3 tests) 62ms
+ ✓ src/compiler/resolution/domainSetFilter.test.ts  (7 tests) 4ms
+ ✓ src/compiler/resolution/domainAccessorDiscipline.test.ts  (2 tests) 20ms
+ ✓ src/compiler/resolution/resolutionEngine.genericDefaults.test.ts  (8 tests) 9ms
+ ✓ src/compiler/scientistIntent/liftParamsPreservation.test.ts  (4 tests) 149ms
+ ✓ src/compiler/scientistIntent/quantityWireContract.test.ts  (4 tests) 375ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 11 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/compiler/scientistIntent/noBypass.test.ts > W2-7 T7 no-bypass closure (AC5, §6) > (b) compileScientistIntent import-set closure: only the known production files + W2-7 realization files
+AssertionError: expected [ 'ai/AgentOrchestrator.ts' ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "ai/AgentOrchestrator.ts",
++ ]
+
+ ❯ src/compiler/scientistIntent/noBypass.test.ts:80:24
+     78|     ]);
+     79|     const unexpected = rel.filter((f) => !known.has(f));
+     80|     expect(unexpected).toEqual([]);
+       |                        ^
+     81|     // W2-7's lowerer IS in the set (the only deterministic family->co…
+     82|     expect(rel).toContain(join('compiler', 'scientistIntent', 'realize…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/11]⎯
+
+ FAIL  src/compiler/scientistIntent/realizationGolden.test.ts > W2-7 T1 golden — family + robot answers -> local-protocol -> intent YAML -> run graph > realizeAndCompile -> compileScientistIntent outcome complete + non-empty events (AC1)
+AssertionError: expected 'needs-clarification' to be 'complete' // Object.is equality
+
+- Expected
++ Received
+
+- complete
++ needs-clarification
+
+ ❯ src/compiler/scientistIntent/realizationGolden.test.ts:271:36
+    269|     if (!('compile' in result)) return;
+    270|     console.log('W27_CLARIFICATIONS', JSON.stringify(result.compile.cl…
+    271|     expect(result.compile.outcome).toBe('complete');
+       |                                    ^
+    272|     expect(result.compile.terminalArtifacts.events.length).toBeGreater…
+    273|     expect(recorder.writeCalls()).toBe(0);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/11]⎯
+
+ FAIL  src/compiler/scientistIntent/realizationGolden.test.ts > W2-7 T2 determinism — identical inputs => byte-identical output (AC2) > two full-chain runs + a fresh-policy-reload run are byte-equal
+AssertionError: expected 0 to be greater than 0
+ ❯ src/compiler/scientistIntent/realizationGolden.test.ts:360:29
+    358|     expect(runB.artifacts).toBe(runA.artifacts);
+    359|     expect(runC.artifacts).toBe(runA.artifacts);
+    360|     expect(runA.eventCount).toBeGreaterThan(0);
+       |                             ^
+    361|     expect(runB.eventCount).toBe(runA.eventCount);
+    362|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/11]⎯
+
+ FAIL  src/compiler/scientistIntent/goldens/goldenIntentToClarification.test.ts > golden.intent-to-clarification.unresolvable-mixture-component > golden.intent-to-clarification.unresolvable-mixture-component
+AssertionError: expected [ { label: 'plate', …(3) }, …(3) ] to have a length of 3 but got 4
+
+- Expected
++ Received
+
+- 3
++ 4
+
+ ❯ src/compiler/scientistIntent/goldens/goldenIntentToClarification.test.ts:324:28
+    322|     // steal the fraction channel: the unknown-noun and fraction legs …
+    323|     // their exact verbatim shape at indices 0/1; the gap fact appends…
+    324|     expect(clarifications).toHaveLength(3);
+       |                            ^
+    325|     const item = clarifications[0]!;
+    326|     expect(item['label']).toBe('Equine Serum');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/11]⎯
+
+ FAIL  src/compiler/scientistIntent/goldens/goldenIntentToClarification.test.ts > golden.intent-to-clarification.mixfrac-canonical-ambiguous > golden.intent-to-clarification.mixfrac-canonical-ambiguous
+AssertionError: expected [ { label: 'plate', …(3) }, …(2) ] to have a length of 2 but got 3
+
+- Expected
++ Received
+
+- 2
++ 3
+
+ ❯ src/compiler/scientistIntent/goldens/goldenIntentToClarification.test.ts:395:28
+    393|     // honest role), so the composition-role-gap fact rides ON TOP of …
+    394|     // fraction fact (producer-append order: fraction bar first, gap f…
+    395|     expect(clarifications).toHaveLength(2);
+       |                            ^
+    396|     const item = clarifications[0]!;
+    397|     expect(item['reason']).toBe('composition-fraction-sum');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/11]⎯
+
+ FAIL  src/compiler/scientistIntent/goldens/goldenIntentToClarification.test.ts > golden.intent-to-clarification.mixfrac-on-top > golden.intent-to-clarification.mixfrac-on-top
+AssertionError: expected [ { label: 'plate', …(3) }, { …(5) } ] to have a length of 1 but got 2
+
+- Expected
++ Received
+
+- 1
++ 2
+
+ ❯ src/compiler/scientistIntent/goldens/goldenIntentToClarification.test.ts:450:28
+    448|
+    449|     const clarifications = payload['clarifications'] as Array<Record<s…
+    450|     expect(clarifications).toHaveLength(1);
+       |                            ^
+    451|     const item = clarifications[0]!;
+    452|     expect(item['reason']).toBe('composition-fraction-sum');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/11]⎯
+
+ FAIL  src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts > golden.intent-to-graph.mixfrac-canonical-flat > golden.intent-to-graph.mixfrac-canonical-flat
+AssertionError: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts:171:24
+    169|     const run = await runGolden(fixture);
+    170|
+    171|     expect(run.status).toBe(200);
+       |                        ^
+    172|     expect(run.payload['outcome']).toBe('complete');
+    173|     expect(Object.keys(run.payload)).not.toContain('clarifications');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/11]⎯
+
+ FAIL  src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts > golden.intent-to-graph.cells-rate-per-volume (CELLRATE-1) > the canonical rate utterance round-trips as DECLARED RATE DATA — counter_density declared, NO count key, no computed total (THE WALL)
+AssertionError: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts:254:24
+    252|     const run = await runGolden(fixture);
+    253|
+    254|     expect(run.status).toBe(200);
+       |                        ^
+    255|     expect(run.payload['outcome']).toBe('complete');
+    256|     expect(Object.keys(run.payload)).not.toContain('clarifications');
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/11]⎯
+
+ FAIL  src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts > golden.manifest.versions-current > golden.manifest.versions-current
+AssertionError: expected [ Array(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "treeState schema/scientist-intent/scientist-intent-vocabulary.yaml: manifest d39fd67b18c8d82486d7f43900b0114284884f4654ede016a2a56e1112185fab actual 5c2e67118f3d6021d45551c68f53e4dacd91ec99e31a8258581b2ac0fc1ce590",
++ ]
+
+ ❯ src/compiler/scientistIntent/goldens/goldenIntentToGraph.test.ts:283:24
+    281|     // silently re-blessing. Every manifest-pinned file re-hashed vs m…
+    282|     const mismatches = manifestHashMismatches(manifest);
+    283|     expect(mismatches).toEqual([]);
+       |                        ^
+    284|   });
+    285| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/11]⎯
+
+ FAIL  src/compiler/scientistIntent/goldens/goldenNoRebless.target1.test.ts > L2-CLARIFY-TARGET-1 (R1.7) — golden safety pin: no re-bless > the three MANIFEST treeState files are byte-unchanged by this fix (actual == manifest pin == literal base hash)
+AssertionError: schema/scientist-intent/scientist-intent-vocabulary.yaml drifted from its MANIFEST treeState pin (manifest d39fd67b18c8d82486d7f43900b0114284884f4654ede016a2a56e1112185fab vs actual 5c2e67118f3d6021d45551c68f53e4dacd91ec99e31a8258581b2ac0fc1ce590): expected '5c2e67118f3d6021d45551c68f53e4dacd91e…' to be 'd39fd67b18c8d82486d7f43900b0114284884…' // Object.is equality
+
+- Expected
++ Received
+
+- d39fd67b18c8d82486d7f43900b0114284884f4654ede016a2a56e1112185fab
++ 5c2e67118f3d6021d45551c68f53e4dacd91ec99e31a8258581b2ac0fc1ce590
+
+ ❯ src/compiler/scientistIntent/goldens/goldenNoRebless.target1.test.ts:71:9
+     69|         actual,
+     70|         `${path} drifted from its MANIFEST treeState pin (manifest ${e…
+     71|       ).toBe(entry!.sha256);
+       |         ^
+     72|       // (b) the file matches the literal merged-base hash — this fix …
+     73|       // none of the three. A re-bless (file change or manifest-pin mo…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/11]⎯
+
+ FAIL  src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts > SH-QA-3 golden replay (in-test fixture, NO bless): the redundant-material doc compiles like the good path > the MANIFEST did not move: manifestHashMismatches is empty (B4)
+AssertionError: expected [ Array(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- Array []
++ Array [
++   "treeState schema/scientist-intent/scientist-intent-vocabulary.yaml: manifest d39fd67b18c8d82486d7f43900b0114284884f4654ede016a2a56e1112185fab actual 5c2e67118f3d6021d45551c68f53e4dacd91ec99e31a8258581b2ac0fc1ce590",
++ ]
+
+ ❯ src/compiler/scientistIntent/goldens/goldenProseBlobStrip.test.ts:110:52
+    108|
+    109|   it('the MANIFEST did not move: manifestHashMismatches is empty (B4)'…
+    110|     expect(manifestHashMismatches(loadManifest())).toEqual([]);
+       |                                                    ^
+    111|   });
+    112| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/11]⎯
+
+ Test Files  6 failed | 57 passed (63)
+      Tests  11 failed | 620 passed (631)
+   Start at  00:46:02
+   Duration  24.33s (transform 1.94s, setup 5ms, collect 18.54s, tests 17.61s, environment 12ms, prepare 4.98s)

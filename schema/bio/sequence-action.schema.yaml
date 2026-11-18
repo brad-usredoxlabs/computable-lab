@@ -123,6 +123,49 @@ oneOf:
   - requestId
   - oligo
 - type: object
+  description: Persist the conservation intervals computed for a pinned alignment artifact. The rows and the per-sequence coordinate mapping come ONLY from the pinned artifact's own snapshot (alignmentRef); rows are never part of the action — the request names the declaration, the pinned artifact and the selected regions.
+  additionalProperties: false
+  properties:
+    operation:
+      const: save_conservation_intervals
+    requestId:
+      type: string
+      pattern: ^[A-Za-z0-9_-]{1,100}$
+    declaration:
+      type: object
+    alignmentRef:
+      type: object
+      additionalProperties: false
+      required: [kind, id, type]
+      properties:
+        kind:
+          const: record
+        id:
+          type: string
+          minLength: 1
+        type:
+          const: analysis-output-artifact
+    regions:
+      type: array
+      minItems: 1
+      items:
+        type: object
+        additionalProperties: false
+        required: [start, end]
+        properties:
+          start:
+            type: integer
+            minimum: 1
+          end:
+            type: integer
+            minimum: 1
+  required:
+  - operation
+  - requestId
+  - declaration
+  - alignmentRef
+  - regions
+- type: object
   additionalProperties: false
   properties:
     operation:

@@ -291,4 +291,229 @@ describe('shelfLookup — concept-keyed inventory (MATRES-SHELF)', () => {
     expect(report.concepts).toEqual([]);
     expect(report.groups).toEqual([]);
   });
+
+  /* ── Labware shelf visibility (u3shelf unit) ── */
+
+  function labwareRecords(): RecordEnvelope[] {
+    return [
+      {
+        recordId: 'LWD-96DEEP',
+        schemaId: SCHEMA('labware-definition'),
+        payload: {
+          kind: 'labware-definition',
+          id: 'LWD-96DEEP',
+          name: '96-deep-well-plate',
+          display_name: '96-deep-well-plate',
+          type: 'labware_definition',
+          topology: { addressing: 'grid' as const, rows: 8, columns: 12 },
+          capacity: { max_well_volume_uL: 2000 },
+        },
+      },
+      {
+        // Instance bound to the definition by labwareId, with location
+        recordId: 'LBI-00001',
+        schemaId: SCHEMA('labware-instance'),
+        payload: {
+          kind: 'labware-instance',
+          recordId: 'LBI-00001',
+          labwareId: 'LWD-96DEEP',
+          label: 'Plate A (RUN-001)',
+          location: { kind: 'bench', label: 'Bench 2' },
+        },
+      },
+      {
+        // Instance bound to the same definition, NO location block
+        recordId: 'LBI-00002',
+        schemaId: SCHEMA('labware-instance'),
+        payload: {
+          kind: 'labware-instance',
+          recordId: 'LBI-00002',
+          labwareId: 'LWD-96DEEP',
+          label: 'Plate B',
+        },
+      },
+      {
+        // Orphan instance: labwareId points to nothing, but label matches the term
+        recordId: 'LBI-ORPHAN',
+        schemaId: SCHEMA('labware-instance'),
+        payload: {
+          kind: 'labware-instance',
+          recordId: 'LBI-ORPHAN',
+          labwareId: 'LWD-DOES-NOT-EXIST',
+          label: 'deep-well-plate spare',
+          location: { kind: 'freezer', label: '-80 freezer' },
+        },
+      },
+    ];
+  }
+
+  it('E: labware definition + instance via labwareId surfaces as labware entries', async () => {
+    const store = new ShelfFixtureStore(labwareRecords());
+    const lookup = createShelfLookup(store);
+    const report = await lookup.queryShelf('deep-well');
+
+    // The term resolves to the labware definition as a concept
+    const conceptIds = report.concepts.map((c) => c.recordId);
+    expect(conceptIds).toContain('LWD-96DEEP');
+
+    // The bound instances surface as entries
+    const entryA = entryOf(report, 'LBI-00001');
+    expect(entryA).toBeDefined();
+    expect(entryA!.kind).toBe('labware-instance');
+    expect(entryA!.joinedVia).toBe('labware-definition');
+    expect(entryA!.level).toBe('labware-instance');
+
+    // Location is carried from the instance's location.label
+    expect(entryA!.location).toBe('Bench 2');
+
+    const entryB = entryOf(report, 'LBI-00002');
+    expect(entryB).toBeDefined();
+    expect(entryB!.kind).toBe('labware-instance');
+    expect(entryB!.joinedVia).toBe('labware-definition');
+    // No location block -> property is ABSENT (not undefined)
+    expect(entryB!.hasOwnProperty('location')).toBe(false);
+  });
+
+  it('F: term matching no labware definition contributes zero entries', async () => {
+    const store = new ShelfFixtureStore(labwareRecords());
+    const report = await createShelfLookup(store).queryShelf('zzz-no-such-labware');
+    expect(report.concepts).toEqual([]);
+    expect(report.groups).toEqual([]);
+  });
+
+  it('G: orphan labware-instance (missing labwareId target) surfaces as unknown-provenance', async () => {
+    const store = new ShelfFixtureStore(labwareRecords());
+    const lookup = createShelfLookup(store);
+    const report = await lookup.queryShelf('spare');
+
+    // The orphan instance's label contains 'spare'
+    const orphan = entryOf(report, 'LBI-ORPHAN');
+    expect(orphan).toBeDefined();
+    expect(orphan!.kind).toBe('labware-instance');
+    expect(orphan!.joinedVia).toBe('unknown-provenance');
+    // Location still comes from the instance's own location.label
+    expect(orphan!.location).toBe('-80 freezer');
+  });
+
+  /* ── Merged labware record families (shelflw2 unit) ── */
+
+  /**
+   * The store holds TWO merged labware record families: `kind: labware`
+   * (records/seed/labware/*, plain vessel records) and `kind:
+   * labware-definition` (records/seed/labware-definition/*). Both halves of
+   * this record differ from the labwareRecords() fixture above, so the pin
+   * is non-vacuous: only a provider that reads the `labware` kind can hit it.
+   */
+  function labwareFamilyRecords(): RecordEnvelope[] {
+    return [
+      {
+        recordId: 'LWB-RES-1',
+        schemaId: SCHEMA('labware'),
+        payload: {
+          kind: 'labware',
+          id: 'LWB-RES-1',
+          name: 'Generic 1 Well Reservoir (seed)',
+        },
+      },
+      {
+        // Instance joins by labwareId -> LWB-RES-1. Its label deliberately
+        // omits the term, so only the join (not lexical fallback) can surface it.
+        recordId: 'LBI-RES-1',
+        schemaId: SCHEMA('labware-instance'),
+        payload: {
+          kind: 'labware-instance',
+          recordId: 'LBI-RES-1',
+          labwareId: 'LWB-RES-1',
+          label: 'Reservoir bottle A',
+        },
+      },
+    ];
+  }
+
+  it('H: kind labware record resolves as a concept and joins its labware-instance via labwareId', async () => {
+    const store = new ShelfFixtureStore(labwareFamilyRecords());
+    const report = await createShelfLookup(store).queryShelf('Generic 1 Well Reservoir (seed)');
+
+    const concept = report.concepts.find((c) => c.recordId === 'LWB-RES-1');
+    expect(concept).toBeDefined();
+    expect(concept!.label).toBe('Generic 1 Well Reservoir (seed)');
+    // The union does NOT widen: the shelf reports the labware concept source
+    // as 'labware-definition' for both merged record families.
+    expect(concept!.sourceKind).toBe('labware-definition');
+
+    const instance = entryOf(report, 'LBI-RES-1');
+    expect(instance).toBeDefined();
+    expect(instance!.kind).toBe('labware-instance');
+    expect(instance!.joinedVia).toBe('labware-definition');
+  });
+
+  /* ── Family-fair concept budget (shelflw2 fix1) ── */
+
+  /**
+   * Both merged families match the ONE term here. `labware` is listed first
+   * in LABWARE_CONCEPT_KINDS, so a provider called once over the combined kind
+   * list (single shared cap) can return 20/20 `labware` hits and zero
+   * `labware-definition` hits (advc probe P2). The fair budget must keep both
+   * families represented instead of letting one starve the other.
+   */
+  function crowdedFamilyRecords(): RecordEnvelope[] {
+    const records: RecordEnvelope[] = [];
+    for (let i = 0; i < 20; i += 1) {
+      const id = `LWB-CROWDED-${String(i).padStart(2, '0')}`;
+      records.push({
+        recordId: id,
+        schemaId: SCHEMA('labware'),
+        payload: { kind: 'labware', id, name: `Crowded-plate vessel ${i}` },
+      });
+    }
+    records.push({
+      recordId: 'LWD-CROWDED-PLATE',
+      schemaId: SCHEMA('labware-definition'),
+      payload: {
+        kind: 'labware-definition',
+        id: 'LWD-CROWDED-PLATE',
+        name: 'Crowded-plate definition',
+      },
+    });
+    return records;
+  }
+
+  it('I: both merged labware families contribute concepts for the same term', async () => {
+    const store = new ShelfFixtureStore([
+      {
+        recordId: 'LWB-DUAL-RESERVOIR',
+        schemaId: SCHEMA('labware'),
+        payload: { kind: 'labware', id: 'LWB-DUAL-RESERVOIR', name: 'Dual-family reservoir vessel' },
+      },
+      {
+        recordId: 'LWD-DUAL-RESERVOIR',
+        schemaId: SCHEMA('labware-definition'),
+        payload: {
+          kind: 'labware-definition',
+          id: 'LWD-DUAL-RESERVOIR',
+          name: 'Dual-family reservoir definition',
+        },
+      },
+    ]);
+    const report = await createShelfLookup(store).queryShelf('dual-family reservoir');
+
+    const conceptIds = report.concepts.map((c) => c.recordId);
+    expect(conceptIds).toContain('LWB-DUAL-RESERVOIR');
+    expect(conceptIds).toContain('LWD-DUAL-RESERVOIR');
+    for (const concept of report.concepts) {
+      expect(concept.sourceKind).toBe('labware-definition');
+    }
+  });
+
+  it('J: 20 labware-family hits cannot starve the labware-definition family', async () => {
+    const store = new ShelfFixtureStore(crowdedFamilyRecords());
+    const report = await createShelfLookup(store).queryShelf('crowded-plate');
+
+    const conceptIds = report.concepts.map((c) => c.recordId);
+    // Starvation pin: this is the hit the single-shared-cap shape lost.
+    expect(conceptIds).toContain('LWD-CROWDED-PLATE');
+    // The crowded family is still represented, and the MERGED cap holds.
+    expect(conceptIds.some((id) => id.startsWith('LWB-CROWDED-'))).toBe(true);
+    expect(report.concepts.length).toBe(20);
+  });
 });

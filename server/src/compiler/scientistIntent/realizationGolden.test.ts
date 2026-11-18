@@ -74,6 +74,14 @@ function familyFixture(): Record<string, unknown> {
       { stepId: 'add-lysis', label: 'Add lysis solution', ordinal: 1, kind: 'other', intent: {
         semanticVerb: { canonical: 'add_material' },
         materialNeeds: [{ need: 'lysis_solution' }],
+        targetWells: ['A1'],
+        constraints: [{
+          class: 'volume',
+          bindingKind: 'hard_bound',
+          overridePolicy: 'never-override',
+          bound: { value: 200, unit: 'uL', dimension: 'volume' },
+          subject: { ref: 'cf:material', role: 'lysis_solution', dimensionKey: 'lysis_solution:volume', bindingPolicyKey: 'never-override:hard_bound' },
+        }],
         provenance: [prov(1)],
       } },
       { stepId: 'step-1', label: 'Lyse the samples', ordinal: 2, kind: 'other', intent: {
@@ -273,6 +281,39 @@ describe('W2-7 T1 golden — family + robot answers -> local-protocol -> intent 
       labwareRequirements: artifacts.labwareRequirements ?? null,
       resourceManifestTipRacks: artifacts.resourceManifest?.tipRacks ?? null,
     }, null, 1).slice(0, 2000));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Negative pin — targetWells is load-bearing for add_material
+// ---------------------------------------------------------------------------
+
+describe('W2-7 negative pin — targetWells is load-bearing (vacuous-pin proof)', () => {
+
+  it('missing targetWells on add-lysis produces needs-clarification', async () => {
+    // Derived from familyFixture() by construction, so the "identical except
+    // targetWells" claim cannot silently desync as familyFixture() evolves.
+    // Omitting it on add-lysis proves the positive pin is not vacuous.
+    const family = structuredClone(familyFixture()) as Record<string, unknown>;
+    const familySteps = family.steps as Array<{ intent: Record<string, unknown> }>;
+    delete familySteps[0].intent.targetWells;
+    const recorder = goldenStore();
+    const spine = createResolveSpineFromContext({ store: recorder.store as never });
+    const result = await realizeAndCompile({
+      family: family as unknown as ProtocolPayloadLike,
+      realization: realizationFixture() as unknown as LocalProtocolPayloadLike,
+      compileDeps: { spine },
+    });
+    expect('compile' in result).toBe(true);
+    if (!('compile' in result)) return;
+    expect(result.compile.outcome).not.toBe('complete');
+    expect(result.compile.outcome).toBe('needs-clarification');
+    // The clarification must cite targetWells as missing-required-argument at actionIndex 0
+    const targetWellsClar = result.compile.clarifications.find(
+      (c: any) => c.label === 'targetWells' && c.reason === 'missing-required-argument'
+        && c.actionLocation.actionIndex === 0 && c.actionLocation.argument === 'targetWells'
+    );
+    expect(targetWellsClar).toBeDefined();
   });
 });
 

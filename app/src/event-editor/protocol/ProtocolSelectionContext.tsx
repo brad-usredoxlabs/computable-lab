@@ -129,6 +129,11 @@ interface ProtocolSelectionState {
   steps: ProtocolStepSummary[]
   /** Set the step concept list (populated when the protocol steps first load). */
   setSteps: (steps: ProtocolStepSummary[]) => void
+  /** True while the attached protocol's steps are still being fetched: the loader
+   *  publishes the identity before the steps fetch lands (G3-D3), so the rail shows
+   *  a pending rail, never "No protocol attached". Cleared when the steps fetch settles. */
+  stepsPending: boolean
+  setStepsPending: (next: boolean) => void
   /** The protocol's DECLARED labware / equipment roles — what the assay needs,
    *  shown as collapsible sections beside the steps in the rail. */
   resources: ProtocolResources
@@ -165,6 +170,7 @@ export function ProtocolSelectionProvider({ children }: { children: ReactNode })
   const [visibleSteps, setVisibleStepsState] = useState<Set<string>>(new Set())
   const [stepGraphs, setStepGraphs] = useState<Record<string, ProtocolStepGraph>>({})
   const [steps, setStepsState] = useState<ProtocolStepSummary[]>([])
+  const [stepsPending, setStepsPending] = useState(false)
   const [resources, setResources] = useState<ProtocolResources>(NO_PROTOCOL_RESOURCES)
   const [labwareBindings, setLabwareBindings] = useState<LabwareBindingMap>(NO_LABWARE_BINDINGS)
   const [protocol, setProtocol] = useState<ProtocolIdentityRef | null>(null)
@@ -224,6 +230,8 @@ export function ProtocolSelectionProvider({ children }: { children: ReactNode })
         setActiveStepId,
         steps,
         setSteps,
+        stepsPending,
+        setStepsPending,
         resources,
         setResources,
         labwareBindings,

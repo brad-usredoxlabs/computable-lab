@@ -21,9 +21,10 @@
  * newThread — i.e. an endpoint was set); a chat without one renders NO
  * picker. No rename affordance.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useOptionalAiPanel } from '../shared/context/AiPanelContext'
+import { getThreadTabId } from '../shared/api/threadTabIds'
 import { ChatLog } from './ChatLog'
 import { WorkstateProposalCard } from '../event-editor/right-pane/ai/WorkstateProposalCard'
 import { ChainProposalCard } from '../event-editor/right-pane/ai/ChainProposalCard'
@@ -67,8 +68,22 @@ function ThreadPicker({ chat }: { chat: UseAiChatReturn }) {
   const listThreads = chat.listThreads
   const switchThread = chat.switchThread
   const newThread = chat.newThread
+  // L2-P1-THREAD-RESTORE-1 u4scope: the hook's resolved (tab, scope) tab id.
+  // The hook knows its own scope — the bare getThreadTabId() below (kept for
+  // non-thread-scoped stubs) hits the no-scope bucket and never matches a
+  // scoped host's persisted row (r12 legB: run-door reload never resumes).
+  const tabThreadId = chat.tabThreadId
   const [threads, setThreads] = useState<ThreadSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // u3reloadresume (r11 gate defect 2): while `threads` is null the list is
+  // LOADING — the picker must say so, never claim an empty account.
+  const loading = threads === null
+  // Active id at LOAD-RESOLVE time: the hook's lazy mint resolves the tab id
+  // one render AFTER the load closure is created, so capturing `chat.threadId`
+  // into the closure would be stale (absent) when the list lands.
+  const activeIdRef = useRef<string | null>(null)
+  activeIdRef.current = chat.threadId ?? null
+  const resumedRef = useRef(false) // one-shot per mount (post-switch re-fetch must not re-fire)
 
   const load = useCallback(() => {
     if (!listThreads) return
@@ -78,6 +93,21 @@ function ThreadPicker({ chat }: { chat: UseAiChatReturn }) {
         if (cancelled) return
         setThreads(list)
         setError(null)
+        // u3reloadresume / u4scope: if the tab's persisted id — read THROUGH
+        // the hook's tabThreadId accessor (the hook knows its own (tab, scope)
+        // bucket, same single mint it and the wire header use; the bare
+        // getThreadTabId() below is the non-thread-scoped-stub fallback only)
+        // names a fetched row WITH messages and we are not already on it,
+        // activate it via the registered switchThread (hook re-keys/rehydrates).
+        // A messageless row is never auto-selected (honest blank).
+        const persisted = (tabThreadId ? tabThreadId() : undefined) ?? getThreadTabId()
+        const row = list.find((t) => t.threadId === persisted)
+        // switchThread is null-checked in the render body; TS does not narrow a
+        // captured const here, so re-check.
+        if (row && row.messageCount > 0 && switchThread && !resumedRef.current && activeIdRef.current !== persisted) {
+          resumedRef.current = true
+          switchThread(row.threadId)
+        }
       })
       .catch((err: unknown) => {
         if (cancelled) return
@@ -87,7 +117,7 @@ function ThreadPicker({ chat }: { chat: UseAiChatReturn }) {
     return () => {
       cancelled = true
     }
-  }, [listThreads])
+  }, [listThreads, switchThread, tabThreadId])
 
   useEffect(() => load(), [load])
 
@@ -118,7 +148,7 @@ function ThreadPicker({ chat }: { chat: UseAiChatReturn }) {
         disabled={!activeId}
       >
         <option value="" disabled>
-          {rows.length === 0 ? 'No threads yet' : 'Threads…'}
+          {loading ? 'Loading threads…' : rows.length === 0 ? 'No threads yet' : 'Threads…'}
         </option>
         {options.map((t) => (
           <option key={t.threadId} value={t.threadId}>
@@ -292,6 +322,30 @@ export function HarnessChatPane({ onReviewProposal }: HarnessChatPaneProps) {
     return wells && wells.length > 0 ? [...wells].sort() : []
   }, [editor?.state.selection?.wells])
 
+  // L2-P1-RETURN-LEG-1 u4 (LEG C): the cold-reload resume affordance. After a
+  // cold reload (F5) that rehydrated a settled deck-adopt transcript, ONE
+  // click puts the person's original sentence back into the composer —
+  // nothing re-applied, deck unchanged. The affordance is DERIVED from the
+  // rehydrated transcript (`chat.messages` — the hook's single source; no new
+  // store): it appears in the SETTLED state (the rehydrated thread is not
+  // streaming AND a completed deck-adopt sits in the transcript — a system
+  // note that names what was Accepted), and clicking it stages the LAST user
+  // message VERBATIM into the composer. NOTHING auto-sends: the click only
+  // fills the composer (setPrompt); the person reviews and presses Send.
+  const lastUserMessage = useMemo(() => {
+    if (!chat) return null
+    for (let i = chat.messages.length - 1; i >= 0; i--) {
+      const message = chat.messages[i]
+      if (message.role === 'user' && message.content.trim().length > 0) return message.content
+    }
+    return null
+  }, [chat])
+  const hasCompletedAdopt = useMemo(
+    () => chat !== null && chat.messages.some((m) => m.role === 'system' && m.content.startsWith('Accepted ')),
+    [chat],
+  )
+  const showResume = chat !== null && !chat.isStreaming && hasCompletedAdopt && lastUserMessage !== null
+
   if (!chat) {
     return (
       <aside className="harness-chat-pane" data-testid="harness-chat-pane">
@@ -340,6 +394,23 @@ export function HarnessChatPane({ onReviewProposal }: HarnessChatPaneProps) {
           {chat.honestWall}
         </div>
       ) : null}
+      {/* L2-P1-TAB2-TRANSCRIPT-1 / u1tab2render: the NAMED-REASON state —
+          the user-selected thread's read returned no messages in this tab.
+          Rendered in the transcript region, keyed off the hook's structured
+          `threadUnreadable` predicate (single writer: the hydration effect —
+          never re-derived from the list's messageCount, never seeded from
+          another tab). The wording names what was attempted (thread id +
+          scope); it does NOT claim the thread is empty. Clears on the next
+          readable read or on switch/new/re-key. */}
+      {chat.threadUnreadable ? (
+        <div
+          className="harness-chat-pane__thread-unreadable"
+          data-testid="thread-unreadable"
+          role="status"
+        >
+          {`This tab could not read the messages for thread ${chat.threadUnreadable.threadId} (scope ${chat.threadUnreadable.scope || 'default'}). The read of the selected thread returned no messages here — that is not a claim the thread is empty.`}
+        </div>
+      ) : null}
       {/* Staged deck proposal: apply/discard + per-event drop, reachable even
           when the deck itself is off screen (mobile drawer). */}
       <ChatPreviewCard chat={chat} />
@@ -376,9 +447,31 @@ export function HarnessChatPane({ onReviewProposal }: HarnessChatPaneProps) {
           )}
         </div>
       ) : null}
+      {/* L2-P1-RETURN-LEG-1 u4 (LEG C): ONE control in the settled
+          cold-reloaded state — rehydrated transcript with a completed
+          deck-adopt. Click = the last user message VERBATIM into the
+          composer (setPrompt); nothing auto-sent, the person reviews and
+          presses Send. Absent while a turn is streaming or when the
+          transcript has no completed adopt (never dead chrome). */}
+      {showResume && lastUserMessage ? (
+        <button
+          type="button"
+          className="harness-chat-pane__resume"
+          data-testid="resume-instruction"
+          onClick={() => setPrompt(lastUserMessage)}
+        >
+          Resume instruction
+        </button>
+      ) : null}
       <ChatLog
         messages={chat.messages}
         isStreaming={chat.isStreaming}
+        // L2-PROSE-SHORTHAND-SALVAGE-1 (gate D2 surface half): the drafting
+        // transcript exposes the recovery marker the hook recorded. Same
+        // conditional-spread key-absent discipline as the card props above:
+        // on a clean turn the prop is ABSENT, so ChatLog renders no attribute
+        // (never an empty one) and adds no visible text.
+        {...(chat.statusRecoveredFrom ? { recoveredFrom: chat.statusRecoveredFrom } : {})}
         prompt={prompt}
         onPromptChange={setPrompt}
         onSend={() => { chat.sendPrompt(prompt); setPrompt('') }}

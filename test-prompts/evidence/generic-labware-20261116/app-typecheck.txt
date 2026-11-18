@@ -1,0 +1,19 @@
+src/editor/forms/SchemaRecordForm.tsx(77,7): error TS2607: JSX element class does not support attributes because it does not have a 'props' property.
+src/editor/forms/SchemaRecordForm.tsx(77,8): error TS2786: 'Form' cannot be used as a JSX component.
+  Its type 'typeof Form' is not a valid JSX element type.
+    Types of construct signatures are incompatible.
+      Type 'new <T = any, S extends StrictRJSFSchema = RJSFSchema, F extends FormContextType = any>(props: FormProps<T, S, F>) => Form<T, S, F>' is not assignable to type 'new (props: any, deprecatedLegacyContext?: any) => Component<any, any, any>'.
+        Type 'Form<any, RJSFSchema, any>' is missing the following properties from type 'Component<any, any, any>': context, setState, forceUpdate, props, and 2 more.
+src/editor/forms/SchemaRecordForm.tsx(85,20): error TS7006: Parameter 'event' implicitly has an 'any' type.
+src/editor/taptab/RefCombobox.ontologyref.test.tsx(32,4): error TS2322: Type '{ suggestionPlan?: { sources: string[]; ontologies: string[]; searchField: string; isRef: boolean; isCombobox: boolean; valueShape: "ref" | "text" | "ontology-ref" | "record-ref" | "material-ref"; } | undefined; value: string; refKind: string; onSelect: Mock<...>; onCancel: Mock<...>; }' is not assignable to type 'RefComboboxProps'.
+  Types of property 'suggestionPlan' are incompatible.
+    Type '{ sources: string[]; ontologies: string[]; searchField: string; isRef: boolean; isCombobox: boolean; valueShape: "ref" | "text" | "ontology-ref" | "record-ref" | "material-ref"; } | undefined' is not assignable to type '{ sources: string[]; ontologies: string[]; searchField: "keywords" | "tags"; isRef: boolean; isCombobox: boolean; ontologyBinding?: "local-material-required" | "allow-ontology" | "local-record-required" | undefined; ownedByApp?: boolean | undefined; valueShape?: "ref" | ... 4 more ... | undefined; lifecycleDefault?:...'.
+      Type '{ sources: string[]; ontologies: string[]; searchField: string; isRef: boolean; isCombobox: boolean; valueShape: "ref" | "text" | "ontology-ref" | "record-ref" | "material-ref"; }' is not assignable to type '{ sources: string[]; ontologies: string[]; searchField: "keywords" | "tags"; isRef: boolean; isCombobox: boolean; ontologyBinding?: "local-material-required" | "allow-ontology" | "local-record-required" | undefined; ownedByApp?: boolean | undefined; valueShape?: "ref" | ... 4 more ... | undefined; lifecycleDefault?:...'.
+        Types of property 'searchField' are incompatible.
+          Type 'string' is not assignable to type '"keywords" | "tags"'.
+src/editor/taptab/widgets/ObjectWidget.nested.test.tsx(53,27): error TS2307: Cannot find module 'ajv/dist/2020.js' or its corresponding type declarations.
+src/event-editor/create/RecordCreatePanel.gc16-widget-commit.test.tsx(57,27): error TS2307: Cannot find module 'ajv/dist/2020.js' or its corresponding type declarations.
+src/event-editor/create/RecordCreatePanel.gc16-widget-commit.test.tsx(448,23): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/event-editor/create/RecordCreatePanel.gc16-widget-commit.test.tsx(452,23): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/event-editor/create/RecordCreatePanel.gc16-widget-commit.test.tsx(565,20): error TS7006: Parameter 'e' implicitly has an 'any' type.
+src/event-editor/create/RecordCreatePanel.gc16.test.tsx(31,27): error TS2307: Cannot find module 'ajv/dist/2020.js' or its corresponding type declarations.

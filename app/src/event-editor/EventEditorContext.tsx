@@ -23,6 +23,7 @@ import type { AddMaterialDetails, PlateEvent } from '../types/events'
 import { generateEventId } from '../types/events'
 import type { Ref } from '../types/ref'
 import { groundMaterialRef } from './lib/groundMaterialRef'
+import { resolvePlacementIdentity } from './lib/eventWellIndex'
 import {
   applyPlateRailPatch,
   DEFAULT_PLATE_RAIL_DRAFT,
@@ -30,7 +31,7 @@ import {
   type PlateRailPatch,
 } from './rail/state'
 
-export type LoadState = 'idle' | 'loading' | 'ready' | 'error'
+export type LoadState = 'idle' | 'loading' | 'ready' | 'error' | 'missing'
 
 /**
  * A staged proposal from the AI dock, layered on top of committed state. The
@@ -282,6 +283,9 @@ export type FixItSessionSnapshot = Pick<
 export interface EventEditorState {
   loadState: LoadState
   loadError: string | null
+  /** danglingplan (L2-SUBPROTOCOL-EXPAND-1): graph id whose read 404'd (stale pointer, not a transport
+   *  failure). Optional so existing full-state fixtures compile; load_start/load_error/load_success clear it. */
+  missingGraphId?: string | null
   platforms: PlatformManifest[]
   platformId: string
   variantId: string
@@ -405,6 +409,7 @@ export type EventEditorAction =
   | { type: 'redo' }
   | { type: 'load_start' }
   | { type: 'load_error'; error: string }
+  | { type: 'load_graph_missing'; eventGraphId: string }
   | { type: 'load_success'; platforms: PlatformManifest[]; initialPlatformId?: string }
   | {
       type: 'load_event_graph_success'
@@ -478,6 +483,7 @@ const DEFAULT_PLATFORM_ID = 'manual'
 const initialState: EventEditorState = {
   loadState: 'idle',
   loadError: null,
+  missingGraphId: null,
   platforms: [],
   platformId: DEFAULT_PLATFORM_ID,
   variantId: '',
@@ -660,7 +666,14 @@ function normalizePreviewPlacementLocations(
  *  at commit time), so a later turn cannot re-route (or erase) them. */
 function committedOfferCapturesForPreview(
   events: PlateEvent[],
-  preview: { resolvedLabwares?: AiResolvedLabware[] },
+  preview: {
+    resolvedLabwares?: AiResolvedLabware[]
+    /** L2-P1-PLACE-AND-MINT-1 u3wellfix [D1/AC3]: the preview's labware map —
+     *  needed to resolve a single definition offer to the PLACEMENT identity
+     *  it places (the same resolvePlacementIdentity the staged arm uses), so
+     *  the committed binding and the tile key are ONE key. */
+    previewLabwares?: Record<string, Labware>
+  },
 ): { binding: Record<string, string>; ambiguous: Record<string, boolean> } {
   const ids = (preview.resolvedLabwares ?? [])
     .map((offer) => offer.recordId)
@@ -674,7 +687,22 @@ function committedOfferCapturesForPreview(
     // zero-offer case writes NOTHING (absent = no offer) and the
     // multi-offer case writes ONLY the marker — never a null sentinel, so
     // the two maps describe the same fact and cannot disagree.
-    if (!isAmbiguous && distinct.size === 1) binding[event.eventId] = ids[0] as string
+    if (!isAmbiguous && distinct.size === 1) {
+      // L2-P1-PLACE-AND-MINT-1 u3wellfix [D1/AC3]: the binding value is the
+      // PLACEMENT identity of the offered vessel when EXACTLY ONE
+      // previewLabwares entry carries its sourceRecordId (a definition offer
+      // re-keyed its labware to its own placement identity — u2), so the
+      // committed arm and the staged arm attribute to the SAME key the deck
+      // tile reads. Zero-or-many matches keep the recordId (the pre-u3wellfix
+      // value) — never guess. Vessel offers are the identity map
+      // (labwareId === recordId), so their bindings are byte-identical.
+      // The value rides per-batch — a later rebuild must not re-route
+      // earlier events (uifix2-fix1 D1 contract, kept).
+      binding[event.eventId] = resolvePlacementIdentity(
+        ids[0] as string,
+        preview.previewLabwares ?? {},
+      )
+    }
     if (isAmbiguous) ambiguous[event.eventId] = true
   }
   return { binding, ambiguous }
@@ -694,12 +722,22 @@ function mergeCommittedOfferBinding(
   return next
 }
 
+/** danglingplan: strict NOT_FOUND test for a 404 record read (ApiError message is `<code>: <msg>`, e.g.
+ *  `NOT_FOUND: Record not found: <id>`); anything else is a genuine failure. */
+export function isGraphNotFound(message: string): boolean {
+  return /\bNOT_FOUND\b/.test(message) || /\bRecord not found:/.test(message) || /\b404\b/.test(message)
+}
+
 function reducer(state: EventEditorState, action: Action): EventEditorState {
   switch (action.type) {
     case 'load_start':
-      return { ...state, loadState: 'loading', loadError: null }
+      return { ...state, loadState: 'loading', loadError: null, missingGraphId: null }
     case 'load_error':
-      return { ...state, loadState: 'error', loadError: action.error }
+      return { ...state, loadState: 'error', loadError: action.error, missingGraphId: null }
+    case 'load_graph_missing':
+      // A 404 on the graph id is a stale pointer, not a transport failure: name the
+      // missing graph instead of painting the red load_error splash.
+      return { ...state, loadState: 'missing', loadError: null, missingGraphId: action.eventGraphId }
     case 'load_success': {
       const platforms = action.platforms
       const fallbackPlatformId =
@@ -710,6 +748,7 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
         ...state,
         loadState: 'ready',
         loadError: null,
+        missingGraphId: null,
         platforms,
         platformId,
         variantId: state.runDeck?.variantId ?? defaults.variantId,
@@ -1529,7 +1568,13 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
       .catch((error: unknown) => {
         if (cancelled) return
         const message = error instanceof Error ? error.message : String(error)
-        dispatch({ type: 'load_error', error: `event graph ${eventGraphId}: ${message}` })
+        // danglingplan: a 404 on the graph id is a stale pointer — degrade to a
+        // named missing state; every other failure keeps load_error verbatim.
+        if (isGraphNotFound(message)) {
+          dispatch({ type: 'load_graph_missing', eventGraphId })
+        } else {
+          dispatch({ type: 'load_error', error: `event graph ${eventGraphId}: ${message}` })
+        }
       })
     return () => {
       cancelled = true

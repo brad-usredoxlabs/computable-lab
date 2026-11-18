@@ -119,6 +119,8 @@ export interface CompletionResponse {
   };
   /** Present on llama.cpp servers; absent elsewhere. */
   timings?: LlamaTimings;
+  /** Present when the inference client relaxed a forced tool_choice to 'auto' (Qwen thinking incompatibility or provider 400 rejection); absent otherwise. */
+  toolChoiceDowngraded?: { reason: 'qwen-thinking' | 'provider-400-tool-choice'; model: string };
 }
 
 export interface StreamChunk {
@@ -165,6 +167,16 @@ export interface ResolveMentionDeps {
   fetchProtocol?: (id: string) => Promise<Record<string, unknown> | null>;
   fetchGraphComponent?: (id: string) => Promise<Record<string, unknown> | null>;
   searchLabwareByHint?: (hint: string) => Promise<Array<{ recordId: string; title: string }>>;
+  // L2-P1-ABSENCE-PROBE-TIERS-1 (u1probe): the DEFINITION tier of the two-tier
+  // absence probe. The empty-turn absence probe (clarifications.ts
+  // emptyTurnAbsenceRequests) must probe BOTH tiers before asserting absence:
+  // the record tier (searchLabwareByHint, kind:'labware' = held stock) and the
+  // definition tier (this, kind:'labware-definition' display names = what the
+  // lab knows). Optional — callers without it keep the single-tier behavior.
+  // Placed beside the record-tier slot on ResolveMentionDeps (the orchestrator
+  // deps type AgentOrchestratorDeps extends this), the same seam the two
+  // absence call sites already read searchLabwareByHint from.
+  searchLabwareDefinitionsByHint?: (hint: string) => Promise<Array<{ recordId: string; title: string }>>;
 }
 
 // ============================================================================
@@ -603,6 +615,14 @@ export interface AgentClarificationRequest {
   options: AgentClarificationOption[];
   allowCreateLocal?: boolean;
   /**
+   * L2-NOUN-CREATION-JOURNEY-1 (unit u1journey): the DECLARED creation journey
+   * an unbound MATERIAL noun is created through. The door list is projected
+   * from config/journey/declarations/noun-create.yaml by
+   * compiler/journey/journeyDeclarationDoors.ts and rides the clarification
+   * verbatim (the card renders these ids/surfaces — it coins none).
+   */
+  journey?: import('../compiler/resolution/types.js').ClarificationJourneyFact;
+  /**
    * Which material LAYER this question is about. The answer's options must be
    * drawn from that layer only — offering a bare concept beside a formulation and
    * an instance (the old flat /m menu) left the biologist guessing which kind of
@@ -634,6 +654,16 @@ export interface AgentClarificationRequest {
   clarifyControl?:
     | { kind: 'quantity'; label: string; value: number; unit: string; source: string; question: string }
     | { kind: 'wells'; question: string };
+  /**
+   * L2-P1-CREATE-DOOR-1 (unit absdoor): a DECLARED ABSENCE — set (via
+   * conditional spread, the key ABSENT and never `absence: undefined`) when a
+   * binding blocker named a noun this lab's records do not hold and offered no
+   * candidates: a NAMED unresolved slot (context §2.7), not an empty option
+   * list. `reason` is ONE server-side phrase matching the shipped slash-menu
+   * diagnostic (resolvers.ts:568, "Not in this lab's records") — the card
+   * renders the server's words verbatim; it never composes a second one.
+   */
+  absence?: { mention: string; reason: string };
 }
 
 export interface AgentClarificationAnswer {
@@ -984,7 +1014,7 @@ export interface AgentActionPayload {
 }
 
 export type AgentEvent =
-  | { type: 'status'; message: string }
+  | { type: 'status'; message: string; recoveredFrom?: import('./AgentOrchestrator.js').RecoveredDraft }
   | { type: 'tool_call'; toolName: string; args: Record<string, unknown> }
   | { type: 'tool_result'; toolName: string; success: boolean; durationMs: number }
   | { type: 'thinking'; content: string }

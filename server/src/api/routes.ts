@@ -50,6 +50,7 @@ import type { SignatureHandlers } from './handlers/SignatureHandlers.js';
 import type { VendorSearchHandlers } from './handlers/VendorSearchHandlers.js';
 import type { VendorDocumentHandlers } from './handlers/VendorDocumentHandlers.js';
 import type { ChemistryHandlers } from './handlers/ChemistryHandlers.js';
+import type { SpecSheetHandlers } from './handlers/SpecSheetHandlers.js';
 import type { IngestionHandlers } from './handlers/IngestionHandlers.js';
 import type { IngestionAIHandlers } from './handlers/IngestionAIHandlers.js';
 import type { AiIngestionHandlers } from './handlers/AiIngestionHandlers.js';
@@ -72,6 +73,7 @@ import type { ProtocolIdeHandlers } from './handlers/ProtocolIdeHandlers.js';
 import type { ProtocolIntakeHandlers } from './handlers/ProtocolIntakeHandlers.js';
 import type { PlannedRunHandlers } from './handlers/PlannedRunHandlers.js';
 import type { AiThreadHandlers } from './handlers/AiThreadHandlers.js';
+import type { PendingIntentHandlers } from './handlers/PendingIntentHandlers.js';
 import type { JsonLdSearchHandlers } from './handlers/JsonLdSearchHandlers.js';
 import type { GraphSearchHandlers } from './handlers/GraphSearchHandlers.js';
 import type { WorkspaceHandlers } from './handlers/WorkspaceHandlers.js';
@@ -85,6 +87,29 @@ import type { CorpusHandlers } from './handlers/CorpusHandlers.js';
 import type { StorageHandlers } from './handlers/StorageHandlers.js';
 import type { AnalysisHandlers } from './handlers/AnalysisHandlers.js';
 import type { HealthResponse } from './types.js';
+import { fileURLToPath } from 'node:url';
+import { AGENT_ALLOWED_TOOLS } from '../ai/index.js';
+import { loadCapabilityCatalogueDir } from '../compiler/journey/capabilityCatalogue.js';
+import { getCompoundClassRegistry } from '../registry/CompoundClassRegistry.js';
+import { compileJourneyStructure } from '../compiler/journey/journeyCompiler.js';
+import { compileJourneyEnvelope, type ResolvedInputVersion } from '../compiler/journey/journeyEnvelope.js';
+import { guardJourneyDispatch, loadPolicySetsDir, refuseUnavailableCapability, RULE_DISPATCH_POLICY_UNAVAILABLE } from '../compiler/journey/journeyDispatch.js';
+import { JourneyEvidenceStore, JourneyEvidenceStoreError } from '../compiler/journey/journeyEvidenceStore.js';
+
+/**
+ * L2-JOURNEY-CAPABILITY-CATALOGUE-1: the shipped catalogue directory, resolved
+ * repo-relative exactly like forcedToolCompliance.ts:20 — never from cwd.
+ */
+const DEFAULT_JOURNEY_CATALOGUE_DIR = fileURLToPath(
+  new URL('../../../config/journey/capabilities', import.meta.url),
+);
+
+// L2-JOURNEY-EVIDENCE-1 (unit evroute): the notice is product copy required by the item
+// text — a bundle is retained evidence, not by itself a compliance claim.
+const JOURNEY_EVIDENCE_NOTICE = 'A journey evidence bundle is retained evidence, not by itself a compliance claim: it certifies nothing; it only makes the request, the decisions, the approvals and the effects recoverable for an auditor.';
+const RULE_EVIDENCE_REQUEST_INVALID = 'journey_evidence_request_invalid';
+const RULE_EVIDENCE_NOT_FOUND = 'journey_evidence_not_found';
+const RULE_EVIDENCE_ROOT_UNAVAILABLE = 'journey_evidence_root_unavailable';
 
 /**
  * Options for registering routes.
@@ -163,12 +188,15 @@ export interface RouteOptions {
   verbActionMapHandlers?: VerbActionMapHandlers;
   foundryJobHandlers?: FoundryJobHandlers;
   aiThreadHandlers?: AiThreadHandlers;
+  /** L2-JOURNEY-CHECKPOINT-1: the pending-intent checkpoint routes under the same /ai/threads family. */
+  pendingIntentHandlers?: PendingIntentHandlers;
   jsonLdSearchHandlers?: JsonLdSearchHandlers;
   graphSearchHandlers?: GraphSearchHandlers;
   workspaceHandlers?: WorkspaceHandlers;
   artifactBlobHandlers?: ArtifactBlobHandlers;
   vendorPdfBlobHandlers?: VendorPdfBlobHandlers;
   predicatesHandlers?: PredicatesHandlers;
+  specSheetHandlers?: SpecSheetHandlers;
   schemaCount: () => number;
   ruleCount: () => number;
   /**
@@ -180,6 +208,26 @@ export interface RouteOptions {
   uiSpecCount?: () => number;
   aiInfo?: { available: boolean; inferenceUrl: string; model: string; provider?: string; error?: string };
   getAiInfo?: () => { available: boolean; inferenceUrl: string; model: string; provider?: string; error?: string } | undefined;
+  /**
+   * L2-JOURNEY-CAPABILITY-CATALOGUE-1: directory of capability descriptor YAML.
+   * Absent => the shipped repo-relative config/journey/capabilities. Optional so
+   * every existing registerRoutes caller is untouched.
+   */
+  journeyCatalogueDir?: string;
+  /**
+   * L2-JOURNEY-POLICY-1: directory of declared policy-set YAML, re-read per
+   * dispatch so an edit is visible without a restart. Absent => dispatch is
+   * REFUSED (restrictive default: a missing policy surface is not a permission);
+   * an empty directory is likewise a refusal, never a pass.
+   */
+  journeyPolicySetDir?: string;
+  /**
+   * L2-JOURNEY-EVIDENCE-1 (unit evroute): root directory of the durable journey
+   * evidence store, read PER REQUEST so a bundle written after boot is served
+   * without a restart. Absent => GET /journey/evidence REFUSES (restrictive
+   * default: the route never guesses a root from cwd).
+   */
+  journeyEvidenceRootDir?: string;
 }
 
 /**
@@ -266,6 +314,8 @@ export function registerRoutes(
   fastify.get('/records', recordHandlers.listRecords.bind(recordHandlers));
   
   // Get single record
+  // L2-RECORD-DELETE-DEPENDENTS-1 criterion (d): static path must be registered before :id param
+  fastify.get('/records/dangling-references', recordHandlers.listDanglingReferences.bind(recordHandlers));
   fastify.get('/records/:id/revisions', recordHandlers.listRevisions.bind(recordHandlers));
   fastify.post('/records/:id/draft-copy', recordHandlers.draftCopy.bind(recordHandlers));
   fastify.post('/records/:id/accept-graph', recordHandlers.acceptGraph.bind(recordHandlers));
@@ -291,6 +341,151 @@ export function registerRoutes(
   if (relatedRecordsHandlers) {
     fastify.get('/records/:id/related', relatedRecordsHandlers.getRelatedRecords.bind(relatedRecordsHandlers));
   }
+
+  // ============================================================================
+  // Journey Capability Catalogue (L2-JOURNEY-CAPABILITY-CATALOGUE-1)
+  // ============================================================================
+  // Read-only served surface for the admitted capability catalogue. The directory
+  // is re-read PER REQUEST (no module cache), so a YAML-only capability needs no
+  // TypeScript change. Admission — Ajv shape plus handler_ref membership — is
+  // unit 2's loadCapabilityCatalogueDir/admitCapabilityCatalogue; the known set is
+  // the shipped AGENT_ALLOWED_TOOLS, never a literal list here. A rejection is a
+  // 200 carrying diagnostics, never a 500 and never a silently empty list.
+  fastify.get('/journey/capabilities', async () => {
+    const dir = options.journeyCatalogueDir ?? DEFAULT_JOURNEY_CATALOGUE_DIR;
+    try {
+      const admitted = await loadCapabilityCatalogueDir(dir, new Set(AGENT_ALLOWED_TOOLS));
+      return {
+        capabilities: admitted.capabilities,
+        diagnostics: admitted.ok ? [] : admitted.diagnostics,
+      };
+    } catch (error) {
+      // Absent/unreadable directory: an empty catalogue WITH a named diagnostic.
+      return {
+        capabilities: [],
+        diagnostics: [
+          `${dir}: could not read capability catalogue directory: ${error instanceof Error ? error.message : String(error)}`,
+        ],
+      };
+    }
+  });
+
+  // L2-JOURNEY-COMPILER-1 (unit croute): THIN compile route. One call to the shipped
+  // compileJourneyStructure, relayed verbatim — manifest or lint diagnostics; never a second
+  // validation authority, never a 500 for a bad document; only a malformed request ENVELOPE is a
+  // 400, and even it carries { ok, diagnostics }. Catalogue re-read PER REQUEST, as above.
+  fastify.post('/journey/compile', async (request, reply) => {
+    const body = request.body as { document?: unknown } | null | undefined;
+    const document = body === null || body === undefined ? undefined : body.document;
+    if (document === null || typeof document !== 'object' || Array.isArray(document)) {
+      return reply.code(400).send({ ok: false, diagnostics: [{
+        rule: 'journey_compile_request_invalid',
+        message: `document must be a non-null object; received ${document === null ? 'null' : Array.isArray(document) ? 'array' : typeof document}`,
+      }] });
+    }
+    const dir = options.journeyCatalogueDir ?? DEFAULT_JOURNEY_CATALOGUE_DIR;
+    try {
+      const admitted = await loadCapabilityCatalogueDir(dir, new Set(AGENT_ALLOWED_TOOLS));
+      const result = compileJourneyStructure(document, admitted.capabilities);
+      const catalogue_diagnostics = admitted.ok ? [] : admitted.diagnostics;
+      return result.ok
+        ? { ok: true, manifest: result.manifest, catalogue_diagnostics }
+        : { ok: false, diagnostics: result.diagnostics, catalogue_diagnostics };
+    } catch (error) {
+      return { ok: false, catalogue_diagnostics: [], diagnostics: [{
+        rule: 'journey_catalogue_unavailable',
+        message: `${dir}: could not read capability catalogue directory: ${error instanceof Error ? error.message : String(error)}`,
+      }] };
+    }
+  });
+
+  // L2-JOURNEY-POLICY-1 (unit psdispatch3): the ONE place a compiled envelope is
+  // handed on. The envelope is built here from the document + the admitted
+  // catalogue, policy sets are re-read PER REQUEST, and only guardJourneyDispatch
+  // decides — this adapter derives no attribute and reads none from the body.
+  fastify.post('/journey/dispatch', async (request, reply) => {
+    const body = request.body as { document?: unknown; step_id?: unknown; current_inputs?: unknown } | null | undefined;
+    const document = body === null || body === undefined ? undefined : body.document;
+    const stepId = body === null || body === undefined ? undefined : body.step_id;
+    if (document === null || typeof document !== 'object' || Array.isArray(document)) {
+      return reply.code(400).send({ ok: false, diagnostics: [{ rule: 'journey_dispatch_request_invalid', message: 'document must be a non-null object' }] });
+    }
+    if (typeof stepId !== 'string' || stepId.length === 0) {
+      return reply.code(400).send({ ok: false, diagnostics: [{ rule: 'journey_dispatch_request_invalid', message: 'step_id must be a non-empty string' }] });
+    }
+    const policyDir = options.journeyPolicySetDir;
+    if (policyDir === undefined) {
+      return reply.code(403).send({ ok: false, diagnostics: [{ rule: RULE_DISPATCH_POLICY_UNAVAILABLE, message: 'no journey policy-set directory is configured; dispatch is refused by the restrictive default', step_id: stepId }] });
+    }
+    const current: ResolvedInputVersion[] = body !== null && body !== undefined && Array.isArray(body.current_inputs)
+      ? body.current_inputs as ResolvedInputVersion[]
+      : [];
+    try {
+      const admitted = await loadCapabilityCatalogueDir(options.journeyCatalogueDir ?? DEFAULT_JOURNEY_CATALOGUE_DIR, new Set(AGENT_ALLOWED_TOOLS));
+      const compiled = compileJourneyStructure(document, admitted.capabilities);
+      if (!compiled.ok) return reply.code(400).send({ ok: false, diagnostics: compiled.diagnostics });
+      const built = compileJourneyEnvelope(compiled.manifest, document, stepId, current);
+      if (!built.ok) return reply.code(400).send({ ok: false, diagnostics: built.diagnostics });
+      const capability = admitted.capabilities.find((d) => d.capability_id === built.envelope.capability_ref);
+      if (capability === undefined) {
+        return reply.code(403).send({ ok: false, diagnostics: [{ rule: RULE_DISPATCH_POLICY_UNAVAILABLE, message: `${built.envelope.capability_ref}: capability descriptor is not admitted; dispatch is refused`, step_id: stepId }] });
+      }
+      // L2-JOURNEY-NOUN-CREATE-1 (unit capguard): declared is not enabled.
+      // An execution precondition, consulted AHEAD of policy: a descriptor
+      // that exists in the catalogue but declares status.available_now: false
+      // may never be handed on, and the refusal is a diagnostic — no policy
+      // set is evaluated here, and none is fabricated to carry the refusal.
+      const refusal = refuseUnavailableCapability(capability, stepId);
+      if (refusal !== undefined) {
+        return reply.code(403).send({ ok: false, diagnostics: [refusal] });
+      }
+      const sets = await loadPolicySetsDir(policyDir);
+      if (sets.length === 0) {
+        return reply.code(403).send({ ok: false, diagnostics: [{ rule: RULE_DISPATCH_POLICY_UNAVAILABLE, message: `${policyDir}: no policy set declared; dispatch is refused`, step_id: stepId }] });
+      }
+      const result = guardJourneyDispatch({ envelope: built.envelope, capability, sets, now: new Date().toISOString() });
+      return reply.code(result.allowed ? 200 : 403).send({ ok: result.allowed, record: result.record, diagnostics: result.diagnostics });
+    } catch (error) {
+      return reply.code(403).send({ ok: false, diagnostics: [{ rule: RULE_DISPATCH_POLICY_UNAVAILABLE, message: `dispatch refused: policy evaluation from ${policyDir} failed: ${error instanceof Error ? error.message : String(error)}`, step_id: stepId }] });
+    }
+  });
+
+  // L2-JOURNEY-EVIDENCE-1 (unit evroute): READ-ONLY surface for one retained bundle.
+  // journey_id/revision are QUERYSTRING params because a schema-legal id may contain
+  // '/' and '@' (a path segment would split it into a different id than the citation
+  // names). The store is PER REQUEST and only its OWN load/verify are called: this
+  // route re-hashes, repairs and validates nothing; a tampered document is served as
+  // verify.ok:false with the bundle refused (null), never silently re-hashed to "valid".
+  fastify.get('/journey/evidence', async (request, reply) => {
+    const query = request.query as Record<string, unknown>;
+    const journeyId = query['journey_id'];
+    const rawRevision = query['revision'];
+    if (typeof journeyId !== 'string' || journeyId.length === 0) {
+      return reply.code(400).send({ ok: false, diagnostics: [{ rule: RULE_EVIDENCE_REQUEST_INVALID, message: 'journey_id must be a non-empty string in the querystring' }] });
+    }
+    const revision = typeof rawRevision === 'string' && /^[1-9][0-9]*$/u.test(rawRevision) ? Number(rawRevision) : Number.NaN;
+    if (!Number.isSafeInteger(revision)) {
+      return reply.code(400).send({ ok: false, diagnostics: [{ rule: RULE_EVIDENCE_REQUEST_INVALID, message: `revision must be a positive integer in the querystring; received ${typeof rawRevision === 'string' ? `'${rawRevision}'` : 'nothing'}` }] });
+    }
+    const rootDir = options.journeyEvidenceRootDir;
+    if (rootDir === undefined) {
+      return reply.code(403).send({ ok: false, diagnostics: [{ rule: RULE_EVIDENCE_ROOT_UNAVAILABLE, message: 'no journey evidence root directory is configured; the evidence surface is refused by the restrictive default' }] });
+    }
+    const store = new JourneyEvidenceStore({ rootDir });
+    try {
+      const verify = await store.verify(journeyId, revision);
+      const bundle = await store.load(journeyId, revision);
+      if (bundle === null && verify.mismatches.length === 0) {
+        return reply.code(404).send({ ok: false, diagnostics: [{ rule: RULE_EVIDENCE_NOT_FOUND, message: `journey '${journeyId}' revision ${revision}: no schema-valid bundle is stored under ${rootDir} — a failed read is reported, never a defaulted bundle` }] });
+      }
+      return { ok: true, bundle, verify, notice: JOURNEY_EVIDENCE_NOTICE };
+    } catch (error) {
+      if (error instanceof JourneyEvidenceStoreError) {
+        return reply.code(400).send({ ok: false, diagnostics: [{ rule: error.rule, message: error.message }] });
+      }
+      throw error;
+    }
+  });
 
   // Identity / groups / sharing (optional - requires identityHandlers)
   const { identityHandlers, authHandlers } = options;
@@ -582,6 +777,12 @@ export function registerRoutes(
     fastify.post('/vendors/:id/documents/extract', vendorDocumentHandlers.extractVendorDocument.bind(vendorDocumentHandlers));
   }
 
+  // Spec-sheet extraction engine: url + recordKind -> proposals (no store writes)
+  const { specSheetHandlers } = options;
+  if (specSheetHandlers) {
+    fastify.post('/ingestion/spec-sheet/extract', specSheetHandlers.extractSpecSheet.bind(specSheetHandlers));
+  }
+
   const { chemistryHandlers } = options;
 
   if (chemistryHandlers) {
@@ -785,6 +986,17 @@ export function registerRoutes(
     // (which match `/ai/threads/<endpoint>` exactly) are unaffected.
     fastify.get('/ai/threads/:endpoint/threads', aiThreadHandlers.listThreads.bind(aiThreadHandlers));
     fastify.post('/ai/threads/:endpoint/promote', aiThreadHandlers.promote.bind(aiThreadHandlers));
+  }
+
+  // L2-JOURNEY-CHECKPOINT-1: the persisted pending-intent checkpoint, beside the thread.
+  // ONE prefix to call (the /ai/threads family): the handler delegates every write to the
+  // PendingIntentStore (validation/version-compare/resume live in the store, never here).
+  const { pendingIntentHandlers } = options;
+  if (pendingIntentHandlers) {
+    fastify.post('/ai/threads/:endpoint/checkpoints', pendingIntentHandlers.save.bind(pendingIntentHandlers));
+    fastify.get('/ai/threads/:endpoint/checkpoints/:checkpointId', pendingIntentHandlers.load.bind(pendingIntentHandlers));
+    fastify.post('/ai/threads/:endpoint/checkpoints/:checkpointId/resume', pendingIntentHandlers.resume.bind(pendingIntentHandlers));
+    fastify.post('/ai/threads/:endpoint/checkpoints/:checkpointId/delta', pendingIntentHandlers.attachDelta.bind(pendingIntentHandlers));
   }
 
   const { jsonLdSearchHandlers } = options;
@@ -1035,8 +1247,12 @@ export function registerRoutes(
   if (plannedRunHandlers) {
     fastify.post('/runs/from-local-protocol', plannedRunHandlers.createFromLocalProtocol.bind(plannedRunHandlers));
     fastify.post('/runs/:id/bindings', plannedRunHandlers.updateBindings.bind(plannedRunHandlers));
+    fastify.post('/runs/:id/protocols', plannedRunHandlers.attachProtocol.bind(plannedRunHandlers));
+    fastify.delete('/runs/:id/protocols/:protocolId', plannedRunHandlers.detachProtocol.bind(plannedRunHandlers));
+    fastify.get('/runs/:id/role-binding-proposals', plannedRunHandlers.getRoleBindingProposals.bind(plannedRunHandlers));
     fastify.post('/runs/:id/sample-map', plannedRunHandlers.setSampleMap.bind(plannedRunHandlers));
     fastify.post('/runs/:id/compile', plannedRunHandlers.compileRunPlan.bind(plannedRunHandlers));
+    fastify.post('/runs/:id/plan-graph', plannedRunHandlers.buildPlanGraph.bind(plannedRunHandlers));
   }
 
   // ============================================================================
@@ -1229,6 +1445,32 @@ export function registerRoutes(
   if (ontologyTermHandlers) {
     fastify.get('/ontology-terms/lookup', ontologyTermHandlers.getOntologyTerm.bind(ontologyTermHandlers));
   }
+
+  // ============================================================================
+  // Compound Class Registry Routes (L2-GC-PEAK-NAMING-1, u4surface)
+  // ============================================================================
+  // Read-only served surface for the compound-class registry (schema/
+  // registry/compound-classes): the consuming side is the /registry "Compounds"
+  // tab, whose candidates resolve labels through GET /ontology-terms/lookup.
+  // The registry loader is stateless per process; list() re-reads from its
+  // in-memory cache (the /Compounds tab's reload requirement is a re-render of
+  // this stateless read — no persistence). Shape copied from the inline-route
+  // precedent above (GET /journey/capabilities): 200 WITH a named diagnostic on
+  // failure, never a 500 and never a silently empty list.
+  fastify.get('/compound-classes', async () => {
+    try {
+      return { classes: getCompoundClassRegistry().list() };
+    } catch (error) {
+      // Absent/unreadable registry directory: an empty list WITH a named
+      // diagnostic (same contract as /journey/capabilities).
+      return {
+        classes: [],
+        diagnostics: [
+          `compound-class registry: ${error instanceof Error ? error.message : String(error)}`,
+        ],
+      };
+    }
+  });
 
   // ============================================================================
   // Verb Action Map Routes (optional - requires verbActionMapHandlers)

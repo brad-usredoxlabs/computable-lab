@@ -9,7 +9,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { EventEditorProvider } from '../event-editor/EventEditorContext'
 import { WorkspaceProvider } from '../event-editor/workspace/WorkspaceContext'
 import { HarnessChatPane } from '../agent/HarnessChatPane'
@@ -17,6 +17,7 @@ import { DeckChatSlice } from '../event-editor/deck/DeckChatSlice'
 import { SurfaceChatBridge } from '../shared/shell/SurfaceChatBridge'
 import type { AiContext } from '../types/aiContext'
 import { RunWorkspaceShell } from './RunWorkspaceShell'
+import { RunDeckPersistence } from './RunDeckPersistence'
 import { useModeToggle, ModeToggle, type RunMode } from './lib/mode-toggle'
 import { ExecutionView } from '../graph/execution/ExecutionView'
 import { DeckViewer } from '../event-editor/viewer/deck/DeckViewer'
@@ -27,7 +28,12 @@ import { ChatFocusProvider } from '../agent/ChatFocusContext'
 import { ProtocolPreviewBridge } from '../event-editor/protocol/ProtocolPreviewBridge'
 import { RunNavPane } from './RunNavPane'
 import { RunProtocolStepsLoader } from './RunProtocolStepsLoader'
+import { RoleBindingProposalsPanel } from './RoleBindingProposalsPanel'
+import { RunProtocolList } from './RunProtocolList'
+import { RunPlanGraphBuild } from './RunPlanGraphBuild'
+import { resolvePlannedRunId } from './plannedRunId'
 import { GcRunSheetSection } from './gc/GcRunSheetSection'
+import { RunAcquisitionSection } from './acquisition/RunAcquisitionSection'
 import { apiClient } from '../shared/api/client'
 import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
 import { runTabId, type WorkspaceTab } from '../event-editor/workspace/types'
@@ -40,6 +46,9 @@ import '../event-editor/styles/eventEditor.css'
 export function RunWorkspacePage() {
   const { studyId: urlStudyId, runId } = useParams<{ studyId?: string; runId: string }>()
   const { mode, setMode } = useModeToggle()
+  // u1resultsroute: carried across into the editor results route so ?id=<eventGraphId>
+  // (and any other query) survives the navigation from the run surface.
+  const [workspaceSearchParams, setWorkspaceSearchParams] = useSearchParams()
   const [resolvedStudyId, setResolvedStudyId] = useState<string | null>(urlStudyId ?? null)
   const [resolvedEventGraphId, setResolvedEventGraphId] = useState<string | undefined>(undefined)
   const [runTitle, setRunTitle] = useState<string | null>(null)
@@ -50,6 +59,8 @@ export function RunWorkspacePage() {
   // stays byte-identical (bait #2). No SECOND getRecord is fired here; this
   // reuses the page's single mount fetch.
   const [runKind, setRunKind] = useState<string | null>(null)
+  const [hasPlannedRunRef, setHasPlannedRunRef] = useState(false)
+  const [plannedRunId, setPlannedRunId] = useState<string | null>(null)
   const openTabs = useOptionalOpenTabs()
 
   // When studyId is not in the URL (route /runs/:runId), fetch it from
@@ -63,9 +74,9 @@ export function RunWorkspacePage() {
     }
     if (!runId) return
     let cancelled = false
-    apiClient.getRecord(runId)
+    apiClient.getRecordWithUI(runId)
       .then((env) => {
-        const payload = env.payload as Record<string, unknown>
+        const payload = (env.record?.payload ?? {}) as Record<string, unknown>
         const sid = typeof payload.studyId === 'string' ? payload.studyId : null
         if (!cancelled) setResolvedStudyId(sid ?? SCRATCH_STUDY_ID)
         const egId = typeof payload.methodEventGraphId === 'string' ? payload.methodEventGraphId : undefined
@@ -74,9 +85,14 @@ export function RunWorkspacePage() {
         if (!cancelled) setRunTitle(t)
         const k = typeof payload.kind === 'string' ? payload.kind : null
         if (!cancelled) setRunKind(k)
+        const prr = payload.plannedRunRef as { id?: string } | undefined
+        if (!cancelled) setHasPlannedRunRef(typeof prr?.id === 'string')
       })
       .catch(() => {
-        if (!cancelled) setResolvedStudyId(SCRATCH_STUDY_ID)
+        if (!cancelled) {
+          setResolvedStudyId(SCRATCH_STUDY_ID)
+          setHasPlannedRunRef(false)
+        }
       })
     return () => { cancelled = true }
   }, [urlStudyId, runId])
@@ -106,6 +122,26 @@ export function RunWorkspacePage() {
     }
     window.addEventListener('cl:run-renamed', onRenamed)
     return () => window.removeEventListener('cl:run-renamed', onRenamed)
+  }, [runId])
+
+  // Resolve the planned-run id for the role-binding proposals panel.
+  // Same shape as RunPlanGraphBuild: fetch the record and apply the
+  // resolver (kind === 'planned-run' → self, else plannedRunRef.id, else null).
+  useEffect(() => {
+    if (!runId) return
+    // Clear stale plannedRunId on run swap so the proposals panel disappears immediately
+    setPlannedRunId(null)
+    let cancelled = false
+    const load = async () => {
+      try {
+        const id = await resolvePlannedRunId(runId)
+        if (!cancelled) setPlannedRunId(id)
+      } catch {
+        if (!cancelled) setPlannedRunId(null)
+      }
+    }
+    void load()
+    return () => { cancelled = true }
   }, [runId])
 
   const aiContext = useMemo((): AiContext => ({
@@ -191,6 +227,10 @@ export function RunWorkspacePage() {
                   required_providers: [deck]); a missing publisher is a loud
                   error, never a silent empty pane. */}
               <DeckChatSlice />
+              {/* d2persist: a hand-placed labware on THIS deck commits through
+                  the existing governed save (the graph's editorLayout is the
+                  one placement authority); a failed save is visible. */}
+              <RunDeckPersistence />
               <SurfaceChatBridge host="run-workspace" base={{ context: aiContext }} />
               <RunWorkspaceShell
                 navPane={<RunNavPane title={title} runId={runId} studyId={resolvedStudyId} />}
@@ -198,7 +238,46 @@ export function RunWorkspacePage() {
                 viewerToolbar={
                   <div className="run-workspace-toolbar">
                     <ModeToggle mode={mode} onChange={setMode} />
+                    {/* u1acqdoor: the ONE toolbar entry into the run's data.
+                        It REPLACES the legacy Results link (which LEFT the run
+                        into /runs/<id>/editor/results — the legacy editor page
+                        being retired by L2-LEGACY-EDITOR-RETIREMENT-1). This is
+                        a SAME-ROUTE affordance: a button that scrolls + focuses
+                        the run-owned acquisition section below. It carries the
+                        current search string into ?section=acquisition so the
+                        state survives a refresh, and it NEVER navigates away
+                        from /runs/<id> (the URL stays on the run surface).
+                        u2fix (defect 2): rendered ONLY when the resolved record
+                        is kind 'run' — mirrors the section's OWN gate below. */}
+                    {runKind === 'run' ? (
+                    <button
+                      type="button"
+                      className="run-workspace-toolbar__data"
+                      data-testid="run-toolbar-data"
+                      onClick={() => {
+                        const next = new URLSearchParams(workspaceSearchParams.toString())
+                        next.set('section', 'acquisition')
+                        setWorkspaceSearchParams(next, { replace: true })
+                        requestAnimationFrame(() => {
+                          const el = document.getElementById('run-acquisition')
+                          if (!el) return
+                          // Same-route "lands in the section": focus (works in
+                          // jsdom + real browsers). scrollIntoView is guarded —
+                          // jsdom does not implement it.
+                          el.focus({ preventScroll: true })
+                          if (typeof el.scrollIntoView === 'function') {
+                            el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                          }
+                        })
+                      }}
+                    >
+                      Data
+                    </button>
+                    ) : null}
+                    <RunProtocolList runId={runId} />
+                    <RunPlanGraphBuild runId={runId} />
                     <DeckToolbar tab={deckTab} breadcrumb={runBreadcrumb} />
+                    {hasPlannedRunRef ? <a className="run-bindings-link" href={`/runs/${runId}/bindings`}>Role bindings</a> : null}
                   </div>
                 }
               >
@@ -208,6 +287,26 @@ export function RunWorkspacePage() {
                     when no instrument-sequence links the run (the DNA case is
                     byte-identical — bait #2) and owns its own single probe. */}
                 {runKind === 'run' ? <GcRunSheetSection runId={runId} /> : null}
+                {/* u1acqdoor: the RUN-OWNED acquisition section — the always-present
+                    data door. Mounts on EVERY kind-'run' page, even when nothing links
+                    an instrument-sequence (it does NOT share GcRunSheetSection's
+                    null-gate — that gate is the defect this unit ends). It lists the
+                    acquisition packages whose sourceRunRef names this run and offers
+                    the attach affordance. It reuses the page's resolved methodEventGraphId
+                    (no second probe) for the door's run-scoped attach binding. */}
+                {runKind === 'run' ? (
+                  <RunAcquisitionSection runId={runId} eventGraphId={resolvedEventGraphId} />
+                ) : null}
+                {/* u1acqdoor: a non-'run' record resolved at /runs/:id NAMES its kind
+                    (one line) and renders NO acquisition section — no guessed kind for
+                    an unresolvable id (runKind stays null, the not-found behaviour is
+                    preserved). */}
+                {runKind !== null && runKind !== 'run' ? (
+                  <p className="run-workspace-kind-label" data-testid="run-kind-label">
+                    This record is a {runKind}, not a run.
+                  </p>
+                ) : null}
+                {plannedRunId ? <RoleBindingProposalsPanel runId={plannedRunId} /> : null}
                 <RunWorkspaceContent runId={runId} mode={mode} />
               </RunWorkspaceShell>
             </ChatFocusProvider>

@@ -546,3 +546,104 @@ profiles:
       widget: object
       control: app-owned
     quick_add: [name, domain, class, definition]
+
+  vendor-product:
+    label: "Vendor product"
+    applies_when:
+      # record-TYPE key, not a material domain: the vendor-product authoring surface
+      # looks this profile up by id (registry.get('vendor-product')). No material record
+      # carries this domain, so material lookups are unaffected.
+      domain: [vendor-product]
+    layers: [vendor-product]
+    fields:
+    - path: kind
+      layer: vendor-product
+      label: "Kind"
+      widget: hidden
+      required: true
+      default: vendor-product
+      control: app-owned
+    - path: id
+      layer: vendor-product
+      label: "Vendor product ID"
+      widget: text
+      required: true
+      control: app-owned
+    - path: name
+      layer: vendor-product
+      label: "Name"
+      widget: text
+      required: true
+      control: free-text
+    - path: vendor
+      layer: vendor-product
+      label: "Vendor"
+      widget: text
+      required: true
+      control: free-text
+    - path: catalog_number
+      layer: vendor-product
+      label: "Catalog number"
+      widget: text
+      required: true
+      control: free-text
+    - path: material_ref
+      layer: vendor-product
+      label: "Linked material concept"
+      widget: ref
+      required: true
+      control: local-material-required
+      ontologies: [chebi, ncit, obi, efo]
+    - path: package_size
+      layer: vendor-product
+      label: "Package size"
+      widget: text
+      control: free-text
+    - path: formulation
+      layer: vendor-product
+      label: "Formulation / stock concentration as supplied"
+      widget: textarea
+      control: free-text
+    - path: grade
+      layer: vendor-product
+      label: "Grade / purity"
+      widget: text
+      control: free-text
+    - path: storage_recommendation
+      layer: vendor-product
+      label: "Storage recommendation"
+      widget: textarea
+      control: free-text
+    - path: product_url
+      layer: vendor-product
+      label: "Product URL"
+      widget: text
+      control: free-text
+    - path: documents
+      layer: vendor-product
+      label: "Documents"
+      widget: array
+      control: app-owned
+    - path: synonyms
+      layer: vendor-product
+      label: "Synonyms"
+      widget: array
+      control: free-text
+    - path: status
+      layer: vendor-product
+      label: "Status"
+      widget: select
+      default: proposed
+      control: app-owned
+    - path: lifecycleId
+      layer: vendor-product
+      label: "Lifecycle"
+      widget: hidden
+      default: lab-vocabulary-control
+      control: app-owned
+    - path: provenance
+      layer: vendor-product
+      label: "Provenance"
+      widget: object
+      control: app-owned
+    quick_add: [name, vendor, catalog_number, material_ref]

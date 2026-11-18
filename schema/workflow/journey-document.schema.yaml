@@ -1,0 +1,125 @@
+# L2-JOURNEY-DOC-1 (unit u1schema) — the journey intent document.
+#
+# One CLOSED shape for a plan the compiler consumes and a regulator reads.
+# Step ports are $refs into journey-port.schema.yaml (VOCABULARY, not a record
+# kind: journey-port.schema.yaml:10); capability_ref reuses the catalogue id
+# pattern one-for-one (capability-descriptor.schema.yaml:44). Not a FAIR
+# record: no common.schema.yaml allOf. The document grants nothing — no policy
+# tier, no permission, no capability existence (lint/validator units own those).
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/journey-document.schema.yaml"
+title: "Journey Intent Document"
+description: >
+  A declared journey: request anchor, objective and completion contract, typed
+  parameters with provenance, steps with vocabulary-typed ports, bounded
+  alternatives with selection authority, a return contract, and separate
+  assumption/question ledgers.
+type: object
+additionalProperties: false
+required: [journey_id, revision, authoring_actor, request_anchor, objective, completion_contract, parameters, steps, alternatives, return_contract, assumptions, unresolved_questions]
+properties:
+  journey_id: { type: string, minLength: 1 }
+  revision: { type: integer, minimum: 1 }
+  authoring_actor:
+    type: object
+    additionalProperties: false
+    required: [actor_kind, actor_id]
+    properties:
+      actor_kind: { type: string, enum: [person, agent] }
+      actor_id: { type: string, minLength: 1 }
+  parent_journey: { type: string, minLength: 1 }
+  thread_ref: { type: string, minLength: 1 }
+  request_anchor:
+    type: object
+    additionalProperties: false
+    description: "The original user message, captured verbatim and never rewritten; lineage starts here, not at whatever the agent later paraphrased."
+    required: [message_id, verbatim_text]
+    properties:
+      message_id: { type: string, minLength: 1 }
+      verbatim_text: { type: string, minLength: 1 }
+  objective: { type: string, minLength: 1 }
+  completion_contract: { type: array, minItems: 1, items: { type: string, minLength: 1 }, description: "Observable completion conditions; prose alone is not a contract." }
+  parameters:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [name, provenance, status]
+      properties:
+        name: { type: string, pattern: "^[a-z][a-z0-9_.-]*$" }
+        value: { description: "Resolved value; absent while status is unresolved." }
+        provenance: { type: string, enum: [user-supplied, resolved, ai-proposed] }
+        status: { type: string, enum: [resolved, unresolved] }
+  steps:
+    type: array
+    minItems: 1
+    items:
+      type: object
+      additionalProperties: false
+      required: [id, capability_ref, input_ports, output_ports, interaction_mode]
+      properties:
+        id: { type: string, pattern: "^[a-z][a-z0-9_.-]*$" }
+        capability_ref: { type: string, pattern: "^[a-z][a-z0-9_.-]*$" }
+        input_ports: { type: array, items: { $ref: "#/$defs/PortBinding" } }
+        output_ports: { type: array, items: { $ref: "#/$defs/PortBinding" } }
+        interaction_mode: { type: string, enum: [automatic, human_in_the_loop] }
+        presentation_surface: { type: string, minLength: 1 }
+        # L2-JOURNEY-HUMANTASK-1 (unit htcschema): the declared human-task
+        # contract. Intentionally ABSENT from `required`: the conditionality —
+        # human_in_the_loop steps MUST carry one, automatic steps MUST NOT —
+        # is the lint's journey_human_task_* rules (a `required` here would
+        # break every existing automatic-mode fixture and make the mode/contract
+        # agreement unjudgeable). The closed shape is human-task.schema.yaml.
+        human_task: { $ref: "./human-task.schema.yaml" }
+  alternatives:
+    type: object
+    additionalProperties: false
+    description: "Bounded, explicitly authorised; the model may never select one itself."
+    required: [options, selection_authority]
+    properties:
+      options:
+        type: array
+        minItems: 1
+        maxItems: 8
+        items:
+          type: object
+          additionalProperties: false
+          required: [alternative_id, summary]
+          properties:
+            alternative_id: { type: string, pattern: "^[a-z][a-z0-9_.-]*$" }
+            summary: { type: string, minLength: 1 }
+            # L2-JOURNEY-NOUN-CREATE-1 (unit altports): the option's wiring. The
+            # capability it invokes (catalogue id pattern, one-for-one with
+            # steps[].capability_ref) and the work surface the person lands on
+            # (the descriptor's surfaces id pattern). Intentionally ABSENT from
+            # `required`: a summary-only option stays legal (the shipped
+            # labware-definition declaration carries only alternative_id +
+            # summary), and membership — not shape — is the lint's rule (v).
+            capability_ref: { type: string, pattern: "^[a-z][a-z0-9_.-]*$" }
+            surface: { type: string, pattern: "^[a-z][a-z0-9_.-]*$" }
+      selection_authority: { type: string, enum: [user, declared_policy] }
+  return_contract:
+    type: object
+    additionalProperties: false
+    required: [checkpoint_ref, permitted_result_types, require_explicit_resume]
+    properties:
+      checkpoint_ref: { type: string, minLength: 1 }
+      permitted_result_types: { type: array, minItems: 1, uniqueItems: true, items: { type: string, pattern: "^[a-z][a-z0-9_.-]*$" } }
+      require_explicit_resume: { type: boolean }
+  assumptions: { type: array, items: { type: string, minLength: 1 }, description: "Beliefs the plan rests on. Never merged with unresolved questions." }
+  unresolved_questions:
+    type: array
+    items: { type: string, minLength: 1 }
+$defs:
+  # A step port typed by the shipped vocabulary. The ref is relative on purpose:
+  # Ajv resolves it against this $id, so a $defs name outside the six shipped
+  # ports is a compile error, not a silently open slot. Every port already
+  # requires `version`; nothing is relaxed here.
+  PortBinding:
+    oneOf:
+    - $ref: "./journey-port.schema.yaml#/$defs/SequenceSetReference"
+    - $ref: "./journey-port.schema.yaml#/$defs/AlignmentReference"
+    - $ref: "./journey-port.schema.yaml#/$defs/MaterialReference"
+    - $ref: "./journey-port.schema.yaml#/$defs/LabwareDefinitionReference"
+    - $ref: "./journey-port.schema.yaml#/$defs/CommittedRecordReference"
+    - $ref: "./journey-port.schema.yaml#/$defs/StagedDraftReference"

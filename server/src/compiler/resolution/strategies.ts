@@ -11,8 +11,8 @@
  * flips the strategyRef flips engine outcomes with zero TS diff.
  */
 import type { RankedCandidate } from '../../resolve/types.js';
-import type { ScientistIntentArgContract } from '../scientistIntent/vocabulary.js';
-import { declaredDomains } from '../scientistIntent/vocabulary.js';
+import type { ScientistIntentArgContract, ScientistIntentVocabulary } from '../scientistIntent/vocabulary.js';
+import { declaredDomains, defaultScientistIntentVocabulary } from '../scientistIntent/vocabulary.js';
 import { filterCandidatesByDeclaredDomain } from './adapters.js';
 import type {
   EngineFailure,
@@ -148,28 +148,113 @@ const mintLocal: ResolutionStrategy = {
 // is named in strategyOrder and ambiguity.strategyRef — no TS comparator,
 // no name/level literal. This strategy gathers the spine once, but
 // candidates are only contributed when a declared twin pair was narrowed.
-const declarationPrecedence: ResolutionStrategy = {
-  id: 'declaration_precedence',
-  applies: (contract: ScientistIntentArgContract) => contract.kind === 'resolvable',
-  gather: async (req, ctx) => {
-    const outcome = withDomainFilter(req, await gatherFrom(req, ctx, ['spine']));
-    // Narrow the band: sort by score DESC, curie ASC (matches resolutionEngine sortCandidates)
-    const sorted = [...outcome.candidates].sort((a, b) => b.score - a.score || a.curie.localeCompare(b.curie));
-    if (sorted.length > 1) {
-      const topScore = sorted[0]!.score;
-      // Count candidates at top score that carry formulationDeclared === true
-      const declaredAtTop = sorted.filter((c) => c.score === topScore && c.formulationDeclared === true);
-      // Exactly one declared candidate at top score => narrow to it
-      if (declaredAtTop.length === 1) {
-        return { candidates: [declaredAtTop[0]!], failures: outcome.failures, traces: [...outcome.traces, 'declaration-precedence: narrowed to declared formulation'] };
+//
+// L2-P1-AMBIGUITY-TIER-RULE-1 u1 (ruling DEFINITION-IDENTITY-UNIQUENESS,
+// amended option (a)): the declared policies.ambiguity.candidatePrecedence
+// block (DATA — zero kind/name literal in TS) orders candidates by RECORD
+// KIND: within one normalized label, the non-supersededByKind whenKinds kind
+// is DROPPED where the superseder is present. One survivor => ONLY it (the
+// inBand length-1 path binds); survivors >= 2 (tie) => NOTHING. Never a
+// "highest confidence wins" arm.
+type CandidatePrecedenceRule = { whenKinds: readonly string[]; supersededByKind: string };
+function makeDeclarationPrecedence(vocab: ScientistIntentVocabulary | undefined): ResolutionStrategy {
+  const rules: readonly CandidatePrecedenceRule[] =
+    (vocab?.policies().ambiguity as { candidatePrecedence?: readonly CandidatePrecedenceRule[] })?.candidatePrecedence ?? [];
+  return {
+    id: 'declaration_precedence',
+    applies: (contract: ScientistIntentArgContract) => contract.kind === 'resolvable',
+    gather: async (req, ctx) => {
+      const outcome = withDomainFilter(req, await gatherFrom(req, ctx, ['spine']));
+      // A declared generic default is an identity choice for an exact slot
+      // and label, not a ranking heuristic. It must still exist among the
+      // eligible local candidates; qualified requests never lose qualifiers.
+      const normalize = (label: string): string => label.trim().toLowerCase().replace(/\s+/g, ' ');
+      const defaults = (vocab?.policies().ambiguity.defaultBindings ?? []).filter((rule) =>
+        rule.verb === req.verb && rule.argument === req.argument
+        && rule.labels.some((label) => normalize(label) === normalize(req.label)));
+      const defaultIds = new Set(defaults.map((rule) => `local:${rule.recordId}`));
+      if (defaultIds.size === 1) {
+        const candidates = outcome.candidates.filter((candidate) => candidate.tier <= 1 && defaultIds.has(candidate.curie));
+        if (candidates.length === 1) {
+          return {
+            candidates,
+            failures: outcome.failures,
+            traces: [...outcome.traces, `declaration-precedence: declared default ${candidates[0]!.curie} for ${req.verb}.${req.argument}`],
+          };
+        }
       }
+      // Narrow the band: sort by score DESC, curie ASC (matches resolutionEngine sortCandidates)
+      const sorted = [...outcome.candidates].sort((a, b) => b.score - a.score || a.curie.localeCompare(b.curie));
+      if (sorted.length > 1) {
+        const topScore = sorted[0]!.score;
+        // Count candidates at top score that carry formulationDeclared === true
+        const declaredAtTop = sorted.filter((c) => c.score === topScore && c.formulationDeclared === true);
+        // Exactly one declared candidate at top score => narrow to it
+        if (declaredAtTop.length === 1) {
+          return { candidates: [declaredAtTop[0]!], failures: outcome.failures, traces: [...outcome.traces, 'declaration-precedence: narrowed to declared formulation'] };
+        }
+        // Declared candidate-tier precedence (DATA): one survivor => ONLY it; survivors >= 2 (tie) => NOTHING.
+        if (rules.length > 0) {
+          const survivors = applyCandidatePrecedence(sorted, rules);
+          if (survivors !== undefined) {
+            if (survivors.length === 1) {
+              return {
+                candidates: [survivors[0]!],
+                failures: outcome.failures,
+                traces: [...outcome.traces, 'declaration-precedence: narrowed to declared candidate precedence'],
+              };
+            }
+            return { candidates: [], failures: outcome.failures, traces: [...outcome.traces, 'declaration-precedence: same-tier tie after declared precedence — no contribution'] };
+          }
+        }
+      }
+      // Not narrowed — contribute empty candidates so the engine falls through
+      // to the next strategy (resolutionEngine.ts:386). Keep failures/traces.
+      return { candidates: [], failures: outcome.failures, traces: [...outcome.traces, 'declaration-precedence: not narrowed — no contribution'] };
+    },
+    resolveAmbiguity: () => 'clarify',
+  };
+}
+
+/** Applies the DECLARED candidatePrecedence rules (generic — no kind/name
+ *  literal). Normalized label = lowercase, non-alphanumerics stripped. The
+ *  tier-5 mint affordance is never an identity candidate: excluded. Returns
+ *  survivors when a rule fired, else undefined (pre-fix bytes). */
+function applyCandidatePrecedence(
+  band: readonly RankedCandidate[],
+  rules: readonly CandidatePrecedenceRule[],
+): RankedCandidate[] | undefined {
+  const record = band.filter((c) => c.tier !== 5); // mint affordance excluded
+  const normalized = (label: string): string => label.toLowerCase().replace(/[^a-z0-9]/g, '');
+  let dropped = false;
+  for (const rule of rules) {
+    const superseded = (c: RankedCandidate): boolean =>
+      c.termKind !== undefined && rule.whenKinds.includes(c.termKind) && c.termKind !== rule.supersededByKind;
+    const groups = new Map<string, RankedCandidate[]>();
+    for (const c of record) {
+      const key = normalized(c.label);
+      const group = groups.get(key);
+      if (group) group.push(c);
+      else groups.set(key, [c]);
     }
-    // Not narrowed — contribute empty candidates so the engine falls through
-    // to the next strategy (resolutionEngine.ts:386). Keep failures/traces.
-    return { candidates: [], failures: outcome.failures, traces: [...outcome.traces, 'declaration-precedence: not narrowed — no contribution'] };
-  },
-  resolveAmbiguity: () => 'clarify',
-};
+    const kept: RankedCandidate[] = [];
+    for (const group of groups.values()) {
+      // Fire only on the DECLARED kind pair (superseder + other whenKinds
+      // kind both present); a same-kind same-tier pair is never dropped.
+      if (group.length >= 2 && group.some((c) => c.termKind === rule.supersededByKind) && group.some(superseded)) {
+        for (const c of group) {
+          if (superseded(c)) dropped = true; // the superseded kind is ineligible
+          else kept.push(c);
+        }
+        continue;
+      }
+      kept.push(...group);
+    }
+    if (!dropped) return undefined; // no rule fired — pre-fix bytes
+    return kept;
+  }
+  return undefined;
+}
 
 // accept_top_ranked — an ambiguity-arm strategy that accepts the top-ranked
 // in-band candidate. Reachable ONLY when the vocabulary DATA names it
@@ -181,7 +266,7 @@ const acceptTopRanked: ResolutionStrategy = {
   resolveAmbiguity: () => 'top',
 };
 
-export function buildStrategyRegistry(): Map<string, ResolutionStrategy> {
+export function buildStrategyRegistry(vocab: ScientistIntentVocabulary = defaultScientistIntentVocabulary()): Map<string, ResolutionStrategy> {
   return new Map<string, ResolutionStrategy>([
     [explicitWells.id, explicitWells],
     [hintSearch.id, hintSearch],
@@ -189,6 +274,6 @@ export function buildStrategyRegistry(): Map<string, ResolutionStrategy> {
     [ontologyResolution.id, ontologyResolution],
     [mintLocal.id, mintLocal],
     [acceptTopRanked.id, acceptTopRanked],
-    [declarationPrecedence.id, declarationPrecedence],
+    ['declaration_precedence', makeDeclarationPrecedence(vocab)],
   ]);
 }

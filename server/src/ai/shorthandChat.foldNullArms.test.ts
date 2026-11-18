@@ -385,7 +385,9 @@ describe('ANSWER-FOLD-NULL-1 — AgentOrchestrator fold-success leg: done line, 
   // in addition to the already-present targetWells. LEG_YAML carries BOTH so the
   // real-orchestrator recompile holds the ORIGINAL 5 cards (4 composition + 1
   // material) — the subject of this fold test — not a 6th volumeUl required-arg
-  // card (no assertion weakening; the 5-card identity below is unchanged).
+  // card: the prompt now STATES the declared volume ("200 uL total") so the
+  // demote adjudication keeps volumeUl instead of stripping it (no assertion
+  // weakening; the 5-card identity below is unchanged).
   const LEG_YAML = `intentId: seed-hepg2-32wells
 actions:
   - action: add_material
@@ -485,7 +487,7 @@ actions:
   }
 
   const RUN_CHAT_REQUEST = {
-    prompt: '50/50 Trypsin-EDTA/DMEM + 10% FBS with 200 HepG2 cells/uL across A1:A3 of the seeding plate',
+    prompt: '50/50 Trypsin-EDTA/DMEM + 10% FBS with 200 HepG2 cells/uL, 200 uL total, across A1:A3 of the seeding plate',
     surface: 'run-workspace' as const,
     forceDraftTool: true,
     context: {

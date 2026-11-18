@@ -1,0 +1,92 @@
+# L2-JOURNEY-NOUN-CREATE-1 (unit nounjourney) — the creation half of the
+# noun-creation journey (canon: test-prompts/creation-journey.md, "Add a noun
+# within a chat in the UI panel"), AUTHORED AS DATA in the journey-document
+# format. A declaration, not code: it changes no behavior. It must survive
+# lintJourneyDocument against the REAL shipped capability catalogue and the
+# REAL work-surface registry.
+#
+# The journey is ONE card. The unresolved material noun of the origin prompt
+# arrives as a staged draft (the parameter is declared unresolved and
+# user-supplied — this document never supplies a value for it). The card
+# offers the three canon alternatives as DECLARED OPTIONS of this one card —
+# not three journeys, not three steps. The single human_in_the_loop step is
+# the card itself: a staged-draft port goes in, and the committed record
+# appears ONLY on the human_task accept port — nothing is written before an
+# accept, and the accept executes an already-admitted capability from the
+# catalogue, never a handler this document invents. The create capabilities
+# are ADMITTED but available_now: false — the executor leg is unresolved
+# below and owned by a later wiring unit.
+journey_id: journey-noun-create
+revision: 1
+authoring_actor:
+  actor_kind: agent
+  actor_id: journey-author
+request_anchor:
+  message_id: creation-journey
+  verbatim_text: "Add 100uL of DMEM to each well.  (DMEM is not yet a locally saved term in this scenario)"
+objective: >
+  create the unresolved material noun named in the origin prompt via one of
+  the three declared paths, and resume the origin prompt at the checkpoint.
+completion_contract:
+  - "the material noun is a committed record minted by the accepted governed write"
+  - "the origin prompt is resumed at the journey checkpoint"
+parameters:
+  - name: material-noun
+    provenance: user-supplied
+    status: unresolved
+steps:
+  - id: choose-creation-path
+    capability_ref: journey.material-create
+    input_ports:
+      - version: v1
+        draft_id: DRAFT-noun-create
+    output_ports: []
+    interaction_mode: human_in_the_loop
+    human_task:
+      decision: "choose how to create the material noun: add it from a vendor or ontology, author it as a local formulation, or create it as a local product or sample"
+      surface: run-design
+      controls:
+        - add-from-vendor-or-ontology
+        - local-formulation
+        - local-product-or-sample
+      selectable_kinds: []
+      completion:
+        kind: governed_write
+        receipt_required: true
+      output_port:
+        version: v1
+        record_id: REC-noun-concept
+        record_type: material
+        receipt_id: RCPT-noun-create
+      on_cancel: keep_journey_active
+      on_defer: keep_journey_active
+alternatives:
+  options:
+    # capability_ref is the ACCEPT'S write, not the search path: every summary
+    # below names journey.material-create as what mints the noun on accept, and
+    # GOVERNED-WRITE-ADMISSION admits each alternative as a landing place for
+    # ONE admitted write (records.create) — never a handler this document invents.
+    - alternative_id: add-from-vendor-or-ontology
+      summary: "add the noun from a vendor or ontology: the person lands on the ingestion surface; the path searches through journey.vendor-web-search and journey.ontology-lookup; the accept mints the noun through journey.material-create"
+      capability_ref: journey.material-create
+      surface: ingestion
+    - alternative_id: local-formulation
+      summary: "author the noun as a local formulation: the person lands on the record-create surface; the accept mints the formulation through journey.material-create"
+      capability_ref: journey.material-create
+      surface: record-create
+    - alternative_id: local-product-or-sample
+      summary: "create the noun as a local product or sample: the person lands on the record-create surface; the accept mints it through journey.material-create"
+      capability_ref: journey.material-create
+      surface: record-create
+  selection_authority: user
+return_contract:
+  checkpoint_ref: cp-journey-noun-create
+  permitted_result_types:
+    - completed
+    - abandoned
+  require_explicit_resume: true
+assumptions:
+  - "the origin prompt's unresolved material noun is carried to the card as a staged draft, never as a committed record"
+unresolved_questions:
+  - "the create capabilities this card admits (journey.material-create, journey.noun-create-from-document) are admitted with available_now: false — the governed-write executor leg is still unresolved and owned by a later wiring unit"
+  - "the canon prompt (creation-journey.md) has no corpus-manifest id, so the request anchor names creation-journey rather than a corpus id"

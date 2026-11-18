@@ -1,6 +1,6 @@
 $schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
 kind: labware-definition
-recordId: lbw-def-generic-96-well-deepwell-plate
+recordId: lbw-def-generic-96-well-deep-plate
 type: labware_definition
 id: 96-well-deepwell-plate
 display_name: Generic 96-Well Deep Well Plate

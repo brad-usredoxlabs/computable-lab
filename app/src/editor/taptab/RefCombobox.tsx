@@ -83,12 +83,22 @@ export function RefCombobox({
   const sources = suggestionPlan?.sources ?? ['local'];
   const searchField = suggestionPlan?.searchField ?? 'tags';
   const useOls = sources.includes('ols');
+  // The resolve spine's in-house local-obo tier is kept only when the
+  // FIELD'S OWN plan declares the source (same data-driven shape as the
+  // 'ols' switch above) — no global default, so other ref fields stay
+  // decoy-free.
+  const includeLocalObo = sources.includes('local-obo');
+  // An ontology-ref field commits a structured ref OBJECT, so the lab-local
+  // vocabulary tier (bare strings) can only ever 422 on save — suppress it for
+  // those fields only, from the plan's own valueShape (same per-field shape as
+  // the switches above). Plans without a valueShape keep the local tier.
+  const offerLocalTier = suggestionPlan?.valueShape !== 'ontology-ref';
 
   // Get local tag suggestions — use the searchField from the plan
   const { suggestions: localResults, loading: localLoading } = useTagSuggestions({
     query,
     field: searchField,
-    enabled: query.length >= 1,
+    enabled: offerLocalTier && query.length >= 1,
   });
 
   // Ontology results come from the resolve() spine (POST /resolve: local OAK →
@@ -103,6 +113,7 @@ export function RefCombobox({
     // Show a wider ranked list (exact/shortest first) — the dropdown scrolls,
     // so the long tail is reachable instead of capped at the default 10.
     maxResults: 40,
+    includeLocalObo,
   });
 
   // Combine results into a single list (headers are NOT included in this array)

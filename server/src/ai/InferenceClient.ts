@@ -94,7 +94,7 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
   // mirroring `requestEnableThinking ?? enableThinking` below). A value absent
   // on BOTH sides stays absent — never an explicit `temperature: undefined`
   // (exactOptionalPropertyTypes is on for the backend).
-  function normalizeRequest(req: CompletionRequest): Record<string, unknown> {
+  function normalizeRequest(req: CompletionRequest, downgradeInfo?: Record<string, unknown>): Record<string, unknown> {
     const { max_tokens, chat_template_kwargs, enableThinking: requestEnableThinking, ...rest } = req;
     const effectiveEnableThinking = requestEnableThinking ?? enableThinking;
     const effectiveTemperature = rest.temperature ?? temperature;
@@ -109,7 +109,10 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
       };
       // Alibaba's Qwen routes cannot force a tool while thinking (often on by default).
       // Preserve thinking and restrict a named choice to that tool; the caller still validates its result.
-      if (/^qwen\//i.test(req.model) && (reasoning?.enabled ?? thinking) !== false) allowAutomaticToolChoice(body);
+      if (/^qwen\//i.test(req.model) && (reasoning?.enabled ?? thinking) !== false && allowAutomaticToolChoice(body)) {
+        console.warn(`[inference] tool_choice downgraded to 'auto' for ${req.model} (qwen-thinking)`);
+        if (downgradeInfo) downgradeInfo.reason = 'qwen-thinking';
+      }
       return body;
     }
 
@@ -140,8 +143,8 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
     return true;
   }
 
-  async function fetchCompletion(request: CompletionRequest, stream: boolean, signal: AbortSignal): Promise<Response> {
-    const body = { ...normalizeRequest(request), ...(stream ? {stream:true,stream_options:{include_usage:true}} : {}) };
+  async function fetchCompletion(request: CompletionRequest, stream: boolean, signal: AbortSignal, downgradeInfo?: Record<string, unknown>): Promise<Response> {
+    const body = { ...normalizeRequest(request, downgradeInfo), ...(stream ? {stream:true,stream_options:{include_usage:true}} : {}) };
     for (let attempt=0; attempt<2; attempt++) {
       const response = await fetch(`${baseUrl}/chat/completions`, {method:'POST',headers,body:JSON.stringify(body),signal});
       if (response.ok) return response;
@@ -150,7 +153,11 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
       // before any generated output or tool execution, without disabling reasoning.
       if (isOpenRouter && attempt===0 && response.status===400 && /tool_choice/i.test(detail)
         && /thinking|reasoning/i.test(detail) && /not support|unsupported|not allowed|cannot|incompatible/i.test(detail)
-        && allowAutomaticToolChoice(body)) continue;
+        && allowAutomaticToolChoice(body)) {
+        console.warn(`[inference] tool_choice downgraded to 'auto' for ${request.model} (provider-400-tool-choice)`);
+        if (downgradeInfo) downgradeInfo.reason = 'provider-400-tool-choice';
+        continue;
+      }
       throw new Error(`Inference error ${response.status}: ${detail}`);
     }
     throw new Error('Inference compatibility retry failed.');
@@ -163,13 +170,21 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
   async function completeOnce(request: CompletionRequest): Promise<CompletionResponse> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const downgradeInfo: Record<string, unknown> = {};
 
     try {
-      const res = await fetchCompletion(request, false, controller.signal);
+      const res = await fetchCompletion(request, false, controller.signal, downgradeInfo);
 
       const response = await res.json() as CompletionResponse & {error?: unknown};
       if(response.error)throw new Error(`Inference response error: ${JSON.stringify(response.error)}`);
-      return normalizeReasoningContent(response);
+      const normalized = normalizeReasoningContent(response);
+      if ('reason' in downgradeInfo) {
+        return {
+          ...normalized,
+          toolChoiceDowngraded: { reason: downgradeInfo.reason as 'qwen-thinking' | 'provider-400-tool-choice', model: request.model },
+        };
+      }
+      return normalized;
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
         throw new Error(`Inference timeout after ${timeoutMs}ms`);
@@ -241,7 +256,9 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
           : null;
 
       try {
-        const res = await fetchCompletion(request, true, controller.signal);
+        // Streaming: log downgrade but do not attach to chunks (no chunk field).
+        const streamDowngradeInfo: Record<string, unknown> = {};
+        const res = await fetchCompletion(request, true, controller.signal, streamDowngradeInfo);
 
         if (!res.body) {
           throw new Error('No response body for streaming');

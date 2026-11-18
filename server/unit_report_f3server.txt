@@ -1,0 +1,45 @@
+L2-SPEC-SHEET-INGEST-1 UNIT f3server Report
+============================================
+
+Task: Make FAIR payload-provenance injection schema-driven instead of hardcoded kind list.
+Unit: f3server of L2-SPEC-SHEET-INGEST-1 (lane 2)
+Worktree: /home/brad/cl-wt/L2-SPECSHEET-doorB1-lane2
+Branch: cl/lane2-specsheet-doorb1-0114
+
+Problem:
+The createRecord handler at RecordHandlers.ts:762 hardcodes a kind list to decide whether
+to inject createdAt/updatedAt/createdBy into payloads. This causes Ajv 422 for schemas
+like labware-definition that have additionalProperties:false and do not declare these fields.
+
+Fix:
+1. RecordHandlers.ts:754-770 — Replaced hardcoded kind checks with schema-driven logic:
+   - New SchemaProvenanceCheck interface and getSchemaProperties option in security
+   - Consults schema properties before injection
+   - Falls back to kind-based checks when getSchemaProperties unavailable (backward compat)
+
+2. RecordHandlers.provenanceInjection.test.ts — New test file with 5 tests:
+   - labware-definition: skips provenance (additionalProperties:false)
+   - material-instance: skips provenance (unevaluatedProperties:false)
+   - aliquot: skips provenance (unevaluatedProperties:false)
+   - event-graph: partial injection (declares createdAt/updatedAt, not createdBy)
+   - protocol: full injection (additionalProperties:true)
+
+Changed files:
+  server/src/api/handlers/L2-SPEC-SHEET-INGEST-1-f3server-report.md
+  server/src/api/handlers/RecordHandlers.provenanceInjection.test.ts
+  server/src/api/handlers/RecordHandlers.ts
+
+Commits:
+7f063634 L2-SPEC-SHEET-INGEST-1 f3server: fix test assertions to read result.record
+cce7d213 L2-SPEC-SHEET-INGEST-1 f3server: SchemaProvenanceCheck interface and getSchemaProperties
+578e85b2 L2-SPEC-SHEET-INGEST-1 f3server: implementation report
+aeb66ba3 L2-SPEC-SHEET-INGEST-1 f3server: schema-driven payload provenance injection
+15234f21 L2-SPEC-SHEET-INGEST-1 f3server: schema-driven provenance injection test
+
+
+Verification:
+- Provenance injection tests: 5/5 green
+- Existing handler tests: RecordHandlers.writeGates.test.ts green
+- Typecheck: exit 0
+
+L2-SPEC-SHEET-INGEST-1-f3server UNIT f3server DONE 7f0636345e03956d64c8eb553090d19278f201ac

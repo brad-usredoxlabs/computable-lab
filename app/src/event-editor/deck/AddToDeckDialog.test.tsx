@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { AddToDeckDialog } from './AddToDeckDialog'
 import type { Labware } from '../../types/labware'
 
@@ -8,6 +9,9 @@ const createFromVendorExa = vi.hoisted(() => vi.fn())
 const searchLabwareDefinitions = vi.hoisted(() => vi.fn())
 const searchRecords = vi.hoisted(() => vi.fn())
 const resolve = vi.hoisted(() => vi.fn())
+// pickerdoor: the door must be NAVIGATION ONLY — this spy proves the dialog
+// never mints anything by opening the door (zero POST /records).
+const createRecord = vi.hoisted(() => vi.fn())
 
 vi.mock('../../shared/api/client', () => ({
   apiClient: {
@@ -16,6 +20,7 @@ vi.mock('../../shared/api/client', () => ({
     searchLabwareDefinitions,
     searchRecords,
     resolve,
+    createRecord,
   },
 }))
 
@@ -29,14 +34,18 @@ function openDialog(props: Partial<{ surfaceKind: 'slot' | 'lawn' }> = {}): {
   container: HTMLElement
 } {
   const holder = { labware: null as Labware | null }
+  // pickerdoor: the dialog navigates (useNavigate) on door click — every render
+  // lives inside a router (App.test.tsx / App.url.test.tsx MemoryRouter idiom).
   const view = render(
-    <AddToDeckDialog
-      open
-      contextLabel="Bench 1"
-      surfaceKind={props.surfaceKind ?? 'lawn'}
-      onClose={() => {}}
-      onPick={(labware) => { holder.labware = labware }}
-    />,
+    <MemoryRouter initialEntries={['/runs/RUN-1/events']}>
+      <AddToDeckDialog
+        open
+        contextLabel="Bench 1"
+        surfaceKind={props.surfaceKind ?? 'lawn'}
+        onClose={() => {}}
+        onPick={(labware) => { holder.labware = labware }}
+      />
+    </MemoryRouter>,
   )
   return { picked: () => holder.labware, container: view.container }
 }
@@ -287,5 +296,191 @@ describe('AddToDeckDialog', () => {
     openDialog({ surfaceKind: 'lawn' })
     fireEvent.click(screen.getByRole('button', { name: /^Labware$/i }))
     expect(screen.queryByRole('button', { name: /definition-driven/i })).toBeNull()
+  })
+
+  it('a server-marked non-offerable hit is a labelled non-bindable line, never a button (dialogconsume)', async () => {
+    // The server's offerability decision (unit offerfilter) must be CONSUMED here:
+    // `offerable: false` never becomes a selectable row — it is one clearly-
+    // labelled non-bindable line carrying the server's reason.
+    searchLabwareDefinitions.mockResolvedValue({
+      hits: [
+        { recordId: 'LBW-STORED-96', label: 'Stored 96 Well Plate', kind: 'labware-definition', offerable: true },
+        {
+          recordId: 'LBW-REGISTRY-ONLY',
+          label: 'Registry Only Deep Well Plate',
+          kind: 'labware-definition',
+          offerable: false,
+          offer_reason: 'registry entry with no record in the lab store (not lab stock)',
+        },
+      ],
+      total: 2,
+    })
+
+    const { container } = openDialog({ surfaceKind: 'lawn' })
+    fireEvent.click(screen.getByRole('button', { name: /^Labware$/i }))
+    fireEvent.change(screen.getByPlaceholderText(/Search plates \/ labware/), { target: { value: 'plate' } })
+
+    // Store-backed hit: still a selectable row.
+    const storedRow = await screen.findByRole('button', { name: /Stored 96 Well Plate/i })
+    expect(storedRow.textContent).toContain('LAB')
+
+    // Registry-only hit: NOT a button — a clickable row would present a
+    // catalogue reference as this lab's stock (the prompt-1 entry-state defect).
+    expect(screen.queryByRole('button', { name: /Registry Only/i })).toBeNull()
+
+    // …but the named reference is still VISIBLE (never silently deleted) as a
+    // non-bindable line with the model's prefix and the server's stated reason.
+    const dialogEl = container.querySelector('.ee-dialog') as HTMLElement
+    expect(screen.getByText(/Not in this lab's stock: Registry Only Deep Well Plate/i)).toBeTruthy()
+    expect(screen.getByText(/registry entry with no record in the lab store \(not lab stock\)/i)).toBeTruthy()
+    // That line is a non-interactive span (never a <button> or vendor-row).
+    const line = dialogEl.querySelector('.ee-dialog__nonbindable')
+    expect(line).toBeTruthy()
+    expect(line!.tagName).toBe('SPAN')
+    expect(line!.textContent).toContain("Not in this lab's stock")
+    // The body shows the line, not the empty state.
+    expect(container.querySelector('.ee-dialog__empty')).toBeNull()
+
+    // With the non-offerable hit alone there is nothing bindable: even after
+    // selecting the stored row the dialog must not offer a second selectable;
+    // with NO selection "Add to deck" stays disabled.
+    expect(screen.getByRole('button', { name: /^Add to deck$/i })).toBeTruthy()
+    const addBtn = screen.getByRole('button', { name: /^Add to deck$/i }) as HTMLButtonElement
+    expect(addBtn.disabled).toBe(true)
+    // Selecting the stored row still enables placement (lab tier not emptied).
+    fireEvent.click(storedRow)
+    expect((addBtn as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('offerable-true and marker-absent hits both stay choosable (absent fails OPEN, not false)', async () => {
+    // Pre-marker wire shape: a hit with NO `offerable` field must stay choosable.
+    // `if (!hit.offerable) skip` would silently empty the lab tier.
+    searchLabwareDefinitions.mockResolvedValue({
+      hits: [
+        { recordId: 'LBW-STORED-A', label: 'Stored Plate A', kind: 'labware-definition', offerable: true },
+        { recordId: 'LBW-LEGACY-NO-MARKER', label: 'Legacy Plate B', kind: 'labware-definition' },
+      ],
+      total: 2,
+    })
+
+    const { container } = openDialog({ surfaceKind: 'lawn' })
+    fireEvent.click(screen.getByRole('button', { name: /^Labware$/i }))
+    fireEvent.change(screen.getByPlaceholderText(/Search plates \/ labware/), { target: { value: 'plate' } })
+
+    const rowA = await screen.findByRole('button', { name: /Stored Plate A/i })
+    const rowB = await screen.findByRole('button', { name: /Legacy Plate B/i })
+    expect(rowA.textContent).toContain('LAB')
+    expect(rowB.textContent).toContain('LAB')
+    expect(container.querySelectorAll('.ee-dialog__nonbindable').length).toBe(0)
+    // Absent ≠ false: selecting the marker-absent row enables "Add to deck".
+    const addBtn = screen.getByRole('button', { name: /^Add to deck$/i }) as HTMLButtonElement
+    expect(addBtn.disabled).toBe(true)
+    fireEvent.click(rowB)
+    expect((addBtn as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  // ---- pickerdoor: a missing type is a DECLARED absence with a door (§2.15).
+  it('empty Plates result agrees in number and offers a create door naming the query', async () => {
+    const { container } = openDialog()
+    fireEvent.change(screen.getByPlaceholderText(/Search plates/), { target: { value: 'A58941' } })
+
+    // The corrected copy: "plates" is plural — NOT "No plates matches".
+    await screen.findByText('No plates match "A58941".')
+    // And the create door row names the user's own words; the body holds no
+    // selectable vendor row and no non-bindable line.
+    expect(screen.getByRole('button', { name: /^Create "A58941"…$/ })).toBeTruthy()
+    expect(container.querySelectorAll('.ee-dialog__vendor-row').length).toBe(0)
+    expect(container.querySelectorAll('.ee-dialog__nonbindable').length).toBe(0)
+  })
+
+  it('clicking the create door navigates to /lab/labware/new?prefillName=A58941, closes, and writes nothing', async () => {
+    const onClose = vi.fn()
+    // MemoryRouter history is in-memory (window.location is untouched), so the
+    // location is read through a useLocation probe in the SAME router.
+    const holder: { location: { pathname: string; search: string } } = {
+      location: { pathname: '/', search: '' },
+    }
+    function LocationProbe() {
+      const location = useLocation()
+      holder.location = location
+      return null
+    }
+    render(
+      <MemoryRouter initialEntries={['/runs/RUN-1/events']}>
+        <LocationProbe />
+        <AddToDeckDialog
+          open
+          contextLabel="Bench 1"
+          surfaceKind="lawn"
+          onClose={onClose}
+          onPick={() => {}}
+        />
+      </MemoryRouter>,
+    )
+    fireEvent.change(screen.getByPlaceholderText(/Search plates/), { target: { value: 'A58941' } })
+    const door = await screen.findByRole('button', { name: /^Create "A58941"…$/ })
+    fireEvent.click(door)
+
+    // The door lands on the REAL create route (App.tsx:169) with the
+    // prefillName param that LabLabwareNewPage.tsx:72 actually reads.
+    await waitFor(() => expect(holder.location.pathname).toBe('/lab/labware/new'))
+    expect(holder.location.search).toBe('?prefillName=A58941')
+    // …and it closes the dialog — opening the door is not a second surface.
+    expect(onClose).toHaveBeenCalledTimes(1)
+    // Navigation only: opening a door mints NOTHING (zero POST /records).
+    expect(createRecord).not.toHaveBeenCalled()
+    cleanup()
+  })
+
+  it('an empty query renders no create door (nothing to name — never invent a type)', () => {
+    const { container } = openDialog()
+    // Resting Plates state: catalog rows fill the body — no empty state, no
+    // door (a blank query has nothing to name).
+    expect(container.querySelector('.ee-dialog__empty')).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Create / })).toBeNull()
+  })
+
+  it('the Equipment tab offers no create door (its create path is not this unit)', async () => {
+    searchVendorExa.mockResolvedValue({ configured: true, query: 'a58941', items: [] })
+    openDialog()
+    fireEvent.click(screen.getByRole('button', { name: /^Equipment$/i }))
+    fireEvent.change(screen.getByPlaceholderText(/Search equipment/), { target: { value: 'A58941' } })
+
+    await screen.findByText('No equipment matches "A58941".')
+    expect(screen.queryByRole('button', { name: /^Create / })).toBeNull()
+    expect(createRecord).not.toHaveBeenCalled()
+  })
+
+  it('a non-offerable hit keeps its one non-bindable line, no door, and never enters selection', async () => {
+    searchLabwareDefinitions.mockResolvedValue({
+      hits: [
+        {
+          recordId: 'LBW-REGISTRY-A58941',
+          label: 'Registry Thermo Imaging Plate A58941',
+          kind: 'labware-definition',
+          offerable: false,
+          offer_reason: 'registry entry with no record in the lab store (not lab stock)',
+        },
+      ],
+      total: 1,
+    })
+    const { container } = openDialog()
+    fireEvent.change(screen.getByPlaceholderText(/Search plates/), { target: { value: 'A58941' } })
+
+    // dialogconsume behaviour survives: ONE labelled, non-interactive line
+    // carrying the server's reason — never a button.
+    await screen.findByText(/Not in this lab's stock: Registry Thermo Imaging Plate A58941/i)
+    expect(screen.queryByRole('button', { name: /Registry Thermo/i })).toBeNull()
+    expect(screen.getByText(/registry entry with no record in the lab store \(not lab stock\)/i)).toBeTruthy()
+    const line = container.querySelector('.ee-dialog__nonbindable')
+    expect(line).toBeTruthy()
+    expect(line!.tagName).toBe('SPAN')
+    expect(line!.getAttribute('aria-disabled')).toBe('true')
+    // A named absence is a DECLARED absence, not an empty result: no door,
+    // no empty-state copy, and the line can never be selected.
+    expect(container.querySelector('.ee-dialog__empty')).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Create / })).toBeNull()
+    expect(container.querySelectorAll('.ee-dialog__vendor-row--selected').length).toBe(0)
+    expect(createRecord).not.toHaveBeenCalled()
   })
 })

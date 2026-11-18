@@ -33,9 +33,11 @@ function props(def: { function: { parameters: unknown } }) {
 }
 
 describe('the create_record intent', () => {
-  it('is one of exactly three intents, on the single forced tool', () => {
+  it('carries create_record on the single forced tool, alongside the existing intents', () => {
     const intent = props(AGENT_INTENT_TOOL_DEF).intent as { enum: string[] };
-    expect(intent.enum).toEqual(['event_graph', 'deck_layout', 'create_record']);
+    expect(intent.enum).toContain('create_record');
+    // The original emission intents are still present — create_record joins them.
+    expect(intent.enum).toEqual(expect.arrayContaining(['event_graph', 'deck_layout']));
     // Still ONE tool: tool_choice forces it, so the model cannot choose a tool at all.
     expect(AGENT_INTENT_TOOL_DEF.function.name).toBe('agent_intent');
   });
@@ -229,6 +231,243 @@ describe('the orchestrator hands creations to the client', () => {
     });
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/requires at least one entry/i);
+  });
+
+  it('L2-P1B-PRODUCT-IDENTITY-1: REFUSES a labware create_record described in the user\'s own words (no generic preview proposal)', async () => {
+    vi.spyOn(runChatbotCompileModule, 'runChatbotCompile').mockResolvedValue({
+      events: [],
+      labwareAdditions: [],
+      unresolvedRefs: [],
+      diagnostics: [{ severity: 'error', code: 'CONFIG_MISSING', message: 'no extractor', pass_id: 'extract_entities' }],
+      terminalArtifacts: { events: [], directives: [], gaps: [] },
+      outcome: 'error',
+    });
+    const completeStream = vi.fn(async function* (_request: CompletionRequest) {
+      yield {
+        id: 'resp-create-labware',
+        choices: [{
+          index: 0,
+          delta: {
+            role: 'assistant',
+            tool_calls: [{
+              index: 0,
+              id: 'call-labware',
+              type: 'function',
+              function: {
+                name: 'agent_intent',
+                arguments: JSON.stringify({
+                  intent: 'create_record',
+                  records: [{
+                    kind: 'labware',
+                    name: 'Thermo Optical-Quality Imaging Plate',
+                    labwareType: 'plate',
+                    format: { rows: 16, cols: 24, wellCount: 384 },
+                    source: 'user-description',
+                  }],
+                }),
+              },
+            }],
+          },
+          finish_reason: 'tool_calls',
+        }],
+      };
+    });
+    const orchestrator = createAgentOrchestrator(
+      { complete: vi.fn(), completeStream },
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2, draftFlowMode: 'preflight-llm' },
+    );
+    const result = await orchestrator.run({
+      prompt: 'Place a Thermo Optical-Quality Imaging Plate, 384-well, black-walled, clear bottom (catalog number A58941) on the deck.',
+      forceDraftTool: true,
+      context: { labwares: [], eventSummary: '', vocabPackId: 'liquid-handling/v1', availableVerbs: [] },
+    });
+    // The emission REFUSES: a labware the user described is a qualified vendor
+    // product, so the chat must not answer with a generic preview proposal.
+    expect(result.success).toBe(false);
+    // No generic preview proposal is emitted for that shape.
+    expect(result.recordCreations ?? []).toEqual([]);
+    expect(result.events ?? []).toEqual([]);
+    // The error names the next step: identify/create the specific product.
+    const err = String(result.error);
+    expect(err).toMatch(/vendor product|product/i);
+    expect(err).toMatch(/new product|labware/i);
+  });
+
+  it('L2-P1B-PRODUCT-IDENTITY-1 u2d1fix E1: REFUSES a labware create_record with NO source (no generic preview proposal)', async () => {
+    vi.spyOn(runChatbotCompileModule, 'runChatbotCompile').mockResolvedValue({
+      events: [],
+      labwareAdditions: [],
+      unresolvedRefs: [],
+      diagnostics: [{ severity: 'error', code: 'CONFIG_MISSING', message: 'no extractor', pass_id: 'extract_entities' }],
+      terminalArtifacts: { events: [], directives: [], gaps: [] },
+      outcome: 'error',
+    });
+    const completeStream = vi.fn(async function* (_request: CompletionRequest) {
+      yield {
+        id: 'resp-create-labware-nosource',
+        choices: [{
+          index: 0,
+          delta: {
+            role: 'assistant',
+            tool_calls: [{
+              index: 0,
+              id: 'call-labware-nosource',
+              type: 'function',
+              function: {
+                name: 'agent_intent',
+                arguments: JSON.stringify({
+                  intent: 'create_record',
+                  records: [{
+                    kind: 'labware',
+                    name: 'Thermo Optical-Quality Imaging Plate A58941',
+                    labwareType: 'plate',
+                    format: { rows: 16, cols: 24, wellCount: 384 },
+                  }],
+                }),
+              },
+            }],
+          },
+          finish_reason: 'tool_calls',
+        }],
+      };
+    });
+    const orchestrator = createAgentOrchestrator(
+      { complete: vi.fn(), completeStream },
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2, draftFlowMode: 'preflight-llm' },
+    );
+    const result = await orchestrator.run({
+      prompt: 'Place a Thermo Optical-Quality Imaging Plate, 384-well, black-walled, clear bottom (catalog number A58941) on the deck.',
+      forceDraftTool: true,
+      context: { labwares: [], eventSummary: '', vocabPackId: 'liquid-handling/v1', availableVerbs: [] },
+    });
+    // `source` is optional in the tool schema — an omitted attribution must NOT
+    // silently mean "answer with a generic": it is a qualified vendor product too.
+    expect(result.success).toBe(false);
+    expect(result.recordCreations ?? []).toEqual([]);
+    expect(result.events ?? []).toEqual([]);
+    const err = String(result.error);
+    expect(err).toMatch(/vendor product|product/i);
+    expect(err).toMatch(/new product|labware/i);
+  });
+
+  it('L2-P1B-PRODUCT-IDENTITY-1 u2d1fix E2: REFUSES a labware create_record sourced to an exa url (no generic preview proposal)', async () => {
+    vi.spyOn(runChatbotCompileModule, 'runChatbotCompile').mockResolvedValue({
+      events: [],
+      labwareAdditions: [],
+      unresolvedRefs: [],
+      diagnostics: [{ severity: 'error', code: 'CONFIG_MISSING', message: 'no extractor', pass_id: 'extract_entities' }],
+      terminalArtifacts: { events: [], directives: [], gaps: [] },
+      outcome: 'error',
+    });
+    const completeStream = vi.fn(async function* (_request: CompletionRequest) {
+      yield {
+        id: 'resp-create-labware-exa',
+        choices: [{
+          index: 0,
+          delta: {
+            role: 'assistant',
+            tool_calls: [{
+              index: 0,
+              id: 'call-labware-exa',
+              type: 'function',
+              function: {
+                name: 'agent_intent',
+                arguments: JSON.stringify({
+                  intent: 'create_record',
+                  records: [{
+                    kind: 'labware',
+                    name: 'Thermo Optical-Quality Imaging Plate A58941',
+                    labwareType: 'plate',
+                    format: { rows: 16, cols: 24, wellCount: 384 },
+                    source: 'exa:https://example.invalid/a58941',
+                  }],
+                }),
+              },
+            }],
+          },
+          finish_reason: 'tool_calls',
+        }],
+      };
+    });
+    const orchestrator = createAgentOrchestrator(
+      { complete: vi.fn(), completeStream },
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2, draftFlowMode: 'preflight-llm' },
+    );
+    const result = await orchestrator.run({
+      prompt: 'Place a Thermo Optical-Quality Imaging Plate, 384-well, black-walled, clear bottom (catalog number A58941) on the deck.',
+      forceDraftTool: true,
+      context: { labwares: [], eventSummary: '', vocabPackId: 'liquid-handling/v1', availableVerbs: [] },
+    });
+    // An `exa:<url>` attribution grounds a specification; it does not identify an
+    // existing product record — the product must be its own record first.
+    expect(result.success).toBe(false);
+    expect(result.recordCreations ?? []).toEqual([]);
+    expect(result.events ?? []).toEqual([]);
+    const err = String(result.error);
+    expect(err).toMatch(/vendor product|product/i);
+    expect(err).toMatch(/new product|labware/i);
+  });
+
+  it('L2-P1B-PRODUCT-IDENTITY-1: still hands a product-IDENTIFIED labware (source record:<id>) to the client', async () => {
+    vi.spyOn(runChatbotCompileModule, 'runChatbotCompile').mockResolvedValue({
+      events: [],
+      labwareAdditions: [],
+      unresolvedRefs: [],
+      diagnostics: [{ severity: 'error', code: 'CONFIG_MISSING', message: 'no extractor', pass_id: 'extract_entities' }],
+      terminalArtifacts: { events: [], directives: [], gaps: [] },
+      outcome: 'error',
+    });
+    const completeStream = vi.fn(async function* (_request: CompletionRequest) {
+      yield {
+        id: 'resp-create-labware-identified',
+        choices: [{
+          index: 0,
+          delta: {
+            role: 'assistant',
+            tool_calls: [{
+              index: 0,
+              id: 'call-labware-identified',
+              type: 'function',
+              function: {
+                name: 'agent_intent',
+                arguments: JSON.stringify({
+                  intent: 'create_record',
+                  records: [{
+                    kind: 'labware',
+                    name: 'Thermo Optical-Quality Imaging Plate',
+                    source: 'record:VPR-THERMO-A58941',
+                  }],
+                }),
+              },
+            }],
+          },
+          finish_reason: 'tool_calls',
+        }],
+      };
+    });
+    const orchestrator = createAgentOrchestrator(
+      { complete: vi.fn(), completeStream },
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2, draftFlowMode: 'preflight-llm' },
+    );
+    const result = await orchestrator.run({
+      prompt: 'create the Thermo plate product',
+      forceDraftTool: true,
+      context: { labwares: [], eventSummary: '', vocabPackId: 'liquid-handling/v1', availableVerbs: [] },
+    });
+    // Product-identified (a resolved product record is named): NOT a bare
+    // user-description, so the existing behaviour is preserved.
+    expect(result.success).toBe(true);
+    expect(result.recordCreations).toEqual([
+      { kind: 'labware', name: 'Thermo Optical-Quality Imaging Plate', source: 'record:VPR-THERMO-A58941' },
+    ]);
   });
 });
 

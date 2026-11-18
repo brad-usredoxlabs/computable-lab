@@ -30,6 +30,10 @@ import { ParameterAnswerInput } from '../event-editor/right-pane/ai/ParameterAns
 import { ClarifyAssumedChip } from './ClarifyAssumedChip'
 import { ClarifyWellTargetSlot } from './ClarifyWellTargetSlot'
 import { ChatClarificationCard } from './ChatClarificationCard'
+// L2-NOUN-CREATION-JOURNEY-1 (u1journey c2 FIX 2): the single-fact absence
+// arm renders the DECLARED journey doors with the SAME href/label builders
+// the grouped card uses — one door vocabulary, never a second copy.
+import { journeyDoorHref, journeyDoorLabel, useJourneyDoorSurfaces } from './journeyDoorHref'
 import { ANSWER_KIND_WORD } from '../shared/taptab/slashMenu/tokens'
 import './ChatLog.css'
 
@@ -84,6 +88,17 @@ export interface ChatLogProps {
    * and no non-deck caller breaks.
    */
   selectedWells?: readonly string[]
+  /**
+   * L2-PROSE-SHORTHAND-SALVAGE-1 (browser-gate D2, surface half): the
+   * recovery marker for the turn on screen — the server-named driver that
+   * salvaged a draft from the model's text (useAiChat.statusRecoveredFrom,
+   * relayed opaquely). Rendered ONLY as the inspection attribute
+   * `data-recovered-from` on the existing root <aside> — ZERO visible text,
+   * no new element, no layout change. Absent on a clean turn (an absent key,
+   * never `undefined`): key-absent discipline, so the attribute is either a
+   * driver string or not present at all.
+   */
+  recoveredFrom?: { driver: string }
 }
 
 /** Shape the exported lane-2 answer helper expects, built from the message's clarification. */
@@ -227,12 +242,22 @@ export function clarificationBubbleText(content: string): string {
   return clarificationAnsweredText(content)
 }
 
-export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend, onCancel, onReview, onClarificationPick, onClarificationSubmit, selectedWells }: ChatLogProps) {
+export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend, onCancel, onReview, onClarificationPick, onClarificationSubmit, selectedWells, recoveredFrom }: ChatLogProps) {
   const scrollerRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const followingRef = useRef(true)
   const viewportRef = useRef({ width: 0, height: 0 })
   const [following, setFollowing] = useState(true)
+  // The DECLARED surface registry — the authority for a journey door's route.
+  // Loaded only when a fact actually carries a declared journey door;
+  // undefined until loaded (the href builder falls back to the documented route).
+  const surfaceRegistry = useJourneyDoorSurfaces(
+    messages.some((message) =>
+      (message.clarificationRequests ?? []).some(
+        (request) => request.journey !== undefined && request.journey.doors.length > 0,
+      ),
+    ),
+  )
   const latestUserId = [...messages].reverse().find(message => message.role === 'user')?.id
   const previousUserId = useRef(latestUserId)
 
@@ -289,7 +314,7 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
    * produce a bordered box containing only an empty <ol> — on a phone that
    * reads as a mangled grey rectangle under the question.
    */
-  function renderClarificationBlock(message: ChatMessage) {
+  function renderClarificationBlock(message: ChatMessage, restoredAnswerable: boolean) {
     const clarification = message.clarification!
     // L2-SUITE-A-uifix3 [D3-CHROME] (regate-5 defect 3, chrome slice): a
     // THREAD-RESTORED message (the useAiChat getThread hydrate marks it
@@ -304,7 +329,15 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
     // (`<p>{message.content}</p>`), so "render neither" preserves the record
     // of what was asked while dropping the dead chrome. Live turns carry no
     // `restored` flag and render byte-unchanged (the controls pin this).
-    if (message.restored) return null
+    // L2-P1-RELOAD-CLARIFIER-1 (tailanswer): the ONE exception — a restored
+    // turn that is UNANSWERED (the isClarificationAnswered adjacency rule)
+    // and is the LAST message is the live open question rehydrated on
+    // reload (pending intent is restored on reload, context §2.6 — and
+    // never a record): it keeps its answer surface so the person can still
+    // answer it. Every other restored turn (historical, or already
+    // answered) stays fully suppressed. Rendering is pure — no append, no
+    // id, no server call.
+    if (message.restored && !restoredAnswerable) return null
     const options = clarification.options ?? []
     const request = clarificationRequest(clarification)
     const promptDiffers = message.content !== clarification.prompt
@@ -382,6 +415,8 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
     const hasPicker = requestHasPicker(request)
     const promptAlreadyShown = shownPrompts.has(request.prompt)
     if (!promptAlreadyShown) shownPrompts.add(request.prompt)
+    // The DECLARED journey the fact carries (unbound material noun only).
+    const journey = request.journey
     return <div className="chat-log-clarification" key={`req-${messageId}-${request.id}`} data-testid={`chat-log-request-${request.id}`}>
       {!promptAlreadyShown && <p>{request.prompt}</p>}
       {/* Exactly ONE answer surface per request (the grouped card's law,
@@ -407,6 +442,63 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
           onAnswer={(answer) => onClarificationPick(clarificationAnswerPrompt(answer, request), answer, request)}
           selectedWells={selectedWells}
         />
+      ) : request.absence != null && options.length === 0 ? (
+        // L2-P1-ABSENCE-SINGLE-ARM-1 (u1singlearm) — RULING 1 (the decision
+        // ABSENCE-RENDERING-AND-PROBE-TIERS-l2-20261114): the absence branch
+        // mounts when ANY request carries an absence payload, independent of
+        // request count — the single-request path gains the absence statement
+        // plus the create affordance (the grouped card at :604 is the only
+        // other absence renderer and mounts only for length > 1). Tested
+        // BEFORE the options/picker arms so a `/l` menuProvider can never
+        // shadow it (the measured defect: the picker swallowed the payload).
+        // The markup MIRRORS the card's arm (ChatClarificationCard.tsx:214-224
+        // — same classes, same testid, same href shape); it needs no
+        // onClarificationPick gate: the create affordance is a LINK, not a
+        // pick, and the card mounts it the same way. options.length === 0
+        // mirrors the card (an absence WITH options offers the options).
+        <div className="chat-clarification-card__absent">
+          <p className="chat-clarification-card__absent-reason">{request.absence.reason}</p>
+          {/* L2-NOUN-CREATION-JOURNEY-1 (u1journey c2 FIX 2): an unbound
+              MATERIAL noun carries the DECLARED journey on the fact. This
+              single-fact arm must render the SAME doors the grouped card
+              renders (ChatClarificationCard.tsx:230-249) — before this fix it
+              ignored `request.journey` entirely and offered the labware
+              create link for a material noun. A labware miss (no journey)
+              keeps the single create anchor byte-identically. */}
+          {journey !== undefined && journey.doors.length > 0 ? (
+            <ul className="chat-clarification-card__journey-doors" data-testid="chat-clarification-journey-doors">
+              {journey.doors.map((door) => {
+                const href = journeyDoorHref(
+                  { ...door, candidateLabel: door.candidateLabel || journey.candidateLabel },
+                  journey,
+                  surfaceRegistry,
+                )
+                return (
+                <li key={door.id}>
+                  <a
+                    className="chat-clarification-card__journey-door"
+                    data-testid={`chat-clarification-door-${door.id}`}
+                    data-surface={door.surface}
+                    {...(href !== null ? { href } : {})}
+                    aria-disabled={href === null ? true : undefined}
+                    title={href !== null ? door.summary : `${door.summary} (no declared route is available)`}
+                  >
+                    {journeyDoorLabel(door.id)}
+                  </a>
+                </li>
+                )
+              })}
+            </ul>
+          ) : (
+            <a
+              className="chat-clarification-card__absent-create"
+              data-testid="chat-clarification-absent-create"
+              href={`/lab/labware/new?prefillName=${encodeURIComponent(request.absence.mention)}`}
+            >
+              Create this record
+            </a>
+          )}
+        </div>
       ) : options.length > 0 && onClarificationPick ? (
         <ol className="chat-log-clarification-options">
           {options.map((option, optionIndex) => {
@@ -436,7 +528,12 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
     </div>
   }
 
-  return <aside className="sequences-page sequence-chat">
+  // L2-PROSE-SHORTHAND-SALVAGE-1 (gate D2 surface half): the recovery marker
+  // rides the EXISTING root element as an inspection attribute only — the
+  // conditional spread keeps the key ABSENT on a clean turn (never an empty
+  // attribute, never `undefined`), the same discipline the sibling lineage
+  // uses at MessageLog.tsx:225 / useChatThread.ts:239.
+  return <aside className="sequences-page sequence-chat" {...(recoveredFrom ? { 'data-recovered-from': recoveredFrom.driver } : {})}>
     <h2>AI Chat</h2>
     <p className="sequence-hint">Ask for an edit, a draft or a navigation. Review proposed actions before applying them.</p>
     <div className="sequence-chat-messages" ref={scrollerRef} onScroll={onScroll} role="log" aria-label="Conversation" aria-live="polite" tabIndex={0}>
@@ -459,6 +556,13 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
           // the arms below render byte-unchanged.
           const hasClarification = Boolean(message.clarification) || Boolean(message.clarificationRequests?.length)
           const answered = hasClarification && isClarificationAnswered(messages, index)
+          // L2-P1-RELOAD-CLARIFIER-1 (tailanswer): the same adjacency rule
+          // that names a restored turn ANSWERED also names the ONE restored
+          // turn that is still open — unanswered AND the last message. Only
+          // that one keeps its answer surface (renderClarificationBlock
+          // below); a restored turn followed by another message is
+          // historical and stays input-less (the D3-CHROME pin).
+          const restoredAnswerable = Boolean(message.restored) && !answered && index === messages.length - 1
           const answerMessage = answered ? messages.slice(index + 1).find((m) => m.role === 'user') : undefined
           // BGATE-FIX D3 (render-side dedupe — see renderTypedClarification):
           // the typed cards print a prompt only when it is NOT already on
@@ -569,7 +673,7 @@ export function ChatLog({ messages, isStreaming, prompt, onPromptChange, onSend,
             </div>
           ) : (
             <>
-              {message.clarification && !(message.clarificationRequests?.length) && renderClarificationBlock(message)}
+              {message.clarification && !(message.clarificationRequests?.length) && renderClarificationBlock(message, restoredAnswerable)}
               {message.clarificationRequests && message.clarificationRequests.length > 1 && onClarificationSubmit ? (
                 // L2-CLARIFY-CARD-1 (P4): ONE card per sentence (one slot per
                 // fact, one Submit, one answered row). The single-request and

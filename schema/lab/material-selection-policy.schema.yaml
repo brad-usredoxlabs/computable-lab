@@ -1,0 +1,58 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/material-selection-policy.schema.yaml"
+title: "Material Selection Policy"
+description: >
+  Declarative lab policy for material selection: declares whether a
+  vendor product is the lab's only/default/alternative choice for a
+  material concept. One record per concept+product pairing. The lab's
+  create flow reads these to pre-select or suppress clarification.
+  `only` means there is nothing to choose (clarification suppressed);
+  `default` means one candidate is pre-selected while others remain offered;
+  `alternative` means the product is a valid but non-default choice.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [kind, recordId, title, material_ref, vendor_product_ref, selection, since]
+
+properties:
+  kind:
+    const: "material-selection-policy"
+
+  recordId:
+    type: string
+    pattern: "^MSPOL-[A-Z0-9][A-Z0-9_-]*$"
+    description: "Stable policy record identifier."
+
+  title:
+    type: string
+    description: "Human-readable title for this selection policy."
+
+  material_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "The material concept this policy governs (ontology ref or record ref)."
+
+  vendor_product_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "The vendor product record this policy selects."
+
+  selection:
+    type: string
+    enum: [only, default, alternative]
+    description: >-
+      Selection mode. 'only' suppresses clarification entirely (nothing
+      to choose). 'default' pre-selects this candidate while offering
+      others. 'alternative' marks this as a valid but non-default choice.
+
+  since:
+    type: string
+    format: date
+    description: "Effective date from which this policy applies (ISO 8601 date)."
+
+  reason:
+    type: string
+    description: >-
+      Human justification for this selection. Required when selection is
+      not 'only' (lint rule material-selection-policy-non-only-requires-reason).

@@ -38,6 +38,7 @@ export const AGENT_ALLOWED_TOOLS = [
   'web_get_contents_exa',
   // Genomics
   'ncbi_gene_search',
+  'ncbi_nucleotide_search',
   'uniprot_search',
   // Tree navigation
   'tree_studies',

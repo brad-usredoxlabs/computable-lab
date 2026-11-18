@@ -1,0 +1,35 @@
+
+ RUN  v1.6.1 /tmp/cl-generic-labware-fix/app
+
+stderr | src/event-editor/deck/deckAdoption.ghostgate.test.ts > u3ghostfix D1 pin (a) — a proposed-creation accept still mints, as on trunk > adopts, mints exactly ONE labware-instance, and persists the created recordId onto the vessel
+[record creation] 96-well plate was created with no stated source — record where its specification came from.
+
+ ❯ src/event-editor/deck/deckAdoption.ghostgate.test.ts  (14 tests | 1 failed) 11ms
+   ❯ src/event-editor/deck/deckAdoption.ghostgate.test.ts > u3ghostfix D1 pin (a) — a proposed-creation accept still mints, as on trunk > adopts, mints exactly ONE labware-instance, and persists the created recordId onto the vessel
+     → expected undefined to be 'LAB-INST-62C1F310' // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/event-editor/deck/deckAdoption.ghostgate.test.ts > u3ghostfix D1 pin (a) — a proposed-creation accept still mints, as on trunk > adopts, mints exactly ONE labware-instance, and persists the created recordId onto the vessel
+AssertionError: expected undefined to be 'LAB-INST-62C1F310' // Object.is equality
+
+- Expected:
+"LAB-INST-62C1F310"
+
++ Received:
+undefined
+
+ ❯ src/event-editor/deck/deckAdoption.ghostgate.test.ts:315:58
+    313|     }
+    314|     expect(persistedArgs.labwares[key].recordId).toBe('LBW-96-WELL-PLA…
+    315|     expect(persistedArgs.labwares[key].instanceRecordId).toBe(ok.insta…
+       |                                                          ^
+    316|     expect(persistedArgs.labwares[key].proposedRecord).toBeUndefined()
+    317|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 13 passed (14)
+   Start at  00:42:18
+   Duration  847ms (transform 116ms, setup 185ms, collect 313ms, tests 11ms, environment 0ms, prepare 223ms)

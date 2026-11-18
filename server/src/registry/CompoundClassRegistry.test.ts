@@ -98,7 +98,7 @@ describe('CompoundClassRegistry', () => {
     expect(entry!.candidates.length).toBe(1);
   });
 
-  it('get("fame-medium-chain") returns the three methyl-ester standards (GC-2 F)', () => {
+  it('get("fame-medium-chain") returns the eight methyl-ester standards (GC-2 F)', () => {
     const registry = getCompoundClassRegistry();
     const entry = registry.get('fame-medium-chain');
 
@@ -109,6 +109,11 @@ describe('CompoundClassRegistry', () => {
       'FAME-LOCAL:methyl-hexanoate-n6',
       'FAME-LOCAL:methyl-octanoate-n8',
       'FAME-LOCAL:methyl-decanoate-n10',
+      'FAME-LOCAL:methyl-myristate-n14',
+      'FAME-LOCAL:methyl-pentadecanoate-n15',
+      'FAME-LOCAL:methyl-palmitate-n16',
+      'FAME-LOCAL:methyl-heptadecanoate-n17',
+      'FAME-LOCAL:methyl-arachidate-n20',
     ]);
     expect(entry!.chebi_ids).toEqual(['CHEBI:77322', 'CHEBI:87432', 'CHEBI:143577']);
   });

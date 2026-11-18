@@ -264,3 +264,41 @@
   color: var(--cl-text-muted, var(--cl-text));
   border-color: var(--cl-border);
 }
+
+/* L2-NOUN-CREATION-JOURNEY-1 (unit u1journey) — the DECLARED creation doors an
+ * unbound material noun offers. One row per alternative_id read from
+ * config/journey/declarations/noun-create.yaml; tokens only (CLAUDE.md CSS
+ * rule), same row discipline as __option so a long declared summary/tooltip
+ * cannot push the card past the bubble. */
+.chat-clarification-card__journey-doors {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.chat-clarification-card__journey-door {
+  box-sizing: border-box;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  display: block;
+  width: 100%;
+  text-align: left;
+  text-decoration: none;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  padding: 4px 6px;
+  color: var(--cl-text);
+  background: var(--cl-bg-elev-1, transparent);
+  cursor: pointer;
+}
+.chat-clarification-card__journey-door:hover {
+  border-color: var(--cl-accent);
+  color: var(--cl-accent);
+}
+.chat-clarification-card__absent-reason {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--cl-text-muted, var(--cl-text));
+}

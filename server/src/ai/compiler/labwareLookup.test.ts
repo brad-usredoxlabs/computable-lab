@@ -7,6 +7,33 @@ import type { RecordStore, RecordFilter } from '../../store/types.js';
 import type { RecordEnvelope } from '../../types/RecordEnvelope.js';
 import { createLabwareLookup } from './labwareLookup.js';
 
+/**
+ * u1restier helper: a fake RecordStore that lists the given labware and
+ * labware-definition envelopes by kind — the two record sets that answer a
+ * labware noun.
+ */
+function seededStore(
+  labwareRecords: RecordEnvelope[],
+  definitionRecords: RecordEnvelope[],
+): RecordStore {
+  const fakeStore: RecordStore = {
+    get: vi.fn(),
+    getByPath: vi.fn(),
+    getWithValidation: vi.fn(),
+    list: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    validate: vi.fn(),
+    lint: vi.fn(),
+    exists: vi.fn(),
+  };
+  vi.mocked(fakeStore.list).mockImplementation(async (filter) =>
+    filter?.kind === 'labware' ? labwareRecords : definitionRecords,
+  );
+  return fakeStore;
+}
+
 describe('createLabwareLookup', () => {
   it('returns empty array for empty hint', async () => {
     const fakeStore: RecordStore = {
@@ -145,7 +172,24 @@ describe('createLabwareLookup', () => {
       },
     ];
 
-    vi.mocked(fakeStore.list).mockResolvedValue(labwareRecords);
+    // The labware-definition record the deck picker offers for the generic
+    // 96-well plate (prompt-1 reuse criterion). Same record data as
+    // records/seed/labware-definition/lbw-def-generic-96-well-plate.yaml.
+    const definitionRecords: RecordEnvelope[] = [
+      {
+        recordId: 'lbw-def-generic-96-well-plate',
+        schemaId: 'https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml',
+        payload: {
+          kind: 'labware-definition',
+          recordId: 'lbw-def-generic-96-well-plate',
+          display_name: 'Generic 96-Well Plate',
+        },
+      },
+    ];
+
+    vi.mocked(fakeStore.list).mockImplementation(async (filter) =>
+      filter?.kind === 'labware-definition' ? definitionRecords : labwareRecords,
+    );
 
     const lookup = createLabwareLookup(fakeStore);
     
@@ -153,13 +197,24 @@ describe('createLabwareLookup', () => {
     const result1 = await lookup('12-well reservoir');
     expect(result1[0].recordId).toBe('lbw-seed-reservoir-12-well');
 
-    // Test 96-well plate alias
+    // u1restier AC1: on the seeded two-set store the DEFINITION record must
+    // come FIRST — rule-ordered by the record's kind, never a per-id pick —
+    // and the legacy seed stays in the list as a ranked entry, not dropped.
     const result2 = await lookup('96-well plate');
-    expect(result2[0].recordId).toBe('lbw-seed-plate-96-flat');
+    expect(result2[0].recordId).toBe('lbw-def-generic-96-well-plate');
+    expect(result2[1].recordId).toBe('lbw-seed-plate-96-flat');
+
+    // u1restier AC2: a hint only a legacy record matches still resolves to
+    // that legacy record; no definition-shaped regression.
+    const result3 = await lookup('generic 384 well plate (seed)');
+    expect(result3[0].recordId).toBe('lbw-seed-plate-384');
+    expect(result3.map((r) => r.recordId)).not.toContain(
+      'lbw-def-generic-96-well-plate',
+    );
 
     // Test whitespace-normalized alias
-    const result3 = await lookup('96 well plate');
-    expect(result3[0].recordId).toBe('lbw-seed-plate-96-flat');
+    const result4 = await lookup('96 well plate');
+    expect(result4[0].recordId).toBe('lbw-def-generic-96-well-plate');
   });
 
   it('matches substring in name', async () => {
@@ -201,10 +256,15 @@ describe('createLabwareLookup', () => {
       },
     ];
 
-    vi.mocked(fakeStore.list).mockResolvedValue(labwareRecords);
+    // u1restier: the mock now mirrors the real store contract — a kind
+    // filter only ever returns records of that kind (a labware-definition
+    // list never returns labware instance records).
+    vi.mocked(fakeStore.list).mockImplementation(async (filter) =>
+      filter?.kind === 'labware' ? labwareRecords : [],
+    );
 
     const lookup = createLabwareLookup(fakeStore);
-    
+
     // Test substring match on "PLATE" - should match both
     const result = await lookup('PLATE');
     expect(result.length).toBe(2);
@@ -295,7 +355,11 @@ describe('createLabwareLookup', () => {
       },
     ];
 
-    vi.mocked(fakeStore.list).mockResolvedValue(labwareRecords);
+    // u1restier: the mock now mirrors the real store contract — a kind
+    // filter only ever returns records of that kind.
+    vi.mocked(fakeStore.list).mockImplementation(async (filter) =>
+      filter?.kind === 'labware' ? labwareRecords : [],
+    );
 
     const lookup = createLabwareLookup(fakeStore);
     const result = await lookup('12-well reservoir');
@@ -308,6 +372,96 @@ describe('createLabwareLookup', () => {
     
     // Substring match should be third
     expect(result[2].recordId).toBe('lbw-substring');
+  });
+
+  it('binds by recordId identity, case-sensitive, for a labware-definition record', async () => {
+    const fakeStore: RecordStore = {
+      get: vi.fn(),
+      getByPath: vi.fn(),
+      getWithValidation: vi.fn(),
+      list: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      validate: vi.fn(),
+      lint: vi.fn(),
+      exists: vi.fn(),
+    };
+
+    const defRecords: RecordEnvelope[] = [
+      {
+        recordId: 'lbw-def-generic-96-well-deep-plate',
+        schemaId: 'https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml',
+        payload: {
+          kind: 'labware-definition',
+          recordId: 'lbw-def-generic-96-well-deep-plate',
+          display_name: 'Generic 96-Well Deep Well Plate',
+        },
+      },
+    ];
+
+    vi.mocked(fakeStore.list).mockImplementation(async (filter) =>
+      filter?.kind === 'labware-definition' ? defRecords : []);
+
+    const lookup = createLabwareLookup(fakeStore);
+
+    // The real recordId binds exactly.
+    const byId = await lookup('lbw-def-generic-96-well-deep-plate');
+    expect(byId).toEqual([
+      { recordId: 'lbw-def-generic-96-well-deep-plate', title: 'Generic 96-Well Deep Well Plate' },
+    ]);
+
+    // Identity is case-sensitive: a wrong-cased id is NOT the record id.
+    expect(await lookup('LBW-DEF-GENERIC-96-WELL-DEEP-PLATE')).toEqual([]);
+
+    // A wrong-slug catalogue id (the vendored-registry-only copy, which no
+    // record holds) does NOT bind — identity, never name or slug.
+    expect(await lookup('lbw-def-generic-96-well-deepwell-plate')).toEqual([]);
+
+    // u1restier: the bare display name now RESOLVES. The scored tier spans
+    // BOTH record sets (labware + labware-definition) and scores the
+    // definition's display_name through the same ladder (exact name = 100),
+    // so a free-text name pre-selects the candidate at the top score. It
+    // does NOT bind identity: identity remains the exact, case-sensitive
+    // recordId (the assertions above), never a name.
+    expect(await lookup('Generic 96-Well Deep Well Plate')).toEqual([
+      { recordId: 'lbw-def-generic-96-well-deep-plate', title: 'Generic 96-Well Deep Well Plate' },
+    ]);
+  });
+
+  it('binds an instance recordId through the labware tier too', async () => {
+    const fakeStore: RecordStore = {
+      get: vi.fn(),
+      getByPath: vi.fn(),
+      getWithValidation: vi.fn(),
+      list: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      validate: vi.fn(),
+      lint: vi.fn(),
+      exists: vi.fn(),
+    };
+
+    const labwareRecords: RecordEnvelope[] = [
+      {
+        recordId: 'LBW-DEEPWELL-A1',
+        schemaId: 'https://computable-lab.com/schema/computable-lab/labware.schema.yaml',
+        payload: {
+          kind: 'labware',
+          recordId: 'LBW-DEEPWELL-A1',
+          name: 'Deepwell plate A1',
+          labwareType: 'plate',
+        },
+      },
+    ];
+
+    vi.mocked(fakeStore.list).mockImplementation(async (filter) =>
+      filter?.kind === 'labware' ? labwareRecords : []);
+
+    const lookup = createLabwareLookup(fakeStore);
+    const result = await lookup('LBW-DEEPWELL-A1');
+    expect(result).toEqual([{ recordId: 'LBW-DEEPWELL-A1', title: 'Deepwell plate A1' }]);
   });
 
   it('handles missing aliases gracefully', async () => {
@@ -345,5 +499,43 @@ describe('createLabwareLookup', () => {
     
     expect(result.length).toBe(1);
     expect(result[0].recordId).toBe('lbw-no-aliases');
+  });
+
+  it('u1restier AC3: same-kind equal-score ties keep BOTH entries, no silent drop', async () => {
+    const labwareRecords: RecordEnvelope[] = [
+      {
+        recordId: 'lbw-seed-plate-96-flat',
+        schemaId: 'https://computable-lab.com/schema/computable-lab/labware.schema.yaml',
+        payload: {
+          kind: 'labware',
+          recordId: 'lbw-seed-plate-96-flat',
+          name: 'Generic 96 Well Plate, Flat Bottom (seed)',
+          labwareType: 'plate',
+          aliases: ['96-well plate'],
+        },
+      },
+      {
+        recordId: 'lbw-seed-plate-96-pcr',
+        schemaId: 'https://computable-lab.com/schema/computable-lab/labware.schema.yaml',
+        payload: {
+          kind: 'labware',
+          recordId: 'lbw-seed-plate-96-pcr',
+          name: 'Generic 96 Well Plate, PCR (seed)',
+          labwareType: 'plate',
+          aliases: ['96-well plate'],
+        },
+      },
+    ];
+
+    const lookup = createLabwareLookup(seededStore(labwareRecords, []));
+    const result = await lookup('96-well plate');
+
+    // Both same-kind candidates at the same top score are returned — a
+    // named ambiguity for the person, never a silent pick — with nothing of
+    // a higher score before them (there is nothing else on this store).
+    expect(result.map((r) => r.recordId)).toEqual([
+      'lbw-seed-plate-96-flat',
+      'lbw-seed-plate-96-pcr',
+    ]);
   });
 });

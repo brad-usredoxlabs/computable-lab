@@ -1,0 +1,86 @@
+# L2-JOURNEY-PORTS-1 (unit u1vocab) — the journey port vocabulary.
+#
+# A journey step's input is a NAMED PORT: a reference of one of six kinds. Two
+# families must never conflate — a CommittedRecordReference names a durable record
+# plus the governed-write receipt that committed it, while a StagedDraftReference
+# names a draft that is NOT a record yet (no receipt, no record id). That is what
+# lets the compiler refuse "the check passed on a surface, not on a committed
+# record".
+#
+# This is VOCABULARY, not a record kind: later legs reference it by $ref. No lint
+# host and no ui spec yet — lint needs a record host (schemaId + a stored record
+# contract), which this item does not create.
+#
+# Every port is CLOSED and REQUIRES a version: a reference without a version is a
+# promise without a subject. MaterialReference's provenance_layer enum is the
+# shipped registry's layer keys (schema/lab/material-profile.registry.yaml,
+# clarification.layers), pinned by test so there is no second authority.
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/journey-port.schema.yaml"
+title: "Journey Port Reference"
+description: >
+  Declared reference types for journey step inputs. The document root is a
+  vocabulary container, not a payload shape: callers validate against
+  #/$defs/<PortName>. Each port is closed over its own fields and requires a
+  version.
+
+type: object
+additionalProperties: false
+
+$defs:
+  SequenceSetReference:
+    type: object
+    additionalProperties: false
+    required: [version, sequence_set_id]
+    properties:
+      version: { type: string, minLength: 1, description: "Version of the sequence set this step pins." }
+      sequence_set_id: { type: string, minLength: 1, description: "Id of the sequence set record this port resolves." }
+
+  AlignmentReference:
+    type: object
+    additionalProperties: false
+    required: [version, alignment_id]
+    properties:
+      version: { type: string, minLength: 1, description: "Version of the alignment this step pins." }
+      alignment_id: { type: string, minLength: 1, description: "Id of the alignment record this port resolves." }
+
+  MaterialReference:
+    type: object
+    additionalProperties: false
+    required: [version, material_id, provenance_layer]
+    properties:
+      version: { type: string, minLength: 1, description: "Version of the material record this step pins." }
+      material_id: { type: string, minLength: 1, description: "Id of the material record this port resolves." }
+      provenance_layer:
+        type: string
+        enum: [material, material-spec, material-instance, aliquot, vendor-product]
+        description: >
+          Provenance layer, using the shipped material-profile registry's
+          clarification.layers keys. Layers must never be collapsed: a prepared
+          solution is not a bare compound, an aliquot is not its preparation.
+
+  LabwareDefinitionReference:
+    type: object
+    additionalProperties: false
+    required: [version, labware_definition_id]
+    properties:
+      version: { type: string, minLength: 1, description: "Version of the labware definition this step pins." }
+      labware_definition_id: { type: string, minLength: 1, description: "Id of a labware DEFINITION (a plate or tip-box model); a physical container is never smuggled in here." }
+
+  CommittedRecordReference:
+    type: object
+    additionalProperties: false
+    required: [version, record_id, record_type, receipt_id]
+    properties:
+      version: { type: string, minLength: 1, description: "Version of the committed record this step pins." }
+      record_id: { type: string, minLength: 1, description: "Id of the durable record this port resolves." }
+      record_type: { type: string, minLength: 1, description: "Record kind of the durable record." }
+      receipt_id: { type: string, minLength: 1, description: "Id of the governed-write receipt that committed the record. Required: a committed reference without a receipt is exactly the surface the journey check must refuse." }
+
+  StagedDraftReference:
+    type: object
+    additionalProperties: false
+    required: [version, draft_id]
+    properties:
+      version: { type: string, minLength: 1, description: "Version of the staged draft this step pins." }
+      draft_id: { type: string, minLength: 1, description: "Id of a staged draft. This port declares no receipt_id and no record_id, and the closed shape refuses both, so staged output can never masquerade as committed." }

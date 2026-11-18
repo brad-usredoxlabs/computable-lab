@@ -1,6 +1,7 @@
 $schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
 kind: labware-definition
 recordId: lbw-def-generic-24-well-plate
+offerable: true
 type: labware_definition
 id: 24-well-plate
 display_name: Generic 24-Well Plate

@@ -3,7 +3,9 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { BindingModeEditor } from './BindingModeEditor'
 import { apiClient } from '../../shared/api/client'
+import { ApiError } from '../../shared/api/errors'
 import type { RecordEnvelope } from '../../types/kernel'
+import type { RecordWithUIResponse } from '../../types/uiSpec'
 import type { PlatformManifest } from '../../types/platformRegistry'
 
 // Mock the platform registry hook
@@ -28,6 +30,7 @@ vi.mock('../labware/DeckVisualizationPanel', () => ({
 vi.mock('../../shared/api/client', () => ({
   apiClient: {
     getRecord: vi.fn(),
+    getRecordWithUI: vi.fn(),
     listRecordsByKind: vi.fn(),
     updatePlannedRunBindings: vi.fn(),
   },
@@ -49,43 +52,60 @@ const mockPlannedRun: RecordEnvelope = {
   },
 }
 
+// SHIPPED shape: local protocol has inherits_from but NO flat labwareRoles/materialRoles
 const mockLocalProtocol: RecordEnvelope = {
   recordId: 'LPR-000001',
   schemaId: 'local-protocol',
   meta: { kind: 'local-protocol' },
   payload: {
     kind: 'local-protocol',
-    labwareRoles: [
-      { roleId: 'plate', roleType: 'labware' },
-      { roleId: 'reservoir', roleType: 'labware' },
-    ],
-    materialRoles: [
-      { roleId: 'wash_buffer', roleType: 'material' },
-    ],
+    inherits_from: { kind: 'record', id: 'PRT-UNIVERSAL' },
   },
 }
 
-const mockLabwareInstances: RecordEnvelope[] = [
+// Universal protocol with roles (the source of truth for role definitions)
+const mockUniversalProtocol: RecordEnvelope = {
+  recordId: 'PRT-UNIVERSAL',
+  schemaId: 'protocol',
+  meta: { kind: 'protocol' },
+  payload: {
+    kind: 'protocol',
+    roles: {
+      labwareRoles: [
+        { roleId: 'plate' },
+        { roleId: 'reservoir' },
+      ],
+      materialRoles: [
+        { roleId: 'wash_buffer' },
+      ],
+    },
+  },
+}
+
+// Seam candidate universe: the pickers are fed from `labware` / `material`
+// records (recordIds unchanged from the pre-fix fixture so the save-shape
+// assertion below stays identical).
+const mockLabwareUniverse: RecordEnvelope[] = [
   {
     recordId: 'LWI-PLATE1',
-    schemaId: 'labware-instance',
-    meta: { kind: 'labware-instance' },
-    payload: { kind: 'labware-instance', name: 'Source Plate 1' },
+    schemaId: 'labware',
+    meta: { kind: 'labware' },
+    payload: { kind: 'labware', name: 'Source Plate 1' },
   },
   {
     recordId: 'LWI-RES1',
-    schemaId: 'labware-instance',
-    meta: { kind: 'labware-instance' },
-    payload: { kind: 'labware-instance', name: 'Reservoir 1' },
+    schemaId: 'labware',
+    meta: { kind: 'labware' },
+    payload: { kind: 'labware', name: 'Reservoir 1' },
   },
 ]
 
-const mockMaterialInstances: RecordEnvelope[] = [
+const mockMaterialUniverse: RecordEnvelope[] = [
   {
     recordId: 'MAT-WASH1',
-    schemaId: 'material-instance',
-    meta: { kind: 'material-instance' },
-    payload: { kind: 'material-instance', name: 'Wash Buffer Batch 1' },
+    schemaId: 'material',
+    meta: { kind: 'material' },
+    payload: { kind: 'material', name: 'Wash Buffer Batch 1' },
   },
 ]
 
@@ -102,19 +122,20 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 describe('BindingModeEditor', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(apiClient.getRecord).mockReset()
+    vi.mocked(apiClient.getRecordWithUI).mockReset()
     vi.mocked(apiClient.listRecordsByKind).mockReset()
     vi.mocked(apiClient.updatePlannedRunBindings).mockReset()
 
-    vi.mocked(apiClient.getRecord).mockImplementation(async (id: string) => {
-      if (id === 'PLR-000001') return mockPlannedRun
-      if (id === 'LPR-000001') return mockLocalProtocol
-      throw new Error('Not found')
+    vi.mocked(apiClient.getRecordWithUI).mockImplementation(async (id: string) => {
+      if (id === 'PLR-000001') return { record: mockPlannedRun, uiSpec: null, schema: null } as RecordWithUIResponse
+      if (id === 'LPR-000001') return { record: mockLocalProtocol, uiSpec: null, schema: null } as RecordWithUIResponse
+      if (id === 'PRT-UNIVERSAL') return { record: mockUniversalProtocol, uiSpec: null, schema: null } as RecordWithUIResponse
+      throw new ApiError({ status: 404, code: 'NOT_FOUND', message: `record not found: ${id}` })
     })
 
     vi.mocked(apiClient.listRecordsByKind).mockImplementation(async (kind: string) => {
-      if (kind === 'labware-instance') return { records: mockLabwareInstances, total: 2 }
-      if (kind === 'material-instance') return { records: mockMaterialInstances, total: 1 }
+      if (kind === 'labware') return { records: mockLabwareUniverse, total: 2 }
+      if (kind === 'material') return { records: mockMaterialUniverse, total: 1 }
       return { records: [], total: 0 }
     })
   })
@@ -192,5 +213,97 @@ describe('BindingModeEditor', () => {
       },
       { timeout: 1000 },
     )
+  })
+
+  it('loads the planned-run through getRecordWithUI, not the 404-ing records arm', async () => {
+    render(
+      <Wrapper>
+        <BindingModeEditor plannedRunId="PLR-000001" />
+      </Wrapper>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Labware roles')).toBeInTheDocument()
+    })
+
+    expect(apiClient.getRecordWithUI).toHaveBeenCalledWith('PLR-000001')
+    expect(apiClient.getRecord).not.toHaveBeenCalled()
+  })
+
+  it('shows rejection message when planned-run is not found', async () => {
+    render(
+      <Wrapper>
+        <BindingModeEditor plannedRunId="PLR-404" />
+      </Wrapper>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/record not found: PLR-404/)).toBeInTheDocument()
+    })
+
+    expect(apiClient.getRecord).not.toHaveBeenCalled()
+  })
+
+  it('resolves roles from the universal protocol via inherits_from', async () => {
+    render(
+      <Wrapper>
+        <BindingModeEditor plannedRunId="PLR-000001" />
+      </Wrapper>,
+    )
+
+    // Wait for roles to be resolved from the universal protocol
+    await waitFor(() => {
+      // The panel should render role rows from the universal protocol
+      expect(screen.getByTestId('role-binding-plate')).toBeInTheDocument()
+      expect(screen.getByTestId('role-binding-reservoir')).toBeInTheDocument()
+      expect(screen.getByTestId('role-binding-wash_buffer')).toBeInTheDocument()
+      // Should NOT show the "No roles" empty state
+      expect(screen.queryByText(/No roles defined/)).not.toBeInTheDocument()
+    }, { timeout: 3000 })
+
+    // Verify the universal protocol was fetched
+    expect(apiClient.getRecordWithUI).toHaveBeenCalledWith('PRT-UNIVERSAL')
+  })
+
+  it('prefers local protocol roles over universal protocol roles (local-first)', async () => {
+    // Override the mock for this test only: LPR-000001 carries its own roles
+    const originalImpl = vi.mocked(apiClient.getRecordWithUI).getMockImplementation()
+    vi.mocked(apiClient.getRecordWithUI).mockImplementation(async (id: string) => {
+      if (id === 'PLR-000001') return { record: mockPlannedRun, uiSpec: null, schema: null } as RecordWithUIResponse
+      if (id === 'LPR-000001') return {
+        record: {
+          recordId: 'LPR-000001',
+          schemaId: 'local-protocol',
+          meta: { kind: 'local-protocol' },
+          payload: {
+            kind: 'local-protocol',
+            roles: { labwareRoles: [{ roleId: 'local_plate' }] },
+            inherits_from: { kind: 'record', id: 'PRT-UNIVERSAL' },
+          },
+        },
+        uiSpec: null,
+        schema: null,
+      } as RecordWithUIResponse
+      if (id === 'PRT-UNIVERSAL') return { record: mockUniversalProtocol, uiSpec: null, schema: null } as RecordWithUIResponse
+      throw new ApiError({ status: 404, code: 'NOT_FOUND', message: `record not found: ${id}` })
+    })
+
+    render(
+      <Wrapper>
+        <BindingModeEditor plannedRunId="PLR-000001" />
+      </Wrapper>,
+    )
+
+    // Should show the local role, not the universal roles
+    await waitFor(() => {
+      expect(screen.getByTestId('role-binding-local_plate')).toBeInTheDocument()
+      expect(screen.queryByTestId('role-binding-plate')).not.toBeInTheDocument()
+    }, { timeout: 3000 })
+
+    // Must NOT have fetched the universal protocol because local roles are sufficient
+    expect(apiClient.getRecordWithUI).not.toHaveBeenCalledWith('PRT-UNIVERSAL')
+
+    // Restore original implementation
+    vi.mocked(apiClient.getRecordWithUI).mockImplementation(originalImpl as () => Promise<RecordWithUIResponse>)
   })
 })

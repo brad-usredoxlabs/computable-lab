@@ -18,6 +18,7 @@
 import type { RankedCandidate } from '../../resolve/types.js';
 import { materialLayerOf, isWellReadyLayer } from '../../ai/materialRefFields.js';
 import { nearMissSuggestions } from './adapters.js';
+import { isMaterialNounContract, nounCreateJourneyForCandidate } from '../journey/journeyDeclarationDoors.js';
 import { loadNounShape, isMintableLabel } from './nounShape.js';
 import { buildEligibilityEnvelope } from './eligibility/facts.js';
 import { evaluateCandidateEligibility, type CandidateEligibility } from './eligibility/evaluate.js';
@@ -411,6 +412,17 @@ export async function resolveNoun(
     clarifications.push(clarificationFor(req, 'unknown-address', []));
   } else {
     const clarification = clarificationFor(req, UNKNOWN_NOUN_REASON, mints);
+    // L2-NOUN-CREATION-JOURNEY-1 (unit u1journey): an unbound MATERIAL noun is
+    // created through the DECLARED creation journey, so its clarification
+    // carries the journey's own door list (read from
+    // config/journey/declarations/noun-create.yaml at this seam — the render
+    // side re-serves it verbatim and never coins a door). Non-material nouns
+    // (an instrument, a piece of labware) get no journey: creating a material
+    // would answer a different question.
+    if (isMaterialNounContract(req.declared)) {
+      const journey = nounCreateJourneyForCandidate(req.label);
+      if (journey) clarification.journey = journey;
+    }
     if (deps.termsForSuggestions) {
       const suggestions = nearMissSuggestions(req.label, await deps.termsForSuggestions());
       if (suggestions.length > 0) {

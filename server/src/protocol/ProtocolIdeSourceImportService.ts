@@ -18,18 +18,39 @@ import type { RecordStore, StoreResult } from '../store/types.js';
 import type { RecordEnvelope } from '../types/RecordEnvelope.js';
 import { importProtocolPdf } from './ProtocolImportService.js';
 import type { PdfPageText } from '../ingestion/pdf/TableExtractionService.js';
-import { extractPdfLayoutText } from '../ingestion/pdf/TableExtractionService.js';
 import {
   buildVendorDocumentExtraction,
   type VendorDocumentUpload,
 } from '../vendor-documents/service.js';
+import { readVendorPdfIntake } from '../ingestion/vendor-protocol/VendorProtocolPdf.js';
+import type { DocumentPageMethod } from '../ingestion/documentIntake.js';
+import { createHash } from 'node:crypto';
 
 
 // ---------------------------------------------------------------------------
 // Optional PDF extraction override for testing
 // ---------------------------------------------------------------------------
 
-type PdfExtractor = (buffer: Buffer, fileName: string) => Promise<{ pages: PdfPageText[]; sha256: string }>;
+type PdfExtractor = (buffer: Buffer, fileName: string) => Promise<{ pages: PdfPageText[]; sha256: string; pageMethods?: DocumentPageMethod[] }>;
+
+// L2-PROTOCOL-ADOPT-INTAKE-1 u1docintake — the DEFAULT `pdfExtractor` resolves
+// to the SHARED intake-backed reader (`readVendorPdfIntake`, defined in
+// VendorProtocolPdf.js so both protocol callers share ONE layout reader — no
+// second front half beside the shared intake service). It keeps the canonical
+// `{pages, sha256}` shape: `pages` is the document's own layout page model
+// (byte-identical to what pdftotext -layout produced), `sha256` hashes the
+// acquired bytes. A failed intake (no pages) surfaces as the service's own
+// failure via a THROW — never an empty success, never fabricated page text.
+async function defaultIntakePdfExtractor(buffer: Buffer, fileName: string): Promise<{ pages: PdfPageText[]; sha256: string; pageMethods: DocumentPageMethod[] }> {
+  const intake = await readVendorPdfIntake(buffer, fileName);
+  const pages: PdfPageText[] = intake.pages.map((page) => ({ pageNumber: page.page, text: page.text }));
+  if (pages.length === 0) {
+    const reason = intake.diagnostics.map((entry) => `${entry.code}: ${entry.message}`).join('; ')
+      || 'document intake produced no pages';
+    throw new Error(`PDF document intake failed: ${reason}`);
+  }
+  return { pages, sha256: createHash('sha256').update(buffer).digest('hex'), pageMethods: intake.pageMethods };
+}
 
 // ---------------------------------------------------------------------------
 // Session status constants
@@ -115,6 +136,14 @@ export interface SourceImportResult {
   evidenceCitations: EvidenceCitation[];
   protocolImportState: 'ready' | 'low_confidence' | 'partial' | null;
   protocolImportConfidence: number | null;
+  /**
+   * L2-PROTOCOL-ADOPT-INTAKE-1 u1docintake — per-page extraction METHOD from the
+   * shared intake seam, aligned 1:1 with the extractor's `pages` (same order as
+   * `evidenceCitations[].sourcePage`). Present only when a PDF was imported
+   * through the intake-backed reader; absent (never `undefined`) otherwise — a
+   * declared sidecar of provenance, never a value invented on an unextracted page.
+   */
+  pageMethods?: DocumentPageMethod[];
 }
 
 // ---------------------------------------------------------------------------
@@ -294,7 +323,10 @@ export class ProtocolIdeSourceImportService {
     options?: { pdfExtractor?: PdfExtractor },
   ) {
     this.store = store;
-    this.pdfExtractor = options?.pdfExtractor ?? extractPdfLayoutText;
+    // L2-PROTOCOL-ADOPT-INTAKE-1 u1docintake: the DEFAULT resolves to the shared
+    // intake-backed reader (one layout reader, shared with decodeVendorProtocolPdf).
+    // The injectable `pdfExtractor` seam is unchanged — tests pass a fake through it.
+    this.pdfExtractor = options?.pdfExtractor ?? defaultIntakePdfExtractor;
   }
 
   /**
@@ -388,6 +420,7 @@ export class ProtocolIdeSourceImportService {
     let protocolImportState: SourceImportResult['protocolImportState'] = null;
     let protocolImportConfidence: number | null = null;
     let extractedTextRef: string | null = null;
+    let pdfPageMethods: DocumentPageMethod[] | null = null;
     let evidenceCitations: EvidenceCitation[] = [];
 
     if (pdfBuffer) {
@@ -423,6 +456,16 @@ export class ProtocolIdeSourceImportService {
         const extractedSha256 = Array.isArray(extracted as unknown)
           ? undefined
           : extracted.sha256;
+        // u1docintake: the per-page extraction method (the intake's decision),
+        // one value per page. Present only when the extractor records it (the
+        // default intake-backed reader does); a fake/test extractor need not.
+        const extractedPageMethods: DocumentPageMethod[] | undefined =
+          Array.isArray(extracted as unknown) || extracted.pageMethods === undefined
+            ? undefined
+            : extracted.pageMethods;
+        if (extractedPageMethods) {
+          pdfPageMethods = extractedPageMethods;
+        }
         evidenceCitations = buildEvidenceCitations(extractedPages, []);
 
         extractedTextRef = await createExtractedTextRecord(this.store, {
@@ -438,6 +481,7 @@ export class ProtocolIdeSourceImportService {
         protocolImportState = null;
         protocolImportConfidence = null;
         evidenceCitations = [];
+        pdfPageMethods = null;
         console.warn(`Protocol import failed for session ${request.sessionId}: ${err instanceof Error ? err.message : String(err)}`);
       }
     } else if (pdfBuffer) {
@@ -468,6 +512,7 @@ export class ProtocolIdeSourceImportService {
       evidenceCitations,
       protocolImportState,
       protocolImportConfidence,
+      ...(pdfPageMethods ? { pageMethods: pdfPageMethods } : {}),
     };
 
     // 8. Update session in place

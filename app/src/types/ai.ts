@@ -33,6 +33,15 @@ export interface AiActiveDeckScope {
 export interface AiStatusEvent {
   type: 'status'
   message: string
+  /**
+   * L2-PROSE-SHORTHAND-SALVAGE-1 (browser-gate D2, surface half): the server
+   * names the driver that salvaged a draft from the model's text
+   * (server/src/ai/types.ts status frame). The CLIENT relays it OPAQUELY as
+   * a `string` — deliberately NOT a union of known drivers, so the next
+   * server driver needs no client edit. Absent on a clean turn (an absent
+   * key, never `undefined`).
+   */
+  recoveredFrom?: { driver: string }
 }
 
 export interface AiToolCallEvent {
@@ -315,6 +324,44 @@ export interface AiClarificationRequest {
     reason: string
     candidates?: Array<{ label: string; confidence?: number; ref?: string }>
     actionLocation?: { actionIndex?: number; action?: string; argument?: string }
+  }
+  /**
+   * L2-P1-CREATE-DOOR-1 (unit absdoor) — a DECLARED ABSENCE, mirrored from the
+   * server's AgentClarificationRequest.absence (clarificationRequestsFromAssurance):
+   * a binding blocker named a noun this lab's records do not hold, with no
+   * candidates — a NAMED unresolved slot (context §2.7), not an empty option
+   * list. The card renders `absence.reason` VERBATIM (the server owns the one
+   * sentence, shaped on resolvers.ts:568). Absent-or-value, never :undefined
+   * (exactOptionalPropertyTypes — the key rides a conditional spread server-side).
+   */
+  absence?: { mention: string; reason: string }
+  /**
+   * L2-NOUN-CREATION-JOURNEY-1 (unit u1journey) — the DECLARED creation journey
+   * an unbound MATERIAL noun is created through, mirrored verbatim from the
+   * server's AgentClarificationRequest.journey (projected from
+   * config/journey/declarations/noun-create.yaml). The card renders ONE door
+   * per `doors[]` entry; it holds no door list of its own. `candidateLabel` is
+   * the person's own noun — a CANDIDATE, never a minted identity.
+   */
+  journey?: {
+    journeyId: string
+    revision: number
+    checkpointRef: string
+    /**
+     * `steps[].human_task.output_port.record_type` — the record type a committed
+     * completion CREATES (server projection of the declaration). The ONLY source
+     * a door fills a surface's `:token` from; absent when the declaration names
+     * none, in which case a token surface gets NO door route (fail closed).
+     */
+    createdType?: string
+    candidateLabel: string
+    doors: Array<{
+      id: string
+      summary: string
+      surface: string
+      capabilityRef: string
+      candidateLabel: string
+    }>
   }
 }
 

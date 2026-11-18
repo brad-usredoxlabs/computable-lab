@@ -1,0 +1,174 @@
+/* L2-RUN-ACQUISITION-SECTION-1 (u1acqdoor): the run-owned acquisition section.
+   --cl-* tokens only. */
+
+.run-acquisition {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: var(--cl-bg-elev);
+  color: var(--cl-text);
+  scroll-margin-top: 72px; /* so the toolbar Data affordance scrolls it into view */
+}
+.run-acquisition:focus {
+  outline: 2px solid var(--cl-accent);
+  outline-offset: 1px;
+}
+
+.run-acquisition__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.run-acquisition__title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.run-acquisition__subtitle {
+  font-size: 0.8rem;
+  color: var(--cl-text-dim);
+}
+
+.run-acquisition__loading,
+.run-acquisition__empty-text {
+  color: var(--cl-text-dim);
+  font-size: 0.9rem;
+  margin: 4px 0;
+}
+
+.run-acquisition__empty {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.run-acquisition__attach-btn,
+.run-acquisition__register-btn {
+  background: var(--cl-accent);
+  color: var(--cl-on-accent);
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.run-acquisition__attach-btn:hover,
+.run-acquisition__register-btn:hover {
+  background: var(--cl-accent-hover);
+}
+.run-acquisition__cancel-btn {
+  background: transparent;
+  color: var(--cl-text-dim);
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.run-acquisition__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.run-acquisition__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: var(--cl-bg);
+}
+.run-acquisition__id {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.run-acquisition__loc {
+  font-size: 0.8rem;
+  color: var(--cl-text-dim);
+}
+.run-acquisition__created {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--cl-text-faint);
+}
+
+.run-acquisition__form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-width: 420px;
+}
+.run-acquisition__label {
+  font-size: 0.8rem;
+  color: var(--cl-text-dim);
+}
+.run-acquisition__form select,
+.run-acquisition__form input {
+  background: var(--cl-bg);
+  color: var(--cl-text);
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 0.85rem;
+}
+.run-acquisition__form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+.run-acquisition__hint,
+.run-acquisition__form-reason {
+  font-size: 0.8rem;
+  color: var(--cl-text-dim);
+}
+.run-acquisition__form-error {
+  font-size: 0.8rem;
+  color: var(--cl-danger);
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.run-acquisition__form-error-token {
+  font-weight: 600;
+}
+.run-acquisition__list-error {
+  color: var(--cl-danger);
+  font-size: 0.85rem;
+}
+
+/* The toolbar "Data" affordance (replaces the legacy Results link). It is a
+   button on the SAME route — no navigation into the editor. */
+.run-workspace-toolbar__data {
+  background: transparent;
+  color: var(--cl-text);
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  padding: 2px 10px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.run-workspace-toolbar__data:hover {
+  border-color: var(--cl-border-strong);
+  color: var(--cl-accent);
+}
+
+/* The one-line kind label for a non-'run' record resolved at /runs/:id. */
+.run-workspace-kind-label {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: var(--cl-bg-elev);
+  color: var(--cl-text-dim);
+  font-size: 0.85rem;
+}

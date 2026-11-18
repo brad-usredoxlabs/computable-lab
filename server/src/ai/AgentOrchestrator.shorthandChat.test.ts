@@ -319,6 +319,25 @@ describe('SHORTHAND-CHAT — the run-chat shorthand path', () => {
     // The prose-recovery leg ACTUALLY ran: the draft was parsed from content and
     // invoked AS agent_intent (intent inferred) — this is not a native tool call.
     expect(events.some((e) => e.type === 'status' && /Parsed the draft from the model's text/.test(String(e.message ?? '')))).toBe(true);
+    // C2 CONTRACT PIN (L2-PROSE-SHORTHAND-SALVAGE-1): the recovery marker rides the
+    // DECLARED `status` variant field in types.ts. The server writes the WHOLE
+    // AgentEvent into the SSE `data:` frame, so the marker is on the wire. This
+    // suite pins the SERVER wire event only; client-side consumption of the marker
+    // lives under app/src/event-editor/right-pane/ai/. The RUNTIME assertion below
+    // is the pin.
+    const recoveryStatuses = events.filter(
+      (e) => e.type === 'status' && /Parsed the draft from the model's text/.test(String(e.message ?? '')),
+    );
+    expect(recoveryStatuses.length).toBeGreaterThanOrEqual(1);
+    for (const e of recoveryStatuses) {
+      if (e.type !== 'status') continue;
+      expect(e.recoveredFrom?.driver).toBe('fenced-json');
+    }
+    // C2 notes half is NOT pinned here: this leg ends in the honest cannot-draft
+    // error return, which never merges `extraSubmissionNotes`, so `result.notes`
+    // stays empty by design. The notes half is pinned where it IS reachable —
+    // the forced-tool run path (recoveredFrom.test.ts).
+
     // The inferred event_graph hit the refusal on BOTH attempts: first call
     // refused + re-asked, repeat call refused again (>=1 refusal required; the
     // stubborn-model route produces exactly two).
@@ -372,6 +391,9 @@ describe('SHORTHAND-CHAT — the run-chat shorthand path', () => {
     // Routing is the refusal arm directly — no prose-coercion leg ran (the call
     // was native), and BOTH raw calls were refused.
     expect(events.some((e) => e.type === 'status' && /Parsed the draft from the model's text/.test(String(e.message ?? '')))).toBe(false);
+    // C2 negative control: no recovery happened, so NO status event may carry the
+    // marker. "Always present" must not be able to pass as a recovery receipt.
+    expect(events.some((e) => e.type === 'status' && e.recoveredFrom !== undefined)).toBe(false);
     const refusals = events.filter((e) => e.type === 'status' && /refused/i.test(String(e.message ?? '')));
     expect(refusals.length).toBe(2);
     const reask = model.captured[1];

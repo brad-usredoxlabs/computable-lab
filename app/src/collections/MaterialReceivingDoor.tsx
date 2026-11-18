@@ -1,0 +1,300 @@
+/**
+ * MaterialReceivingDoor — the /lab materials category "Receive a lot" door.
+ *
+ * A received lot is created BY a material-receiving attestation, never
+ * free-standing (schema/lab/material-receiving.schema.yaml:31). This is a
+ * DRAFTING surface only: it relays the scientist's stated facts as the
+ * `compose-receiving` intent to the EXISTING /drafts/compile seam (adapter
+ * `receiving`, config/drafting/adapters.yaml) and renders the compiled draft
+ * (draftId + reviewHash) or the server's own typed refusal. Compiling NEVER
+ * accepts: a canAccept draft additionally offers Accept, which relays exactly
+ * {draftId, revision, reviewHash} to the EXISTING /drafts/accept seam and
+ * renders the ids the server returned.
+ *
+ * Hard rules: the claim rides the RECEIVING_INTENT_SCHEMA vocabulary
+ * (additionalProperties:false — no undeclared key is sent); refusal copy is
+ * whatever the server returned (diagnostics[].message), never hardcoded; and
+ * optional keys are absent-or-value via conditional spread, never
+ * present-as-undefined. occurredAt/approximation ride only in the occurrence
+ * states the lint pairings allow (known needs occurredAt; approximate needs
+ * occurredAt + approximation; unknown carries neither).
+ *
+ * Discard-on-close (L2-LABINV-discardfix, g5 LEG 1 DEFECT 1): the parent
+ * keeps this door ALWAYS mounted (null early-return on !isOpen), so its
+ * state outlives a close. Closing while a staged draft is on screen
+ * (compiled result, not yet accepted) DISCARDS it locally and reports it
+ * via the optional onDiscard cue callback. Purely local: nothing commits.
+ */
+
+import { useState, type FormEvent, type ReactNode } from 'react'
+import { apiClient } from '../shared/api/client'
+import { labModalStyles } from './labModalStyles'
+
+type Status = 'known' | 'approximate' | 'unknown'
+type CompileResponse = Awaited<ReturnType<typeof apiClient.compileWorkstateDraft>>
+const STATUS_OPTIONS: Status[] = ['known', 'approximate', 'unknown']
+
+function nz(v: string): string | undefined {
+  return v.trim().length > 0 ? v.trim() : undefined
+}
+
+// The Arrival date input is a native date control emitting a plain YYYY-MM-DD,
+// but the claim schema declares occurredAt as format: date-time
+// (schema/lab/attestation.schema.yaml:165). Encode the scientist's stated
+// date at UTC midnight: the DATE PART IS THE SCIENTIST'S STATEMENT, anchored
+// to UTC midnight. No local Date() (local midnight shifts the calendar date
+// back a day east of UTC) and no now() (an unstated time is absent, never
+// manufactured). Applied only at claim assembly, so the controlled input
+// keeps showing the plain date the human typed.
+function toOccurredAtValue(raw: string): string {
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T00:00:00.000Z` : raw
+}
+
+function Row({ id, label, children }: { id: string; label: string; children: ReactNode }) {
+  return (
+    <div className="lab-modal__row">
+      <label className="lab-modal__label" htmlFor={id}>{label}</label>
+      {children}
+    </div>
+  )
+}
+
+interface TextProps {
+  id: string
+  label: string
+  value: string
+  onChange: (v: string) => void
+  tid: string
+  type?: string
+  placeholder?: string
+  disabled?: boolean
+}
+
+function Text({ id, label, value, onChange, tid, type, placeholder, disabled }: TextProps) {
+  return (
+    <Row id={id} label={label}>
+      <input id={id} type={type} value={value} placeholder={placeholder} disabled={disabled}
+        onChange={(e) => onChange(e.target.value)} data-testid={tid} />
+    </Row>
+  )
+}
+
+function StatusSelect({ id, label, value, onChange, tid }: {
+  id: string; label: string; value: Status; onChange: (v: Status) => void; tid: string
+}) {
+  return (
+    <Row id={id} label={label}>
+      <select id={id} value={value} onChange={(e) => onChange(e.target.value as Status)} data-testid={tid}>
+        {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+      </select>
+    </Row>
+  )
+}
+
+export function MaterialReceivingDoor({ isOpen, onClose, onDiscard }: {
+  isOpen: boolean
+  onClose: () => void
+  onDiscard?: () => void
+}) {
+  const [vendor, setVendor] = useState('')
+  const [catalogNumber, setCatalogNumber] = useState('')
+  const [productLabel, setProductLabel] = useState('')
+  const [lotNumber, setLotNumber] = useState('')
+  const [receivedByStatus, setReceivedByStatus] = useState<Status>('unknown')
+  const [receivedByLabel, setReceivedByLabel] = useState('')
+  const [occurredAtStatus, setOccurredAtStatus] = useState<Status>('unknown')
+  const [occurredAt, setOccurredAt] = useState('')
+  const [approximation, setApproximation] = useState('')
+  const [result, setResult] = useState<CompileResponse | null>(null)
+  const [failure, setFailure] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [acceptBusy, setAcceptBusy] = useState(false)
+  const [accepted, setAccepted] = useState<{ receiptId: string | null; instanceId: string | null } | null>(null)
+
+  // Discard-on-close (g5 LEG 1 DEFECT 1): the parent keeps this door always
+  // mounted, so a staged draft (result !== null, not yet accepted) must be
+  // reset on close or it resurrects byte-identical on reopen. Purely local —
+  // nothing commits, no server call.
+  const handleClose = () => {
+    const staged = result !== null && accepted === null
+    if (staged) {
+      setVendor('')
+      setCatalogNumber('')
+      setProductLabel('')
+      setLotNumber('')
+      setReceivedByStatus('unknown')
+      setReceivedByLabel('')
+      setOccurredAtStatus('unknown')
+      setOccurredAt('')
+      setApproximation('')
+      setResult(null)
+      setFailure(null)
+      setBusy(false)
+      setAcceptBusy(false)
+      setAccepted(null)
+      onDiscard?.()
+    }
+    onClose()
+  }
+
+  if (!isOpen) return null
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault()
+    setResult(null)
+    setFailure(null)
+    setAccepted(null)
+    setBusy(true)
+    const catalog = nz(catalogNumber)
+    const product = nz(productLabel)
+    const lot = nz(lotNumber)
+    const receiver = receivedByStatus === 'unknown' ? undefined : nz(receivedByLabel)
+    const statedTime = occurredAtStatus === 'unknown' ? undefined : nz(occurredAt)
+    const approx = occurredAtStatus === 'approximate' ? nz(approximation) : undefined
+    const claim: Record<string, unknown> = {
+      vendor: vendor.trim(),
+      receivedByStatus,
+      occurredAtStatus,
+      ...(catalog !== undefined ? { catalogNumber: catalog } : {}),
+      ...(product !== undefined ? { productLabel: product } : {}),
+      ...(lot !== undefined ? { lotNumber: lot } : {}),
+      ...(receiver !== undefined ? { receivedByLabel: receiver } : {}),
+      ...(statedTime !== undefined ? { occurredAt: toOccurredAtValue(statedTime) } : {}),
+      ...(approx !== undefined ? { approximation: approx } : {}),
+    }
+    try {
+      setResult(await apiClient.compileWorkstateDraft({
+        adapter: 'receiving',
+        intent: { operation: 'compose-receiving', claim },
+      }))
+    } catch (err) {
+      setFailure(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleAccept = async () => {
+    if (!result || acceptBusy) return
+    setAcceptBusy(true)
+    setFailure(null)
+    try {
+      // Exactly the three keys the server compares against the stored draft;
+      // no document, claim or envelope is ever resubmitted.
+      const a = await apiClient.acceptWorkstateDraft({
+        draftId: result.draftId, revision: result.revision, reviewHash: result.reviewHash,
+      })
+      setAccepted({ receiptId: a.recordId ?? null, instanceId: a.instanceRecordId ?? null })
+    } catch (err) {
+      setFailure(err instanceof Error ? err.message : String(err))
+    } finally {
+      setAcceptBusy(false)
+    }
+  }
+
+  return (
+    <div className="lab-modal__backdrop" role="presentation"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) handleClose() }}>
+      <style>{`${labModalStyles}
+.lab-modal__result { margin: 0; padding: 8px 10px; border: 1px solid var(--cl-border); border-radius: 6px; }
+.lab-modal__result dl { margin: 0; }
+.lab-modal__result dt, .lab-modal__refusal dl dt {
+  font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--cl-text-faint);
+}
+.lab-modal__result dd, .lab-modal__refusal dl dd { margin: 0 0 4px; font-family: monospace; font-size: 0.8rem; overflow-wrap: anywhere; }
+.lab-modal__refusal dl { margin: 0 0 6px; }
+.lab-modal__hint { margin: 0; font-size: 0.75rem; color: var(--cl-text-faint); }
+`}</style>
+      <div className="lab-modal" role="dialog" aria-modal="true" aria-label="Receive a lot">
+        <header className="lab-modal__header">
+          <h2>Receive a lot</h2>
+          <button type="button" className="lab-modal__close" onClick={handleClose} aria-label="Close">✕</button>
+        </header>
+        <form className="lab-modal__body" onSubmit={handleSubmit}>
+          {failure && (
+            <p className="lab-modal__error" data-testid="material-receiving-request-error">{failure}</p>
+          )}
+          <Text id="recv-vendor" label="Vendor *" value={vendor} onChange={setVendor}
+            tid="material-receiving-vendor" placeholder="e.g. Sigma-Aldrich" />
+          <Text id="recv-catalog" label="Catalog number" value={catalogNumber}
+            onChange={setCatalogNumber} tid="material-receiving-catalog-number" />
+          <Text id="recv-product" label="Product label" value={productLabel}
+            onChange={setProductLabel} tid="material-receiving-product-label" placeholder="e.g. D6429-500ML" />
+          <Text id="recv-lot" label="Lot number" value={lotNumber}
+            onChange={setLotNumber} tid="material-receiving-lot-number" />
+          <StatusSelect id="recv-received-by-status" label="Received by (status)" value={receivedByStatus}
+            onChange={setReceivedByStatus} tid="material-receiving-received-by-status" />
+          <Text id="recv-received-by-label" label="Received by (name)" value={receivedByLabel}
+            onChange={setReceivedByLabel} tid="material-receiving-received-by-label"
+            disabled={receivedByStatus === 'unknown'} />
+          {receivedByStatus === 'unknown' && (
+            <p className="lab-modal__hint" data-testid="material-receiving-received-by-cue">
+              not sent while status is unknown
+            </p>
+          )}
+          <StatusSelect id="recv-occurred-status" label="Arrival date (status)" value={occurredAtStatus}
+            onChange={setOccurredAtStatus} tid="material-receiving-occurred-at-status" />
+          <Text id="recv-occurred-at" label="Arrival date" value={occurredAt} onChange={setOccurredAt}
+            tid="material-receiving-occurred-at" type="date"
+            disabled={occurredAtStatus === 'unknown'} />
+          {occurredAtStatus === 'unknown' && (
+            <p className="lab-modal__hint" data-testid="material-receiving-occurred-at-cue">
+              not sent while status is unknown
+            </p>
+          )}
+          {occurredAtStatus === 'approximate' && (
+            <Text id="recv-approximation" label="How approximate?" value={approximation}
+              onChange={setApproximation} tid="material-receiving-approximation" placeholder="e.g. last week" />
+          )}
+          <p className="lab-modal__hint">
+            A lot is received by an attestation. This stages a draft for review — nothing is
+            written until it is reviewed and accepted.
+          </p>
+          {result?.canAccept && (
+            <div className="lab-modal__result" data-testid="material-receiving-result">
+              <dl>
+                <dt>Draft ID</dt>
+                <dd data-testid="material-receiving-draft-id">{result.draftId}</dd>
+                <dt>Review hash</dt>
+                <dd data-testid="material-receiving-review-hash">{result.reviewHash}</dd>
+              </dl>
+              {!accepted && (
+                <button type="button" className="lab-modal__save" onClick={handleAccept}
+                  disabled={acceptBusy} data-testid="material-receiving-accept">
+                  {acceptBusy ? 'Accepting…' : 'Accept'}
+                </button>
+              )}
+              {accepted && (
+                <dl data-testid="material-receiving-accepted">
+                  <dt>Receipt record</dt>
+                  <dd data-testid="material-receiving-accepted-record-id">{accepted.receiptId ?? '—'}</dd>
+                  <dt>Material instance</dt>
+                  <dd data-testid="material-receiving-accepted-instance-id">{accepted.instanceId ?? '—'}</dd>
+                </dl>
+              )}
+            </div>
+          )}
+          {result && !result.canAccept && (
+            <div className="lab-modal__error" data-testid="material-receiving-refusal">
+              <dl>
+                <dt>Draft ID</dt>
+                <dd data-testid="material-receiving-draft-id">{result.draftId}</dd>
+                <dt>Review hash</dt>
+                <dd data-testid="material-receiving-review-hash">{result.reviewHash}</dd>
+              </dl>
+              <p>The server refused this receiving draft:</p>
+              <ul data-testid="material-receiving-diagnostics">
+                {result.diagnostics.map((d, i) => <li key={i}>{d.message}</li>)}
+              </ul>
+            </div>
+          )}
+          <footer className="lab-modal__footer">
+            <button type="button" className="lab-modal__cancel" onClick={handleClose}>Close</button>
+            <button type="submit" className="lab-modal__save" disabled={busy}
+              data-testid="material-receiving-submit">{busy ? 'Compiling…' : 'Stage draft'}</button>
+          </footer>
+        </form>
+      </div>
+    </div>
+  )
+}

@@ -20,6 +20,7 @@ import {
   type TemplateInputResolution,
 } from '../shared/api/treeClient'
 import { useLabwareEditor, type LabwareEditorState } from './context/LabwareEditorContext'
+import { resolveRunMethodGraph, runMethodGraphMissingNotice } from './runMethodGraphLoad'
 import { DualLabwarePane } from './labware/DualLabwarePane'
 import { DeckVisualizationPanel, type DeckPlacement } from './labware/DeckVisualizationPanel'
 import { EventRibbon } from './events/ribbon'
@@ -41,11 +42,17 @@ import type { PlateEvent, TransferDetails } from '../types/events'
 import { getEventSummary, normalizeTransferDetails, withCanonicalTransferDetails } from '../types/events'
 import type { WellId } from '../types/plate'
 import type { MacroProgram } from '../types/macroProgram'
-import type { Labware, LabwareType, LabwareRecordPayload } from '../types/labware'
+import type {
+  Labware,
+  LabwareDefinitionRecordPayload,
+  LabwareType,
+  LabwareRecordPayload,
+} from '../types/labware'
 import {
   getLabwareDefaultOrientation,
   getLabwareWellIds,
   isTipRackType,
+  labwareDefinitionRecordToEditorLabware,
   labwareDefinitionRecordToPayload,
   labwareRecordToEditorLabware,
   normalizeLabwareWithDefinition,
@@ -1023,7 +1030,21 @@ function LabwareEventEditorContent({
     aiContext: labwareAiContext,
     onAcceptEvent: addEvent,
     onAddLabwareFromRecord: (record, addition) => {
-      const labware = addLabwareFromRecord(record as unknown as LabwareRecordPayload)
+      // Spec decision 1 (topology-intact definition placement): when the person
+      // confirmed a labware DEFINITION in chat, the resolved record carries its
+      // own topology/capacity — place it through the definition-intact factory so
+      // the definitionId survives, instead of collapsing plate_96 through the
+      // legacy first-wins type map (gate defect 1+3: "Generic 96-Well Plate"
+      // came back as opentrons/nest_96_wellplate_200ul_flat@v1, 200 uL).
+      const definitionLabware = labwareDefinitionRecordToEditorLabware(
+        record as unknown as LabwareDefinitionRecordPayload,
+        addition?.recordId,
+      )
+      const labware = definitionLabware
+        ?? addLabwareFromRecord(record as unknown as LabwareRecordPayload)
+      if (definitionLabware) {
+        dispatch({ type: 'ADD_LABWARE', labware: definitionLabware })
+      }
       if (addition?.deckSlot === 'source') {
         setSourceLabware(labware.labwareId)
       } else if (addition?.deckSlot === 'target') {
@@ -1583,9 +1604,12 @@ function LabwareEventEditorContent({
         if (runId) {
           const method = await getRunMethod(runId)
           setRunMethodSummary(method)
-          if (method.hasMethod && method.methodEventGraphId) {
-            await loadById(method.methodEventGraphId)
+          const outcome = await resolveRunMethodGraph(method, loadById)
+          if (outcome.kind === 'loaded') {
             return
+          }
+          if (outcome.kind === 'missing') {
+            setExecutionNotice(runMethodGraphMissingNotice(outcome.graphId))
           }
         }
       } catch (err) {
@@ -3888,16 +3912,42 @@ function LabwareEventEditorContent({
                     >
                       {resultsMode.parserOptions.map((parser) => (
                         <option key={parser.value} value={parser.value}>
-                          {parser.label}
+                          {parser.label} — {parser.expectedUnits}
                         </option>
                       ))}
                     </select>
+                  </label>
+                  <label className="results-mode-field">
+                    <span>Instrument</span>
+                    <select
+                      value={resultsMode.selectedEquipmentId ?? ''}
+                      onChange={(e) => resultsMode.setSelectedEquipmentId(e.target.value || null)}
+                    >
+                      <option value="">{resultsMode.equipmentOptions.length > 0 ? 'Ambient / not recorded' : 'No equipment records declared'}</option>
+                      {resultsMode.equipmentOptions.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="results-mode-field__hint">
+                      {resultsMode.equipmentSource === 'picked'
+                        ? `Chosen here — ${resultsMode.equipmentOptions.find((option) => option.id === resultsMode.selectedEquipmentId)?.label ?? ''}${
+                            resultsMode.activeContext?.payload.equipment_ref?.id &&
+                            resultsMode.activeContext.payload.equipment_ref.id !== resultsMode.selectedEquipmentId
+                              ? `; the readout "${resultsMode.activeContextLabel ?? resultsMode.activeContext.recordId}" names a different instrument`
+                              : ''
+                          }`
+                        : resultsMode.equipmentSource === 'readout'
+                          ? `From readout ${resultsMode.activeContextLabel ?? resultsMode.activeContext?.recordId ?? ''}`
+                          : 'No instrument will be recorded: publishing is refused until you choose an instrument or select a readout that declares one.'}
+                    </span>
                   </label>
                   <label className="results-mode-field results-mode-field--wide">
                     <span>Raw Data File</span>
                     <input
                       type="file"
-                      accept=".csv,.tsv,.txt,.json,.xml"
+                      accept=".csv,.tsv,.txt,.json,.xml,.cdf,.ch,.D,.dad"
                       onChange={(e) => {
                         const file = e.target.files?.[0]
                         if (!file) return
@@ -3911,6 +3961,14 @@ function LabwareEventEditorContent({
                     {resultsMode.uploadedFileName ? (
                       <span className="results-mode-field__hint">
                         Uploaded: <strong>{resultsMode.uploadedFileName}</strong>
+                        {resultsMode.uploadedContentHash ? (
+                          <>
+                            {' · '}
+                            <code title={`content hash (from the data-reference): ${resultsMode.uploadedContentHash}`}>
+                              sha256: {resultsMode.uploadedContentHash.slice(0, 12)}…
+                            </code>
+                          </>
+                        ) : null}
                       </span>
                     ) : null}
                   </label>
@@ -3937,6 +3995,31 @@ function LabwareEventEditorContent({
                     Refresh Results
                   </button>
                 </div>
+                {resultsMode.error ? (
+                  <p className="results-mode-field__hint" data-testid="attach-error">
+                    {resultsMode.error}
+                  </p>
+                ) : null}
+                {resultsMode.parseSummary ? (
+                  <div className="results-mode-summary">
+                    <strong>Parse result</strong>
+                    <p>
+                      {resultsMode.parseSummary.parserId} v{resultsMode.parseSummary.parserVersion} · {resultsMode.parseSummary.units} · {resultsMode.parseSummary.rowCount} rows
+                    </p>
+                    <p>
+                      first: {resultsMode.parseSummary.firstPoint ?? 'n/a'} · last: {resultsMode.parseSummary.lastPoint ?? 'n/a'}
+                    </p>
+                    <p>
+                      measurement <code title={resultsMode.parseSummary.recordId}>{resultsMode.parseSummary.recordId}</code>
+                      {resultsMode.uploadedDataReferenceId ? (
+                        <>
+                          {' · data-reference '}
+                          <code title={resultsMode.uploadedDataReferenceId}>{resultsMode.uploadedDataReferenceId}</code>
+                        </>
+                      ) : null}
+                    </p>
+                  </div>
+                ) : null}
                 <div className="results-mode-summary">
                   <strong>Run-linked review</strong>
                   <p>{resultsMode.measurementSummary}</p>
@@ -4206,8 +4289,8 @@ function LabwareEventEditorContent({
           {runMethodSourceTemplateId ? <> (template: {runMethodSourceTemplateId})</> : null}.
         </div>
       )}
-      {planningEnabled && executionNotice && (
-        <div className="deck-execution-notice">{executionNotice}</div>
+      {executionNotice && (
+        <div className="deck-execution-notice" data-testid="run-method-graph-notice">{executionNotice}</div>
       )}
       {loadedTemplateOutputs.length > 0 && (
         <div className="template-output-bar">

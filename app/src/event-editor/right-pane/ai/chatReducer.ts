@@ -62,6 +62,11 @@ export interface ChatState {
    *  so it can be promoted atomically on `stream-done`. */
   pending: { id: string; text: string } | null
   status: string | null
+  /** Draft-recovery marker for the CURRENT turn, when the turn's draft was
+   *  salvaged from the model's text rather than returned structurally.
+   *  Optional so test/runtime literals elsewhere need not carry it; nulled
+   *  at every turn boundary so it never labels a clean turn. */
+  statusRecoveredFrom?: { driver: string } | null
   error: string | null
   /** Protocol candidate auto-extracted from a PDF attachment. */
   protocolCandidate?: AiProtocolCandidateSummary
@@ -75,7 +80,7 @@ export interface ChatState {
 
 export type ChatAction =
   | { type: 'send'; userMessage: ChatMessage; pendingAssistantId: string }
-  | { type: 'stream-status'; message: string }
+  | { type: 'stream-status'; message: string; recoveredFrom?: { driver: string } }
   | { type: 'stream-delta'; delta: string }
   | { type: 'stream-done'; fallbackText?: string; clarificationRequests?: AiClarificationRequest[] }
   | { type: 'stream-error'; message: string }
@@ -92,6 +97,7 @@ export const initialChatState: ChatState = {
   messages: [],
   pending: null,
   status: null,
+  statusRecoveredFrom: null,
   error: null,
   trace: [],
 }
@@ -108,6 +114,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         messages: [...state.messages, action.userMessage],
         pending: { id: action.pendingAssistantId, text: '' },
         status: null,
+        statusRecoveredFrom: null,
         error: null,
         trace: [],
       }
@@ -128,7 +135,11 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       // Status events are backend pipeline progress, not assistant text.
       // We keep only the latest so the UI doesn't grow a log; debugging
       // info lives in the server logs.
-      return { ...state, status: action.message }
+      return {
+        ...state,
+        status: action.message,
+        statusRecoveredFrom: action.recoveredFrom ?? null,
+      }
     }
 
     case 'stream-delta': {
@@ -147,7 +158,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         // `done` arrived without a `pending` — most likely a backend that
         // didn't stream any text_delta (e.g. tool-call-only path). The
         // assistant turn just finishes with no visible text.
-        return { ...state, status: null }
+        return { ...state, status: null, statusRecoveredFrom: null }
       }
       // Promote the in-flight pending message into the committed history.
       // Tool-call-only turns stream no text — use the caller's summary of
@@ -165,6 +176,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         messages: [...state.messages, committed],
         pending: null,
         status: null,
+        statusRecoveredFrom: null,
       }
     }
 
@@ -175,13 +187,14 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         ...state,
         pending: null,
         status: null,
+        statusRecoveredFrom: null,
         error: action.message,
       }
     }
 
     case 'stream-cancelled': {
       // User-initiated stop. Same as error but without the error string.
-      return { ...state, pending: null, status: null }
+      return { ...state, pending: null, status: null, statusRecoveredFrom: null }
     }
 
     case 'reset': {

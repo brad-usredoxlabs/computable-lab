@@ -33,6 +33,7 @@ import type {
 } from './types.js';
 import { createOakProvider } from './providers/oak.js';
 import { createOls4Provider } from './providers/ols4.js';
+import { createLocalOboProvider, loadLocalOboSources } from './providers/localObo.js';
 import { createRecordProvider } from './providers/records.js';
 import { createTermProvider } from './providers/terms.js';
 import { createVendorExaProvider } from './providers/vendorExa.js';
@@ -42,6 +43,16 @@ const DEFAULT_LOCAL_TIMEOUT_MS = 1500;
 const DEFAULT_REMOTE_TIMEOUT_MS = 2500;
 const DEFAULT_LIMIT = 20;
 
+/** Check if the local-obo tier should be mounted by reading the registry. */
+export function localOboTierEnabled(registryPath?: string): boolean {
+  try {
+    const sources = loadLocalOboSources(registryPath);
+    return sources.length > 0;
+  } catch (_err) {
+    return false;
+  }
+}
+
 export interface ResolveSpineDeps {
   /** Ontology config (drives the OAK tier + OLS4 ontology restriction). */
   ontology?: OntologyConfig;
@@ -49,6 +60,8 @@ export interface ResolveSpineDeps {
   termProvider?: ResolveProvider;
   /** Tier 1 — existing workspace records (incl. previously-minted local terms). */
   recordProvider?: ResolveProvider;
+  /** Tier 2 — shipped .obo sources from config/ontology-sources.yaml (same tier as OAK). */
+  localOboProvider?: ResolveProvider;
   /** Tier 4 — vendor/catalog search. */
   vendorProvider?: ResolveProvider;
   /** Override timeouts (testing). */
@@ -167,6 +180,9 @@ export function createResolveSpine(deps: ResolveSpineDeps = {}): ResolveSpine {
   if (oak) {
     tiers.push({ tier: 2, source: 'oak', provider: oak, remote: false });
   }
+  if (deps.localOboProvider) {
+    tiers.push({ tier: 2, source: 'local-obo', provider: deps.localOboProvider, remote: false });
+  }
   tiers.push({
     tier: 3,
     source: 'ols4',
@@ -256,6 +272,7 @@ export function createResolveSpineFromContext(ctx: {
   appConfig?: { ontology?: OntologyConfig } | undefined;
   /** Live config accessor so the tier-4 Exa vendor provider reads a freshly-pasted key. */
   getAppConfig?: () => AppConfig | undefined;
+  localOboRegistryPath?: string;
 }): ResolveSpine {
   const deps: ResolveSpineDeps = {
     termProvider: createTermProvider(ctx.store),
@@ -263,6 +280,12 @@ export function createResolveSpineFromContext(ctx: {
   };
   if (ctx.appConfig?.ontology) deps.ontology = ctx.appConfig.ontology;
   if (ctx.getAppConfig) deps.vendorProvider = createVendorExaProvider(ctx.getAppConfig);
+  // Conditional mount of local-obo tier — only when at least one source is enabled
+  if (ctx.localOboRegistryPath && localOboTierEnabled(ctx.localOboRegistryPath)) {
+    deps.localOboProvider = createLocalOboProvider({ registryPath: ctx.localOboRegistryPath });
+  } else if (!ctx.localOboRegistryPath && localOboTierEnabled()) {
+    deps.localOboProvider = createLocalOboProvider();
+  }
   return createResolveSpine(deps);
 }
 

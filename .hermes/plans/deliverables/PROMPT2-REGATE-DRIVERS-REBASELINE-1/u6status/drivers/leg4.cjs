@@ -67,6 +67,31 @@ const shot = async (page, label) => { seq += 1; const f = path.join(SHOTS, `${St
           out.answer.numberedOptionError = String(e).slice(0, 300)
           step('answer-numbered', 'FAILED', { error: out.answer.numberedOptionError })
         }
+
+        // Zero-option single arm: the product renders a free-text typed answer
+        // (ParameterAnswerInput) instead of slots or numbered <li> options. With
+        // neither surface driven the old driver committed nothing and submitted EMPTY.
+        if (!out.answer.numberedOption) {
+          try {
+            const input = page.locator('[data-testid="parameter-answer-input"]')
+            const present = (await input.count()) > 0
+            out.answer.typed = { present, via: 'parameter-answer-input' }
+            if (present) {
+              await input.first().fill('Clofibrate')
+              out.answer.typed.typed = 'Clofibrate'
+              await page.waitForTimeout(300)
+              const submit = page.locator('[data-testid="parameter-answer-submit"]')
+              out.answer.typed.submitted = (await submit.count()) > 0
+              if (out.answer.typed.submitted) await submit.first().click()
+              else out.answer.typed.note = 'parameter-answer-submit absent'
+              step('answer-typed', 'typed', out.answer.typed)
+              await page.waitForTimeout(1500)
+            } else step('answer-typed', 'NO typed input', out.answer.typed)
+          } catch (e) {
+            out.answer.typedError = String(e).slice(0, 300)
+            step('answer-typed', 'FAILED', { error: out.answer.typedError })
+          }
+        }
       }
 
       // Use answerAllSlots to drive every slot and record per-slot results.
@@ -138,11 +163,12 @@ const shot = async (page, label) => { seq += 1; const f = path.join(SHOTS, `${St
     } else {
       const failed = []
       // Picking a numbered option IS submitting the answer for the single-arm variant, which
-      // renders no slot testids and therefore no Submit button.
-      const answered = out.answer && (out.answer.submitted === true || Boolean(out.answer.numberedOption))
+      // renders no slot testids and therefore no Submit button — and so is the typed fallback.
+      const typedAnswered = Boolean(out.answer && out.answer.typed && out.answer.typed.submitted)
+      const answered = out.answer && (out.answer.submitted === true || Boolean(out.answer.numberedOption) || typedAnswered)
       if (!answered) failed.push('answer-not-submitted')
       if (!out.previewWells || out.previewWells.length === 0) failed.push('no-preview-after-submit')
-      out.answerMode = out.answer && out.answer.numberedOption ? 'numbered-option' : 'slot-card'
+      out.answerMode = out.answer && out.answer.numberedOption ? 'numbered-option' : (typedAnswered ? 'typed-answer' : 'slot-card')
       out.failedCriteria = failed
       out.status = failed.length ? 'FAIL' : 'PASS'
     }

@@ -24,6 +24,11 @@ vi.mock('../shared/api/client', () => ({
     getRecord: vi.fn(async () => ({
       payload: { studyId: 'STU-1', methodEventGraphId: 'EG-1', title: 'Run' },
     })),
+    getRecordWithUI: vi.fn(async () => ({
+      record: { recordId: 'RUN-1', schemaId: 'run', payload: { studyId: 'STU-1', methodEventGraphId: 'EG-1', title: 'Run' } },
+      uiSpec: null,
+      schema: null,
+    })),
     workspace: { get: vi.fn(async () => null) },
     ai: { health: vi.fn(async () => ({ ok: false })) },
     getSurfaces: vi.fn(async () => []),
@@ -242,6 +247,7 @@ vi.mock('../event-editor/EventEditorContext', () => ({
     <>{children}</>
   ),
   useEventEditor: () => eventEditorContextValue,
+  useOptionalEventEditor: () => null,
   isDeckSetupLocked: (state: { placements?: unknown[]; events?: unknown[]; runDeck?: unknown }) =>
     state.runDeck !== null || (state.placements?.length ?? 0) > 0 || (state.events?.length ?? 0) > 0,
 }))

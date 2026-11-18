@@ -1,0 +1,48 @@
+# L2-NOUN-FROM-DOC-1 (d1gwrite) — governed-write capability descriptor.
+# The document extractor never writes: it produces a proposal (staged draft);
+# the person accepts; the accept path executes THIS registered governed write
+# (governed-writes.yaml -> records.create -> POST /records), the same path a
+# dictated mint already takes. Two records land per accept — the material
+# concept and the vendor-product that points at it — so the receipt must name
+# BOTH: ports.output carries two committed-record ports, each with its
+# receipt_id. One human task may produce both (one decision, two writes).
+capability_id: journey.noun-create-from-document
+version: "1.0.0"
+display_name: Mint a material noun from an accepted document proposal
+justification: >-
+  No shipped journey capability writes records: the four seeded capabilities
+  are read-only agent tools, and a domain mutation must go through a governed
+  write path (capability-descriptor.schema.yaml forbids an agent tool that
+  happens to write). Minting the concept plus its vendor product from an
+  accepted, person-reviewed document proposal is that governed write, named
+  once against the registry.
+ports:
+  input:
+  - version: "1.0.0"
+    draft_id: DRAFT-1
+  output:
+  - version: "1.0.0"
+    record_id: MAT-CONCEPT
+    record_type: material
+    receipt_id: RCPT-MINT
+  - version: "1.0.0"
+    record_id: VEND-PRODUCT
+    record_type: vendor-product
+    receipt_id: RCPT-MINT
+implementation:
+  handler_kind: governed_write
+  handler_ref: records.create
+effects: [domain_mutation]
+permissions: [journey.read, records.write]
+availability:
+  requires_records: [material, vendor-product]
+surfaces: [journey.workspace]
+idempotency: non_idempotent
+retry: none
+reconciliation: receipt_required
+evidence: [governed_write_receipt]
+status:
+  declared: true
+  implemented: true
+  available_now: false
+  browser_certified: false

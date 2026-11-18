@@ -1,0 +1,9 @@
+# L2-GC-RAW-BINARY-1 unit binfix2 — report
+Base 0e41a8cd3aea98bd0fcb9b1a9b811f9bbeaf77b3, branch cl/lane2-gc-raw-binary-1-binfix2-0845. Fixes advc c1 finding 1 (the binary:true force path was implemented but unpinned — mutant M1, deleting `|| request.body.binary === true`, left 6/6 green) and finding 2 (report sentence named a nonexistent force test). NO product-code change.
+Added ONE it() to server/src/api/handlers/MeasurementHandlers.uploadRawBinary.test.ts (+16 lines): `forces the device path for a VALID-UTF8 payload when binary: true is set` — valid-UTF8 payload + binary:true → 201, mode 'binary', sha256 64-hex and equal to the payload's real sha256, path starts with measurements/, store.created.length 1, files.size 0 (no records/inbox file).
+Verification (real): suite 6 passed (6) at base → `Tests  7 passed (7)` at tip (vitest 1.6.1).
+Mutation M1 (clause deleted at MeasurementHandlers.ts:208): `Test Files  1 failed (1)` / `Tests  1 failed | 6 passed (7)` — the ONLY red leg is the new force leg (`AssertionError: expected 'text' to be 'binary' // Object.is equality`). Product file restored byte-identical: `git diff HEAD -- server/src/api/handlers/MeasurementHandlers.ts` empty at commit time.
+`cd server && npx tsc --noEmit -p .` → exit 0, `0` error TS (brief's baseline 6 was measured on an older trunk tick; count not exceeded).
+binbytes report sentence (L2-GC-RAW-BINARY-1-binbytes-0628.md:128-129): KEPT per brief ("keep it if your mutation run fails on it") — that probe re-executed on this tree at the final commit yields `4 failed | 3 passed (7)`, including the now-existing force leg, so the sentence is true as written. The file sits outside this unit's 2-file budget; orchestrator may dispatch the cosmetic edit.
+
+L2-GC-RAW-BINARY-1-binfix2 UNIT binfix2 DONE 6707e87dfd6a1ad294886c58d382bc4a360fda96

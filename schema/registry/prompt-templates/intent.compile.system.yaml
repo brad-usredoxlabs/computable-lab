@@ -47,7 +47,7 @@ content: |
   - count — labware?:resolvable(labware), mode?:scalar, readout?:scalar
   - read — labware?:resolvable(labware), instrument?:resolvable(instrument), mode?:scalar, wavelength?:scalar, readout?:scalar
   - add_material — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), source_name?:scalar, volumeUl:quantity, volume?:quantity, composition?:resolvable(material), targetWells:wells
-  - create_container — labware?:resolvable(labware), source_name?:scalar
+  - create_container — labware?:resolvable(labware|labware-definition), source_name?:scalar
   - transfer — source?:resolvable(labware|material), target?:resolvable(labware), labware?:resolvable(labware), volumeUl?:quantity, volume?:quantity, sourceWells?:wells, targetWells?:wells
   - stain — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), duration?:scalar, volumeUl?:quantity
   - fix — source?:resolvable(labware), target?:resolvable(labware), labware?:resolvable(labware), material?:resolvable(material), duration?:scalar

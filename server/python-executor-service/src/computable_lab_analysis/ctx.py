@@ -16,6 +16,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 
+# u2signalstrict — string code carried INSIDE the read_signal refusal message
+# (the convention d_reader.py:59 ships: one code per failure class). No new
+# exception class, no TS error token, no schema vocabulary.
+SIGNAL_NOT_NUMERIC = "SIGNAL_NOT_NUMERIC"
+
+
 # ---------------------------------------------------------------------------
 # Serialization helpers (deterministic)
 # ---------------------------------------------------------------------------
@@ -141,9 +147,31 @@ def _csv_rows(text: str) -> List[Dict[str, Any]]:
 def _csv_signal(text: str) -> Dict[str, Any]:
     rows = _csv_rows(text)
     keys = list(rows[0].keys()) if rows else []
+    # u2signalstrict — the signal consumer REFUSES, named, when the CSV it is
+    # handed is not two numeric columns: a preamble line used as the header, a
+    # third-column artifact, or non-numeric cells. It never guesses which
+    # column is which (column spellings are owned by the TS parsers) and it
+    # never cleans partially-numeric cells — the read is refused. The refusal
+    # quotes the first offending source line verbatim, from text in hand.
+    if len(keys) < 2:
+        first = next((l.strip() for l in text.splitlines() if l.strip()), "")
+        raise ValueError(
+            f"{SIGNAL_NOT_NUMERIC}: {first} — detected columns {keys!r}; "
+            "expected two numeric columns (time, signal)"
+        )
+    source_lines = [l.strip() for l in text.splitlines() if l.strip()]
+    for i, row in enumerate(rows):
+        for key in keys[:2]:
+            val = row.get(key, "")
+            if isinstance(val, bool) or not isinstance(val, (int, float)):
+                first = source_lines[i + 1] if i + 1 < len(source_lines) else ""
+                raise ValueError(
+                    f"{SIGNAL_NOT_NUMERIC}: {first} — detected columns {keys!r}; "
+                    "expected two numeric columns (time, signal)"
+                )
     return {
-        "axis": [r[keys[0]] for r in rows] if keys else [],
-        "values": [r[keys[1]] for r in rows] if len(keys) > 1 else [],
+        "axis": [r[keys[0]] for r in rows],
+        "values": [r[keys[1]] for r in rows],
     }
 
 

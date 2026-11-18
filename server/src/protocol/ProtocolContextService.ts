@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { RecordEnvelope, RecordStore } from '../store/types.js';
 import { slugifyRecordLabel } from '../compiler/material/MaterialCompiler.js';
 import { buildSetupSections, type InheritedRoles } from '../compiler/protocol/LocalProtocolBuilder.js';
+import { protocolIdsOf } from './runProtocolList.js';
 
 const LOCAL_PROTOCOL_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/local-protocol.schema.yaml';
 const PLANNED_RUN_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/planned-run.schema.yaml';
@@ -441,7 +442,9 @@ export class ProtocolContextService {
 
     let inheritedRef: Record<string, unknown> | undefined;
     const plannedPayload = asObject(plannedRun?.payload);
-    const localProtocolId = refId(plannedPayload.localProtocolRef) ?? refId(asObject(run?.payload).localProtocolRef);
+    const plannedHasRefs = protocolIdsOf(plannedPayload).length > 0 || asObject(plannedPayload.localProtocolRef).id !== undefined;
+    const localProtocolSource = plannedHasRefs ? plannedPayload : asObject(run?.payload);
+    const localProtocolId = protocolIdsOf(localProtocolSource)[0];
     if (localProtocolId) {
       const localProtocol = await this.store.get(localProtocolId);
       inheritedRef = asObject(asObject(localProtocol?.payload).inherits_from);

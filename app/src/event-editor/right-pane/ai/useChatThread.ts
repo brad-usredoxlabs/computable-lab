@@ -229,7 +229,15 @@ export function useChatThread({
           onEvent: (event) => {
             switch (event.type) {
               case 'status':
-                dispatch({ type: 'stream-status', message: event.message })
+                // The draft-recovery marker rides the status frame for one
+                // turn. Conditional spread, matching `workingFocus` above:
+                // `{ recoveredFrom: undefined }` would change the shape the
+                // reducer receives (app does not set exactOptionalPropertyTypes).
+                dispatch({
+                  type: 'stream-status',
+                  message: event.message,
+                  ...(event.recoveredFrom ? { recoveredFrom: event.recoveredFrom } : {}),
+                })
                 return
               case 'text_delta':
                 dispatch({ type: 'stream-delta', delta: event.delta })

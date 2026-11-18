@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { OntologyRef, RecordRef } from '../../shared/ref'
-import { apiClient, type VendorSearchResult, type VendorName } from '../../shared/api/client'
+import { apiClient, type VendorSearchResult, type VendorName, type SpecSheetExtractResult, type SpecSheetProposal } from '../../shared/api/client'
 import {
   CONCENTRATION_UNITS,
   MATERIAL_SCHEMA_ID,
@@ -9,12 +9,15 @@ import {
   parseVendorDocuments,
   formatConcentration,
   generateMaterialId,
+  generateMaterialSelectionPolicyId,
   generateVendorProductId,
   inferDomainFromNamespace,
   type CompositionDraftValue,
   type VendorDocumentValue,
   withInferredConcentrationBasis,
 } from '../../types/material'
+
+const POLICY_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/material-selection-policy.schema.yaml'
 
 const VENDOR_DISPLAY_NAMES: Record<VendorName, string> = {
   thermo: 'Thermo Fisher',
@@ -114,6 +117,10 @@ export function VendorProductBuilderModal({ isOpen, onClose, ontologyRef, initia
   const [selectedDraftId, setSelectedDraftId] = useState('')
   const [isExtractingDocument, setIsExtractingDocument] = useState(false)
   const [documentError, setDocumentError] = useState<string | null>(null)
+  const [specSheetResult, setSpecSheetResult] = useState<SpecSheetExtractResult | null>(null)
+  const [isSpecSheetLoading, setIsSpecSheetLoading] = useState(false)
+  const [makeDefault, setMakeDefault] = useState(false)
+  const [defaultReason, setDefaultReason] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -143,6 +150,10 @@ export function VendorProductBuilderModal({ isOpen, onClose, ontologyRef, initia
     setSelectedDraftId('')
     setIsExtractingDocument(false)
     setDocumentError(null)
+    setSpecSheetResult(null)
+    setIsSpecSheetLoading(false)
+    setMakeDefault(false)
+    setDefaultReason('')
     setError(null)
   }, [initialSearchResult, isOpen, ontologyRef])
 
@@ -319,9 +330,17 @@ export function VendorProductBuilderModal({ isOpen, onClose, ontologyRef, initia
       throw new Error('Vendor, catalog number, and product name are required')
     }
     const materialRef = await ensureMaterialRecord()
-    const resolvedVendorProductId = vendorProductId || generateVendorProductId(vendor, catalogNumber)
+    // Idempotent on (vendor, catalog_number): reuse the existing record before
+    // minting a new random id, so re-adding the same product updates it.
+    const matchedRecord = vendorProductId
+      ? null
+      : await apiClient.findVendorProductByCatalog(vendor, catalogNumber).catch(() => null)
+    const resolvedVendorProductId = vendorProductId
+      || matchedRecord?.recordId
+      || generateVendorProductId(vendor, catalogNumber)
     if (!vendorProductId) setVendorProductId(resolvedVendorProductId)
-    const existingRecord = await apiClient.getRecord(resolvedVendorProductId).catch(() => null)
+    const existingRecord = matchedRecord
+      || await apiClient.getRecord(resolvedVendorProductId).catch(() => null)
     const existingPayload = existingRecord?.payload as Record<string, unknown> | undefined
     const payload = buildVendorProductPayload(resolvedVendorProductId, materialRef, existingPayload)
     if (existingRecord) {
@@ -329,7 +348,36 @@ export function VendorProductBuilderModal({ isOpen, onClose, ontologyRef, initia
     } else {
       await apiClient.createRecord(VENDOR_PRODUCT_SCHEMA_ID, payload)
     }
-    return { vendorProductId: resolvedVendorProductId }
+    return { vendorProductId: resolvedVendorProductId, materialRef }
+  }
+
+  /**
+   * D2 — the approved default question. Writes ONE material-selection-policy
+   * (selection: default) for the resolved concept + just-saved product; reuses
+   * an identical default row so re-saving the same product is not additive.
+   */
+  async function writeDefaultPolicy(
+    materialRef: { kind: 'record'; id: string; type: 'material'; label: string },
+    resolvedVendorProductId: string,
+  ) {
+    const listed = await apiClient.listRecordsByKind('material-selection-policy', 200).catch(() => null)
+    const alreadyDeclared = (listed?.records ?? []).some((envelope) => {
+      const p = envelope.payload as Record<string, unknown> | undefined
+      const m = p?.material_ref as { id?: string } | undefined
+      const v = p?.vendor_product_ref as { id?: string } | undefined
+      return p?.selection === 'default' && m?.id === materialRef.id && v?.id === resolvedVendorProductId
+    })
+    if (alreadyDeclared) return
+    await apiClient.createRecord(POLICY_SCHEMA_ID, {
+      kind: 'material-selection-policy',
+      recordId: generateMaterialSelectionPolicyId(materialRef.label),
+      title: `Default vendor product for ${materialRef.label}`,
+      material_ref: materialRef,
+      vendor_product_ref: { kind: 'record', id: resolvedVendorProductId, type: 'vendor-product' },
+      selection: 'default',
+      since: new Date().toISOString().slice(0, 10),
+      reason: defaultReason.trim(),
+    })
   }
 
   async function refreshVendorExtractionState(resolvedVendorProductId: string) {
@@ -358,10 +406,15 @@ export function VendorProductBuilderModal({ isOpen, onClose, ontologyRef, initia
       setError('Vendor, catalog number, and product name are required')
       return
     }
+    if (makeDefault && !defaultReason.trim()) {
+      setError('A short reason is required to make this the default product')
+      return
+    }
     setIsSaving(true)
     setError(null)
     try {
       const persisted = await upsertVendorProductRecord()
+      if (makeDefault) await writeDefaultPolicy(persisted.materialRef, persisted.vendorProductId)
       onSave({ kind: 'record', id: persisted.vendorProductId, type: 'vendor-product', label: name.trim() })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create vendor product')
@@ -547,8 +600,60 @@ export function VendorProductBuilderModal({ isOpen, onClose, ontologyRef, initia
                     {isExtractingDocument ? 'Extracting…' : 'Fetch + Extract'}
                   </button>
                 </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={!htmlSourceUrl.trim() || isSpecSheetLoading}
+                    onClick={async () => {
+                      const trimmedUrl = htmlSourceUrl.trim()
+                      if (!trimmedUrl) return
+                      setSpecSheetResult(null)
+                      setIsSpecSheetLoading(true)
+                      try {
+                        setSpecSheetResult(await apiClient.extractSpecSheetProposals({ url: trimmedUrl, recordKind: 'vendor-product' }))
+                      } catch (err) {
+                        setSpecSheetResult(null)
+                        setDocumentError(err instanceof Error ? err.message : 'Failed to extract spec sheet')
+                      } finally {
+                        setIsSpecSheetLoading(false)
+                      }
+                    }}
+                  >
+                    {isSpecSheetLoading ? 'Extracting…' : 'Extract Spec Sheet'}
+                  </button>
+                </div>
               </div>
               {documentError && <div className="text-xs text-red-700">{documentError}</div>}
+              {specSheetResult && !specSheetResult.configured && (
+                <div className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                  Spec-sheet extraction is not configured.
+                </div>
+              )}
+              {specSheetResult && specSheetResult.configured && 'blocked' in specSheetResult && specSheetResult.blocked && (
+                <div className="rounded border border-red-200 bg-red-50 p-3 space-y-1">
+                  <div className="text-xs font-medium text-red-800">Extraction blocked</div>
+                  <div className="text-xs text-red-700">URL: {specSheetResult.blocked.url}</div>
+                  <div className="text-xs text-red-700">Reason: {specSheetResult.blocked.reason}</div>
+                </div>
+              )}
+              {specSheetResult && specSheetResult.configured && specSheetResult.proposals.length > 0 && (
+                <div className="rounded border border-blue-200 bg-blue-50 p-3 space-y-2">
+                  <div className="text-sm font-medium text-blue-900">Spec-sheet proposals</div>
+                  {specSheetResult.proposals.map((proposal: SpecSheetProposal, index: number) => (
+                    <div key={`${proposal.targetField}-${index}`} className="rounded border border-blue-100 bg-white p-2 text-xs space-y-1">
+                      <div className="font-medium text-gray-900">{proposal.targetField}: {proposal.value}</div>
+                      <div className="text-gray-600">passage: {proposal.passage}</div>
+                      <div className="text-gray-500">sourceUrl: {proposal.sourceUrl}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {specSheetResult && specSheetResult.configured && specSheetResult.proposals.length === 0 && !('blocked' in specSheetResult && specSheetResult.blocked) && (
+                <div className="rounded border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
+                  No spec-sheet proposals found.
+                </div>
+              )}
               {selectedDraft && (
                 <div className="rounded border border-amber-200 bg-amber-50 p-3 space-y-2">
                   <div className="flex items-center justify-between gap-3">
@@ -616,6 +721,9 @@ export function VendorProductBuilderModal({ isOpen, onClose, ontologyRef, initia
                       <div className="text-gray-600 mt-1">
                         {document.documentKind || 'other'} · {document.fileRef.mediaType}
                         {document.fileRef.pageCount ? ` · ${document.fileRef.pageCount} page${document.fileRef.pageCount === 1 ? '' : 's'}` : ''}
+                        {document.extraction?.pages?.length
+                          ? ` · pages ${document.extraction.pages.map((page) => `${page.pageNumber} ${page.method}`).join(', ')}`
+                          : ''}
                       </div>
                     </div>
                   ))}
@@ -680,6 +788,27 @@ export function VendorProductBuilderModal({ isOpen, onClose, ontologyRef, initia
               <span>Description</span>
               <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} placeholder="Optional notes or vendor description" />
             </label>
+            <div className="rounded border border-gray-200 bg-gray-50 p-3 space-y-2">
+              <label className="flex items-start gap-2 text-sm text-gray-900">
+                <input
+                  type="checkbox"
+                  checked={makeDefault}
+                  onChange={(e) => setMakeDefault(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>Make this the lab's default product for this material</span>
+              </label>
+              {makeDefault && (
+                <label className="formulations-field">
+                  <span>Why is this the default product? (required)</span>
+                  <input
+                    value={defaultReason}
+                    onChange={(e) => setDefaultReason(e.target.value)}
+                    placeholder="Scientist's own words — never a generated justification"
+                  />
+                </label>
+              )}
+            </div>
             <div className="flex items-center justify-end gap-2 pt-2">
               <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isSaving}>Cancel</button>
               <button type="submit" className="btn btn-primary" disabled={isSaving}>{isSaving ? 'Saving…' : 'Save Vendor Product'}</button>

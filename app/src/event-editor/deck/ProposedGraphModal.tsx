@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { EventEditorPreview } from '../EventEditorContext'
-import { LABWARE_TYPE_LABELS } from '../../types/labware'
+import { labwareGeometrySummary } from '../../types/labware'
+import { apiClient } from '../../shared/api/client'
 import type { DraftOntologyBinding } from '../../types/ai'
 import type { TermDecision } from './acceptedOntologyBindings'
 import { useResolveOntology } from '../../editor/hooks/useResolveOntology'
@@ -151,6 +152,14 @@ export function ProposedGraphModal({
   // written until Accept, which is why they are listed separately from what is placed.
   const creations = preview.recordCreations ?? []
 
+  // The header must state what Accept will do (gate defect 5, prompt-1): a labware
+  // the draft creates is labware even when it is never placed, so the header's
+  // labware count is placed non-equipment labware PLUS labware-kind creations.
+  // (Material-kind creations are still listed under New records; the header makes no
+  // material clause and must not claim a count of them.)
+  const labwareCount =
+    labwarePlacements.length + creations.filter((c) => c.kind === 'labware').length
+
   const bindings = preview.ontologyBindings ?? []
   const decisionNeeded = useMemo(() => bindings.filter(bindingNeedsDecision), [bindings])
   const readOnly = useMemo(
@@ -189,13 +198,74 @@ export function ProposedGraphModal({
   const pendingCount = decisionNeeded.filter((b) => !termDecisions[b.curie]).length
   const resolvedCount = decisionNeeded.length - pendingCount
 
+  // L2-P1-RETURN-LEG-1 u4 (gate r17 D2 residual): the View changes row must
+  // NAME the definition each placed entry binds — the bound definition's own
+  // display name, resolved from the labware-definition RECORD STORE (the
+  // single authority; the static map does not carry registry-bound ids, and a
+  // name is never invented client-side). Unresolvable definitionId -> the id
+  // itself is shown, never a fabricated label. The ghost's own `name` stays
+  // the entry's title; the definition name is an ADDITIONAL derived field,
+  // held per labwareId (derived ONLY from the entry's definitionId — never a
+  // second store).
+  const [definitionLabels, setDefinitionLabels] = useState<Record<string, string>>({})
+  const labwaresByKey = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const [labwareId, entry] of Object.entries(preview.previewLabwares)) {
+      const definitionId = (entry as { definitionId?: unknown }).definitionId
+      if (typeof definitionId === 'string' && definitionId.length > 0) map.set(labwareId, definitionId)
+    }
+    return map
+  }, [preview.previewLabwares])
+  const labwaresKey = Array.from(labwaresByKey.entries()).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).join(' ')
+  useEffect(() => {
+    const wanted = labwaresByKey
+    if (wanted.size === 0) return
+    let cancelled = false
+    const entries: Array<[string, string]> = []
+    let pending = 0
+    const settle = () => {
+      pending--
+      if (cancelled || pending > 0) return
+      setDefinitionLabels((prev) => {
+        const next = { ...prev }
+        for (const [labwareId, display] of entries) next[labwareId] = display
+        return next
+      })
+    }
+    wanted.forEach((definitionId, labwareId) => {
+      pending++
+      void apiClient
+        .getLabwareDefinitionDisplay(definitionId)
+        .then((display) => {
+          if (cancelled) return
+          entries.push([labwareId, display])
+          settle()
+        })
+        // u5advcfix F1: the rejection arm settles the SAME way — the id
+        // verbatim is the label (the same fallback the real method returns
+        // on a miss), so a records read that fails (5xx / offline) never
+        // leaves `pending` > 0 (stuck row) and never leaks an unhandled
+        // rejection. Mirrors useAiChat's catch on the same seam (the note
+        // falls back to the ids verbatim there too).
+        .catch(() => {
+          if (cancelled) return
+          entries.push([labwareId, definitionId])
+          settle()
+        })
+    })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [labwaresKey])
+
   return (
     <div className="ee-dialog__scrim" role="dialog" aria-modal="true" onClick={onClose}>
       <div className="ee-dialog proposed-graph" onClick={(e) => e.stopPropagation()}>
         <header className="ee-dialog__header">
           <span className="ee-dialog__title">Proposed changes</span>
           <span className="ee-dialog__context">
-            {labwarePlacements.length} labware · {equipmentPlacements.length} equipment ·{' '}
+            {labwareCount} labware · {equipmentPlacements.length} equipment ·{' '}
             {events.length} event{events.length === 1 ? '' : 's'}
           </span>
           <button className="ee-dialog__close" onClick={onClose} aria-label="Close">×</button>
@@ -371,12 +441,36 @@ export function ProposedGraphModal({
                   const lw = preview.previewLabwares[p.labwareId]
                   const where =
                     p.location.kind === 'slot' ? `slot ${p.location.slotId}` : 'lawn'
+                  // L2-P1-RETURN-LEG-1 u4: NAME the bound definition (AC1).
+                  // The row's title IS the definition's own display name,
+                  // resolved async from the record store (definitionLabels is
+                  // populated per labwareId); while it is pending the row
+                  // keeps the geometry as its title — a name that is not yet
+                  // known is never shown invented, and an unresolvable id
+                  // falls back to the id itself (the store's resolver, AC4).
+                  // The true geometry rides in the detail line (never baked
+                  // from a static type table), and the ghost's own title
+                  // stays visible inside it (its title, not the definition's
+                  // name).
+                  const definitionLabel = lw ? definitionLabels[p.labwareId] : undefined
+                  // u5advcfix F2: the geometry / identity token appears
+                  // EXACTLY ONCE per row. Once a definition name is
+                  // resolved it occupies the title, so the detail keeps the
+                  // full geometry (a distinct token now). While the label is
+                  // ABSENT (pending, or the id fallback for an unresolvable
+                  // id) the title already carries the geometry (or the
+                  // labwareId for an unknown labware), so the detail drops
+                  // the repeated first token and keeps type · where ·
+                  // orientation.
+                  const geometry = lw ? labwareGeometrySummary(lw) : p.labwareId
                   return (
                     <li key={p.placementId} className="proposed-graph__lw">
-                      <span className="proposed-graph__lw-name">{lw?.name ?? p.labwareId}</span>
+                      <span className="proposed-graph__lw-name">
+                        {lw ? (definitionLabel ?? geometry) : p.labwareId}
+                      </span>
                       <span className="proposed-graph__muted">
-                        {lw ? LABWARE_TYPE_LABELS[lw.labwareType] : 'unknown type'} · {where} ·{' '}
-                        {p.orientation}
+                        {definitionLabel ? `${geometry} · ` : ''}
+                        {lw ? 'labware' : 'unknown type'} · {where} · {p.orientation}
                       </span>
                     </li>
                   )

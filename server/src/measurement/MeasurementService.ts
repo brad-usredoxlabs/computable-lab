@@ -2,6 +2,8 @@ import type { AppContext } from '../server.js';
 import { ParserRegistry } from './parsers/ParserRegistry.js';
 import { evaluateDeclaredCapabilityGate } from '../capabilities/DeclaredCapabilityGate.js';
 import { basename } from 'node:path';
+import { resolveRawFile } from './rawFileResolver.js';
+import { deriveReadEventRef } from './deriveReadEventRef.js';
 
 const MEASUREMENT_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/measurement.schema.yaml';
 
@@ -17,7 +19,7 @@ type MeasurementPayload = {
   kind: 'measurement';
   recordId: string;
   title: string;
-  assayType: 'qpcr' | 'plate_reader' | 'microscopy' | 'gc_ms' | 'flow' | 'other';
+  assayType: 'qpcr' | 'plate_reader' | 'microscopy' | 'gc_fid' | 'gc_ms' | 'flow' | 'other';
   eventGraphRef?: Ref;
   readEventRef?: string;
   equipmentRef?: Ref;
@@ -40,6 +42,14 @@ type MeasurementPayload = {
     parserId: string;
     parserVersion: string;
     parsedAt: string;
+    units?: { time: string; intensity: string };
+    metadata?: Record<string, string>;
+    // D3 (L2-GC-TRACE-PERSIST-1): the parser-declared ordinate series — the
+    // single persisted trace truth. Omitted when the parser declares none.
+    trace?: {
+      values: number[];
+      samplingIntervalSeconds: number;
+    };
   };
 };
 
@@ -121,7 +131,8 @@ export class MeasurementService {
       throw new MeasurementServiceError('BAD_REQUEST', 'rawData.path is required', 400);
     }
 
-    const file = await this.ctx.repoAdapter.getFile(rawPath);
+    // Same seam as validate-parser: git worktree first, then the device blob store.
+    const file = await resolveRawFile(this.ctx, rawPath);
     if (!file) {
       throw new MeasurementServiceError('NOT_FOUND', `raw data file not found: ${rawPath}`, 404);
     }
@@ -137,13 +148,25 @@ export class MeasurementService {
 
     const recordId = await this.nextRecordId();
     const parsedAt = new Date().toISOString();
+    // u2pubgate: the read-event provenance pointer comes from the stored
+    // event-graph's data when the request names none (ONE helper, reused by
+    // the RunSheetHandlers mint; events by event_type only). Purely
+    // additive: no read event in the graph -> absent, exactly as today.
+    const derivedReadEventRef =
+      typeof input.readEventRef === 'string' && input.readEventRef.length > 0
+        ? undefined
+        : eventGraphRef
+          ? await deriveReadEventRef(this.ctx.store, eventGraphRef)
+          : undefined;
+    const readEventRef =
+      typeof input.readEventRef === 'string' && input.readEventRef.length > 0 ? input.readEventRef : derivedReadEventRef;
     const payload: MeasurementPayload = {
       kind: 'measurement',
       recordId,
       title: `Measurement ${recordId}`,
       assayType: parsed.assayType,
       ...(eventGraphRef ? { eventGraphRef } : {}),
-      ...(typeof input.readEventRef === 'string' ? { readEventRef: input.readEventRef } : {}),
+      ...(readEventRef ? { readEventRef } : {}),
       ...(equipmentRef ? { equipmentRef } : {}),
       ...(labwareInstanceRef ? { labwareInstanceRef } : {}),
       ...(measurementContextRef ? { measurementContextRef } : {}),
@@ -169,6 +192,26 @@ export class MeasurementService {
         parserId: parsed.parserId,
         parserVersion: parsed.parserVersion,
         parsedAt,
+        // u0parserinfo: persist the parser's OWN declared units and preamble
+        // metadata (MeasurementParseResult) — what the file said, verbatim.
+        // Omitted entirely when the parser declares none: never a bare
+        // undefined, never a friendly default for a missing/sentinel unit.
+        ...(parsed.units !== undefined ? { units: parsed.units } : {}),
+        ...(parsed.metadata !== undefined && Object.keys(parsed.metadata).length > 0
+          ? { metadata: parsed.metadata }
+          : {}),
+        // D3: the parser's OWN ordinate series rides the same way — the
+        // single persisted trace truth for the render path (the app maps it
+        // in traceModel; no re-parse at render, no second copy of the
+        // sampling interval). Omitted entirely when the parser declares none.
+        ...(parsed.trace !== undefined
+          ? {
+              trace: {
+                values: parsed.trace.values,
+                samplingIntervalSeconds: parsed.trace.samplingIntervalSeconds,
+              },
+            }
+          : {}),
       },
     };
 

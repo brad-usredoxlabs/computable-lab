@@ -181,8 +181,20 @@ export async function runRunPlanCompile(
       },
     });
     const eventsEmitOutput = eventsEmitResult.output as { eventGraphRef?: string } | undefined;
-    if (eventsEmitOutput?.eventGraphRef) {
-      eventGraphRef = eventsEmitOutput.eventGraphRef;
+    if (eventsEmitResult.ok) {
+      if (eventsEmitOutput?.eventGraphRef) {
+        eventGraphRef = eventsEmitOutput.eventGraphRef;
+      }
+    } else {
+      // The emit pass refused (unbound role or zero events — D-6). Nothing was
+      // persisted and the planned-run repoint never happened, so the compile
+      // must not read as success: override the status to 'blocked' and surface
+      // the emit-pass diagnostics. eventGraphRef stays absent.
+      runPlanCompileResult.status = 'blocked';
+      runPlanCompileResult.diagnostics = [
+        ...runPlanCompileResult.diagnostics,
+        ...(eventsEmitResult.diagnostics ?? []),
+      ];
     }
   }
 

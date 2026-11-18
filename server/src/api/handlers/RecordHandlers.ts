@@ -39,6 +39,16 @@ import { authoringGateActive, authoringGuardFiresOnUpdate, authoringPolicyPasses
 import type { PolicyDisposition } from '../../policy/types.js';
 import type { AuditEventService } from '../../governance/AuditEventService.js';
 import type { KindLifecycleRegistry } from '../../registry/KindLifecycleRegistry.js';
+import { findDanglingReferences } from '../../store/referenceCascade.js';
+import { getLabwareDefinitionRegistry } from '../../registry/LabwareDefinitionRegistry.js';
+
+/** Schema-driven provenance check: describes which fields the target schema accepts */
+interface SchemaProvenanceCheck {
+  hasCreatedAt: boolean;
+  hasUpdatedAt: boolean;
+  hasCreatedBy: boolean;
+  allowsAny: boolean;
+}
 
 interface RecordHandlerSecurityOptions {
   identityService?: LocalIdentityService;
@@ -62,6 +72,12 @@ interface RecordHandlerSecurityOptions {
    * no authoring gates (system works with the wiring ripped out).
    */
   getAuthoringPolicy?: (schemaId: string) => AuthoringPolicy | undefined;
+  /**
+   * Schema-driven provenance check: which fields the target schema accepts.
+   * Absent accessor → kind-based fallback (backward compat; system works with
+   * the wiring ripped out). NO kind names in TS — the schema shape decides.
+   */
+  getSchemaProperties?: (schemaId: string) => SchemaProvenanceCheck | undefined;
   /**
    * QMS7-3: registry-kind lifecycle coverage, loaded from
    * schema/registry/registry-kinds.registry.yaml via KindLifecycleRegistry.
@@ -551,8 +567,25 @@ export function createRecordHandlers(
           };
         }
         
-        const record = await store.get(id);
-        
+        let record: RecordEnvelope | null = await store.get(id);
+
+        // Answer channel (L2-P1-ANSWERCHANNEL-1, narrowed by L2-P1-STOCK-IS-A-RECORD-1):
+        // the store is the record layer; the vendored labware-definition registry is
+        // vocabulary. On a store MISS a registry entry only PRE-SELECTS a candidate
+        // recordId — by exact recordId, then the bare definition id, then a declared
+        // alias — and the STORE is re-read for it. A registry entry with no store
+        // record is a 404, never a synthesized record-shaped 200. A store ERROR is
+        // not a miss: it still surfaces as 500 below. The shape `record:<recordId>`
+        // is NOT accepted — no double identity. Nothing is written, seeded or mutated.
+        if (!record) {
+          const registry = getLabwareDefinitionRegistry();
+          const byRecordId = registry.list().find((entry) => entry.recordId === id);
+          const hit = byRecordId ?? registry.get(id) ?? registry.getByAlias(id);
+          if (hit) {
+            record = await store.get(hit.recordId);
+          }
+        }
+
         if (!record) {
           reply.status(404);
           return {
@@ -753,22 +786,34 @@ export function createRecordHandlers(
         // also carry createdBy for durable file-level provenance.
         const now = new Date().toISOString();
         const creator = user.userId ?? identity?.username ?? 'system';
-        // NOTE: material-instance and aliquot schemas use unevaluatedProperties:false
-        // at root level and do NOT include FAIRCommon via allOf. Ajv rejects
-        // createdAt/createdBy/updatedAt for these types, so we skip injecting them
-        // into the payload and rely on envelope meta instead. Event graphs accept
-        // createdAt/updatedAt but not createdBy, so actor provenance stays in meta.
+        // Schema-driven: inject createdAt/updatedAt/createdBy only when the target
+        // schema accepts them. When the caller provides getSchemaProperties, we
+        // consult it; otherwise we fall back to kind-based checks for backward
+        // compatibility. Schemas with additionalProperties:false and no
+        // createdAt/updatedAt/createdBy will reject injection — rely on envelope
+        // meta for provenance instead.
         const payloadObj = payload as Record<string, unknown>;
-        const isInventoryRecord = payloadObj.kind === 'material-instance' || payloadObj.kind === 'aliquot';
-        const supportsPayloadCreatedBy = payloadObj.kind !== 'event-graph';
-        const payloadWithProvenance = isInventoryRecord
-          ? payloadObj
-          : {
-              ...payloadObj,
-              createdAt: now,
-              updatedAt: now,
-              ...(supportsPayloadCreatedBy ? { createdBy: creator } : {}),
-            };
+        const schemaProps = security?.getSchemaProperties?.(schemaId);
+        let acceptsCreatedAt: boolean, acceptsUpdatedAt: boolean, acceptsCreatedBy: boolean;
+        if (schemaProps) {
+          acceptsCreatedAt = schemaProps.hasCreatedAt || schemaProps.allowsAny;
+          acceptsUpdatedAt = schemaProps.hasUpdatedAt || schemaProps.allowsAny;
+          acceptsCreatedBy = schemaProps.hasCreatedBy || schemaProps.allowsAny;
+        } else {
+          // Backward-compat fallback when getSchemaProperties is unavailable:
+          // material-instance and aliquot schemas reject extra fields, event-graph
+          // declares createdAt/updatedAt but not createdBy.
+          const kind = payloadObj.kind as string;
+          acceptsCreatedAt = kind !== 'material-instance' && kind !== 'aliquot';
+          acceptsUpdatedAt = kind !== 'material-instance' && kind !== 'aliquot';
+          acceptsCreatedBy = kind !== 'material-instance' && kind !== 'aliquot' && kind !== 'event-graph';
+        }
+        const payloadWithProvenance = {
+          ...payloadObj,
+          ...(acceptsCreatedAt ? { createdAt: now } : {}),
+          ...(acceptsUpdatedAt ? { updatedAt: now } : {}),
+          ...(acceptsCreatedBy ? { createdBy: creator } : {}),
+        };
 
         // Inherit FAIR fields from parent record
         const typedPayload = payloadWithProvenance as Record<string, unknown>;
@@ -1588,7 +1633,7 @@ export function createRecordHandlers(
           recordId: id,
           ...(expectedSha !== undefined ? { expectedSha } : {}),
         });
-        
+
         if (!result.success) {
           // Check for SHA mismatch
           if (result.error?.includes('SHA mismatch')) {
@@ -1598,14 +1643,25 @@ export function createRecordHandlers(
               error: result.error,
             };
           }
-          
+
+          // L2-RECORD-DELETE-DEPENDENTS-1: HAS_DEPENDENTS refusal (409)
+          if (result.error?.includes('HAS_DEPENDENTS')) {
+            reply.status(409);
+            return {
+              success: false,
+              error: 'HAS_DEPENDENTS',
+              message: result.error,
+              ...(result.referrers !== undefined ? { referrers: result.referrers } : {}),
+            };
+          }
+
           reply.status(400);
           return {
             success: false,
             error: result.error || 'Failed to delete record',
           };
         }
-        
+
         // Update index after successful delete
         if (indexManager) {
           try {
@@ -1614,10 +1670,12 @@ export function createRecordHandlers(
             console.error('Failed to update index after delete:', indexErr);
           }
         }
-        
+
+        // L2-RECORD-DELETE-DEPENDENTS-1: pass through cascaded array when present
         return {
           success: true,
           ...(result.commit !== undefined ? { commit: result.commit } : {}),
+          ...(result.cascaded !== undefined ? { cascaded: result.cascaded } : {}),
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -1627,6 +1685,34 @@ export function createRecordHandlers(
           message: `Failed to delete record: ${message}`,
         };
       }
+    },
+
+    /**
+     * GET /records/dangling-references
+     * L2-RECORD-DELETE-DEPENDENTS-1 criterion (d) — read-only dangling-reference sweep.
+     */
+    async listDanglingReferences(
+      request: FastifyRequest,
+      reply: FastifyReply,
+    ): Promise<{ dangling: Array<{ recordId: string; kind: string; pointer: string; targetId: string }>; count: number } | ApiError> {
+      const user = await resolveRequestUser(request, reply);
+      if (!user) return unauthenticatedError('A valid local user is required');
+
+      const records = await store.list();
+      const dangling = findDanglingReferences(records);
+
+      // Filter through the same request-scoped ACL snapshot as listRecords
+      const aclSnapshot = security?.authorizationService
+        ? await security.authorizationService.buildAclSnapshot()
+        : undefined;
+
+      const byId = new Map(records.map((r) => [r.recordId, r]));
+      const visible: typeof dangling = [];
+      for (const ref of dangling) {
+        const owner = byId.get(ref.recordId) ?? null;
+        if (await canAccess(user, 'read', owner, aclSnapshot)) visible.push(ref);
+      }
+      return { dangling: visible, count: visible.length };
     },
   };
 }

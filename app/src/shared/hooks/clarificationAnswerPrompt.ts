@@ -15,13 +15,39 @@
  */
 import type { AiClarificationAnswer, AiClarificationRequest } from '../../types/ai'
 
+/**
+ * L2-P1-AMBIGUOUS-OPTIONS-1 / u2refcarry — a choice the person made travels
+ * as the record they chose, not as prose the server re-guesses. When the
+ * answer holds a record identity (the option's `ref` — the picker's real
+ * shape `{ kind, id, type?, label? }`, the identity in `id`, never a mint),
+ * the sentence names the record id so the server never re-resolves the
+ * ambiguous label a second time (gate r11: click → identical question →
+ * "no proposal" loop).
+ */
+function recordIdentity(answer: AiClarificationAnswer): string | undefined {
+  const ref = answer.ref
+  if (ref === undefined) return undefined
+  const id = ref.id
+  return typeof id === 'string' && id.length > 0 ? id : undefined
+}
+
+/** The value the sentence names — the EXACT fallback chain, plus the record
+ *  id in parens when the answer holds a record identity. A mention-token
+ *  answer is byte-unchanged: the token already names the identity, so no
+ *  second one is appended (the `Use [[type:id|label]] for X.` wire form is
+ *  pinned). */
+function answerValue(answer: AiClarificationAnswer): string {
+  const value = answer.mentionToken ?? answer.label ?? answer.value ?? answer.optionId ?? 'answer'
+  const identity = answer.mentionToken === undefined ? recordIdentity(answer) : undefined
+  return identity === undefined ? value : `${value} (${identity})`
+}
+
 export function clarificationAnswerPrompt(
   answer: AiClarificationAnswer,
   request: AiClarificationRequest,
 ): string {
   const target = request.entityType ?? request.kind
-  const value = answer.mentionToken ?? answer.label ?? answer.value ?? answer.optionId ?? 'answer'
-  return `Use ${value} for ${target}.`
+  return `Use ${answerValue(answer)} for ${target}.`
 }
 
 /** Combine a batch of clarification answers into a single prompt sentence-set. */
@@ -34,8 +60,7 @@ export function clarificationAnswersPrompt(
     .map((a) => {
       const req = byId.get(a.requestId)
       const target = req?.entityType ?? req?.kind ?? 'material'
-      const value = a.mentionToken ?? a.label ?? a.value ?? a.optionId ?? 'answer'
-      return `Use ${value} for ${target}.`
+      return `Use ${answerValue(a)} for ${target}.`
     })
     .join(' ')
 }

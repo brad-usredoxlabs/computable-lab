@@ -1,0 +1,80 @@
+$schema: https://computable-lab.com/schema/computable-lab/event-graph.schema.yaml
+recordId: EVG-mwiub3t1-88e1
+id: EVG-mwiub3t1-88e1
+kind: event-graph
+events:
+  - eventId: evt-create_container-dmesgcla
+    event_type: create_container
+    verb: create_container
+    vocabPackId: general
+    details:
+      slot: target
+      labwareType: 96-well-plate
+    provenance:
+      actor: ai-agent
+      timestamp: 2026-11-16T05:45:40.563Z
+      method: compiler
+      actionGroupId: compiler-draft
+labwares:
+  - labwareId: lbw-def-generic-96-well-plate
+    labwareType: plate_96
+    name: plate1
+    addressing:
+      type: grid
+      rows: 8
+      columns: 12
+      rowLabels:
+        - A
+        - B
+        - C
+        - D
+        - E
+        - F
+        - G
+        - H
+      columnLabels:
+        - "1"
+        - "2"
+        - "3"
+        - "4"
+        - "5"
+        - "6"
+        - "7"
+        - "8"
+        - "9"
+        - "10"
+        - "11"
+        - "12"
+    geometry:
+      maxVolume_uL: 350
+      minVolume_uL: 10
+      wellShape: round
+    layoutFamily: sbs_plate
+    wellPitch_mm: 9
+    orientationPolicy: rotatable
+    definitionId: generic/96_well_plate@v1
+    definitionSource: registry
+    renderProfile: plate
+    linearAxis: x
+    sourceRecordId: lbw-def-generic-96-well-plate
+    physicalFootprintMm:
+      length: 127
+      width: 85
+    instanceRecordId: LAB-INST-FAA90585
+runId: RUN-2026-11-16-run-ejst
+name: Event Graph for RUN-2026-11-16-run-ejst
+links:
+  runId: RUN-2026-11-16-run-ejst
+status: filed
+editorLayout:
+  surface: event-editor/v1
+  placements:
+    - placementId: pl-preview-mwiub28n-1
+      labwareId: lbw-def-generic-96-well-plate
+      location:
+        kind: lawn
+        xMm: 16
+        yMm: 16
+      orientation: landscape
+createdAt: 2026-11-16T05:45:42.700Z
+updatedAt: 2026-11-16T05:45:42.700Z

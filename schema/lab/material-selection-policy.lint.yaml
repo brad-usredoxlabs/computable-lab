@@ -1,0 +1,30 @@
+# Lint rules for Material Selection Policy records
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/material-selection-policy.schema.yaml"
+rules:
+  - id: "material-selection-policy-since-must-be-present"
+    title: "Selection policy must declare an effective date"
+    severity: "error"
+    scope: "record"
+    assert:
+      op: "nonEmpty"
+      path: "$.since"
+    message:
+      template: "Selection policy '{{$.recordId}}' must declare 'since'"
+      paths: ["$.recordId", "$.since"]
+  - id: "material-selection-policy-non-only-requires-reason"
+    title: "Non-only selections must justify the choice"
+    severity: "error"
+    scope: "record"
+    when:
+      op: "not"
+      not:
+        op: "equals"
+        path: "$.selection"
+        value: "only"
+    assert:
+      op: "nonEmpty"
+      path: "$.reason"
+    message:
+      template: "Selection policy '{{$.recordId}}' with selection '{{$.selection}}' requires a 'reason'"
+      paths: ["$.recordId", "$.selection", "$.reason"]

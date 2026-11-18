@@ -1,0 +1,10 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://computable-lab.com/schema/computable-lab/datatypes/revision-ref.schema.yaml
+title: Immutable revision reference
+type: object
+additionalProperties: false
+required: [kind, type, id]
+properties:
+  kind: { const: record }
+  type: { const: record-revision }
+  id: { type: string, pattern: '^REV-[A-F0-9]+$' }

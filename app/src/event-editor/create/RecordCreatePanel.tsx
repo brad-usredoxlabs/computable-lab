@@ -170,6 +170,24 @@ function generateSpineRecordId(nodeType: SpineKind, title: string, rand: string)
   return `${prefix}-${slug}-${rand}`
 }
 
+/**
+ * L2-ONTSRC (idmintreadonly7): the mint for a PROJECTION-marked readonly
+ * identity slot — `REC-` + 8 UPPERCASE hex characters (the g4 RED pin
+ * requires ^REC-[0-9A-F]{8}$ exactly). Deliberately distinct from
+ * generateSpineRecordId (4 lowercase base36 chars — the spine's own shape):
+ * reused, it would fail the pin. Minted once per submit (never on mount),
+ * so the header preview does not churn and the created record's identity is
+ * stable (AC3 — the record is re-read at the minted id, not re-minted per
+ * render).
+ */
+function mintReadonlyIdentity(): string {
+  let hex = ''
+  for (let i = 0; i < 8; i++) {
+    hex += Math.floor(Math.random() * 16).toString(16)
+  }
+  return `REC-${hex.toUpperCase()}`
+}
+
 export interface RecordCreatePanelProps {
   /**
    * The record kind to create. Spine kinds ('study'|'experiment'|'run') keep
@@ -184,6 +202,14 @@ export interface RecordCreatePanelProps {
   experimentId?: string
   /** Optional title prefill (e.g. carried from the picker's search query). */
   draftTitle?: string
+  /**
+   * u3defprefill: the noun the record-create door was opened with
+   * (?prefillName=, read once in RecordHostPage). Seeded ONLY into the
+   * non-spine kind's SCHEMA-DECLARED label slot (resolved from the served
+   * schema/projection — never a key the schema does not declare). The spine's
+   * title/shortSlug seed is `draftTitle` and stays untouched.
+   */
+  prefillLabel?: string
   onCreated: (recordId: string, title: string) => void
   onCancel?: () => void
 }
@@ -193,6 +219,7 @@ export function RecordCreatePanel({
   studyId,
   experimentId,
   draftTitle,
+  prefillLabel,
   onCreated,
   onCancel,
 }: RecordCreatePanelProps) {
@@ -266,15 +293,29 @@ export function RecordCreatePanel({
   const unserved = registryNodes !== null && resolvedNode === null && !(registryError !== null && isSpine)
   const registryUnavailable = registryError !== null && resolvedNode === null
 
+  // L2-ONTSRC (idmintreadonly7): the submit-time mint discriminator is the
+  // SERVED projection's `readOnly` flag on the identity slot — never the kind
+  // name (D16 stays correct for assertion/claim: the author supplies the id).
+  // Uses the RAW projection.slots — the `slots` memo below force-sets
+  // readOnly on parent-path slots and is a different array. A missing
+  // projection or a missing slot means NO mint (strict === true).
+  const identitySlotReadOnly =
+    !isSpine &&
+    projection?.slots.find((s) => s.path === `$.${idField}`)?.readOnly === true
+
   // GC-16 FIX RUN 2 (adversarial defect 4; provisional D-A): honest note for
   // a SERVED non-spine kind — the client mints no id; the form exposes the
   // schema-declared `id` field for the author to fill (the server's
   // required-check speaks). Spine kinds carry no note (the client mints
-  // recordId as before).
+  // recordId as before). L2-ONTSRC (idmintreadonly7): a projection-marked
+  // readonly identity slot flips the note to the mint statement — the D16
+  // writable-identity text is byte-identical to pre-idmintreadonly7.
   const idNote =
     isSpine || registryNodes === null || resolvedNode === null
       ? null
-      : `Supply a stable id before saving — the client does not mint knowledge ids; the schema requires one (server validation is the authority).`
+      : identitySlotReadOnly
+        ? `An identifier is minted when you save — the UI spec marks it read-only.`
+        : `Supply a stable id before saving — the client does not mint knowledge ids; the schema requires one (server validation is the authority).`
 
   const label =
     resolvedNode?.title ?? (isSpine ? SPINE_LABELS[nodeType as SpineKind] : nodeType)
@@ -309,6 +350,40 @@ export function RecordCreatePanel({
   // (nothing declared → the shortSlug-deletion branch is correct there,
   // and their required fields come from the author, not a client stamp).
   const [schemaDocFailed, setSchemaDocFailed] = useState(false)
+  // u3defprefill: the label slot resolved ONCE from the settled schema doc
+  // (non-spine kinds only — the spine's title/shortSlug seed stays in the seed
+  // effect, byte-identical). Resolution order: the served schema's declared
+  // `title`, else `display_name`; if neither is declared, null (seed NOTHING —
+  // never invent a key the schema does not declare; additionalProperties:false
+  // would 422 a fabricated one).
+  const [prefillLabelField, setPrefillLabelField] = useState<string | null>(null)
+  useEffect(() => {
+    setPrefillLabelField(null)
+    if (isSpine || !schemaDoc || schemaDocFor !== schemaId) return
+    const declared =
+      schemaDoc.properties && typeof schemaDoc.properties === 'object'
+        ? schemaDoc.properties
+        : null
+    const field =
+      declared && 'title' in declared
+        ? 'title'
+        : declared && 'display_name' in declared
+          ? 'display_name'
+          : null
+    setPrefillLabelField(field)
+  }, [schemaDoc, schemaDocFor, schemaId, isSpine])
+  // u3defprefill: seed the prefilled noun into the RESOLVED label slot.
+  // Runs AFTER the schema doc settles (the resolution effect above), merging
+  // into the current formData so the spine seed (kind / id / state / status /
+  // parent) and any other slot are preserved — only the one resolved key is
+  // set. Gated on `prefillLabelField` (null until a non-spine doc has settled
+  // and declared a slot) so an empty/missing prefill and the spine seed
+  // NOTHING. A kind that declares neither `title` nor `display_name` resolves
+  // to null → nothing is seeded and no key is invented.
+  useEffect(() => {
+    if (isSpine || !prefillLabel || !prefillLabelField) return
+    setFormData((prev) => ({ ...prev, [prefillLabelField!]: prefillLabel }))
+  }, [isSpine, prefillLabel, prefillLabelField])
   useEffect(() => {
     if (!schemaId) {
       setSchemaDoc(null)
@@ -365,6 +440,7 @@ export function RecordCreatePanel({
     schemaDoc?.properties && 'shortSlug' in (schemaDoc.properties as Record<string, unknown>),
   )
   const schemaRequiresTitle = Boolean(schemaDoc?.required?.includes('title'))
+  const schemaRequiresId = !isSpine && Boolean(schemaDoc?.required?.includes(idField))
 
   const parentPaths = useMemo(() => {
     const paths: string[] = []
@@ -448,6 +524,10 @@ export function RecordCreatePanel({
 
   const handleFormChange = useCallback(
     (next: Record<string, unknown>) => {
+      // g7form C-3 (gate g7-legA-20261113T091102:132-135): the banner describes
+      // the SUBMITTED state; an author edit makes it stale. Clear on EDIT only
+      // (not on validity — real refusals must stay until the author acts).
+      if (error !== null) setError(null)
       if (
         next.title &&
         typeof next.title === 'string' &&
@@ -466,7 +546,7 @@ export function RecordCreatePanel({
       }
       setFormData(next)
     },
-    [formData.title, nodeType, idField, isSpine, schemaDeclaresShortSlug],
+    [formData.title, nodeType, idField, isSpine, schemaDeclaresShortSlug, error],
   )
 
   const handleEditorUpdate = useCallback(
@@ -492,6 +572,20 @@ export function RecordCreatePanel({
       if (schemaRequiresTitle && !titleOk) {
         setError('Title is required')
         return
+      }
+      // GC-16 FIX RUN 2 (adversarial defect 9/4; D-A): client-side id gate applies
+      // ONLY when the served schema's `required` names `id` AND the slot is a
+      // visible writable author slot (`!identitySlotReadOnly`). Schema doc
+      // unavailable → the gate is skipped and the server speaks. The spine keeps
+      // its pre-existing mint (client never checks an empty field for those);
+      // only non-spine kinds with schema-required `id` get this parity gate.
+      if (schemaRequiresId && !identitySlotReadOnly) {
+        const idVal = formData[idField]
+        const idOk = typeof idVal === 'string' && idVal.trim() !== ''
+        if (!idOk) {
+          setError('An identifier is required before saving')
+          return
+        }
       }
       if (!schemaId) {
         setError(
@@ -573,6 +667,23 @@ export function RecordCreatePanel({
             randRef.current,
           )
         }
+        // L2-ONTSRC (idmintreadonly7): the served projection marks the
+        // identity slot readonly → mint the id at submit (the g4 defect: the
+        // write carried the anchor and NO id, and the server 400'd with
+        // 'payload must contain recordId or id field'). Placed AFTER the
+        // empty-field strip above (a mint before it is deleted again) and
+        // before the kind re-stamp; the spine branch is untouched (its mint
+        // keeps the STU-/EXP-/RUN- shape). recordId is NEVER invented here —
+        // the server derives it from id (RecordEnvelope.ts).
+        // `!payload[idField]` guard (the gc16 D4 pin): the mint is the
+        // fallback for an EMPTY identity slot — an id already in the payload
+        // (the author's, the D16 contract) is never replaced by a client-
+        // fabricated one. A readonly slot renders NO input in the real form,
+        // so the served-readonly path always reaches this with the id
+        // absent — the guard only protects author-supplied values.
+        if (identitySlotReadOnly && !payload[idField]) {
+          payload[idField] = mintReadonlyIdentity()
+        }
         payload.kind = nodeType
         // System provenance is server-owned — never submit it from the client.
         stripSystemProvenance(payload)
@@ -618,8 +729,10 @@ export function RecordCreatePanel({
       isSpine,
       schemaDeclaresShortSlug,
       schemaRequiresTitle,
+      schemaRequiresId,
       schemaDocFor,
       schemaDocFailed,
+      identitySlotReadOnly,
     ],
   )
 
@@ -678,7 +791,11 @@ export function RecordCreatePanel({
       >
         <div className="record-create-panel__body">
           {error ? (
-            <div className="record-create-panel__error" role="alert">
+            <div
+              className="record-create-panel__error"
+              role="alert"
+              data-testid="record-create-refusal"
+            >
               {error}
             </div>
           ) : null}
@@ -699,6 +816,11 @@ export function RecordCreatePanel({
               disabled={isSubmitting}
               onUpdate={handleEditorUpdate}
               enableOntologyCopilot
+              // g7form C-2 (gate g7-legA-20261113T091102:124-131): a create form
+              // is a form, not prose — ProjectionTapTabEditor defaults to 'prose'
+              // (TapTabEditor.tsx:184) whose sheet suppresses the required asterisk
+              // (taptab.css:451-452). Choose the posture; kind-independent.
+              style="form"
             />
           ) : (
             <div className="record-create-panel__fallback">

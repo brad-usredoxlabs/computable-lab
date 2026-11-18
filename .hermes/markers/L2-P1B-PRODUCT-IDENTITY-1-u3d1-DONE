@@ -1,0 +1,8 @@
+L2-P1B-PRODUCT-IDENTITY-1 u3d1 DONE marker — real commit SHAs from git
+(branch cl/lane2-p1b-u3d1-0530, base f22d4305f155fe70090c2bde5d417aeb76b8f1ae):
+
+41dbda0e8 test(lane2): RED — product door must list kind=labware-definition records (gate r2 D1)
+31bfac91b fix(lane2): product door loads labware-definition records too, deduped (gate r2 D1)
+ec9d1397efcd08e42dc965e187c7d3bdba017d1b report(L2-P1B-PRODUCT-IDENTITY-1 u3d1): seam-fix report
+
+L2-P1B-PRODUCT-IDENTITY-1 UNIT u3d1 DONE ec9d1397efcd08e42dc965e187c7d3bdba017d1b

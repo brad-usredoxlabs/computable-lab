@@ -65,8 +65,10 @@ describe('ANSWER-CHANNEL: the structured clarification answer rides the turn', (
 
     expect(onClarificationPick).toHaveBeenCalledTimes(1)
     const [sentence, answer, request] = onClarificationPick.mock.calls[0]!
-    // 1. the human sentence is unchanged (it is the visible transcript turn)
-    expect(sentence).toBe('Use Thermo DMEM for material.')
+    // 1. the human sentence names the chosen RECORD (u2refcarry): the ref's
+    //    identity rides the visible transcript turn, so the server never
+    //    re-resolves the ambiguous label and re-asks.
+    expect(sentence).toBe('Use Thermo DMEM (MAT-thermo-dmem-1vq1) for material.')
     // 2. the structured answer survives — this is what the server folds, and
     //    its `ref` is what narrows the ambiguous noun to the chosen record.
     expect(answer).toMatchObject({ requestId: REQUEST.id, label: 'Thermo DMEM' })

@@ -23,6 +23,7 @@ export type ResolveSource =
   | 'canonical-term' // tier 0 (canonical term node — alias-first)
   | 'local-record' //   tier 1
   | 'oak' //            tier 2 (on-box local ontology service)
+  | 'local-obo' //      tier 2 (shipped .obo sources, same tier as OAK)
   | 'ols4' //           tier 3 (remote EBI OLS4)
   | 'vendor' //         tier 4
   | 'mint'; //          tier 5 (affordance, not a search hit)

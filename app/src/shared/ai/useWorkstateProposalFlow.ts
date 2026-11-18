@@ -17,8 +17,18 @@
  * NOT lifted (PB-CH-6 extraction ruling): AiTabPanel's `workstateTurnRef`
  * turn flag and its `sendChat` choke point — they guard the AiTabPanel turn
  * model, not the flow, and stay in AiTabPanel.
+ *
+ * L2-P1-THREAD-RESTORE-1 (u1persist): the pending identity + card view are
+ * DURABLE across a page reload — the card's plain-data view rides
+ * sessionStorage under the single key `cl.workstate-pending-proposal` (the
+ * aiThreadClient `cl.ai-thread-tab-ids` / SequenceEditor `cl-sequence-proposal`
+ * tab-checkpoint precedent; sessionStorage, not localStorage — a reload must
+ * survive, a closed tab must not resurrect forever). The compiled draft
+ * itself already survives the server restart (git-backed RecordStore); a
+ * spent/superseded identity is the SERVER's stale-identity rejection through
+ * the single writer — rehydration never re-compiles and never re-accepts.
  */
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiClient } from '../api/client'
 import { useWorkstateExecutor } from '../session/useWorkstateExecutor'
 import type {
@@ -113,6 +123,91 @@ export function useWorkstateProposalFlow(): WorkstateProposalFlow {
     setCardState(next)
   }, [])
 
+  // u1persist: the pending proposal's DURABLE home — the card's plain-data
+  // view (every member is plain data: adapter, phase, summary, tabs,
+  // resolvedTerms, diagnostics, recordFields, chainCard, draftId, revision).
+  // The card is rehydrated at phase 'review' ONLY (rehydration must never
+  // manufacture an accept control the server denied — a blocked compile
+  // therefore clears the entry instead of persisting), and NEVER recompiled:
+  // there is no GET /drafts/:id; the identity is what the single writer's
+  // stale-identity guard checks (a spent/superseded draft fails accept with a
+  // named diagnostic — never a double write).
+  const PENDING_PROPOSAL_KEY = 'cl.workstate-pending-proposal'
+  const persistPendingProposal = useCallback((entry: { adapter: WorkstateAdapter; identity: { draftId: string; revision: number; reviewHash: string }; cardView: WorkstateProposalCardState }) => {
+    try {
+      sessionStorage.setItem(PENDING_PROPOSAL_KEY, JSON.stringify(entry))
+    } catch {
+      // Storage unavailable/full — the in-memory flow is unaffected.
+    }
+  }, [])
+  const clearPendingProposal = useCallback(() => {
+    try {
+      sessionStorage.removeItem(PENDING_PROPOSAL_KEY)
+    } catch {
+      // Same conservative shape — persistence never breaks the flow.
+    }
+  }, [])
+
+  // One-shot rehydration on mount: a stored entry survives the reload; a
+  // fresh mount (compileSeqRef 0, no card) restores the card at phase
+  // 'review'. Corrupt JSON is dropped (key removed) — never thrown.
+  // Runs at most once (empty deps) and BEFORE any compile could start — the
+  // remount never fires the compile endpoint.
+  useEffect(() => {
+    if (compileSeqRef.current !== 0 || cardRef.current !== null) return
+    let raw: string | null = null
+    try {
+      raw = sessionStorage.getItem(PENDING_PROPOSAL_KEY)
+    } catch {
+      return
+    }
+    if (!raw) return
+    let entry: unknown
+    try {
+      entry = JSON.parse(raw)
+    } catch {
+      clearPendingProposal() // corrupt — drop, stay null
+      return
+    }
+    const obj = (entry && typeof entry === 'object' ? entry : {}) as {
+      adapter?: unknown
+      identity?: { draftId?: unknown; revision?: unknown; reviewHash?: unknown }
+      cardView?: Record<string, unknown>
+    }
+    const id = obj.identity
+    const view = obj.cardView
+    if (
+      typeof obj.adapter !== 'string' ||
+      !id ||
+      typeof id.draftId !== 'string' ||
+      typeof id.revision !== 'number' ||
+      typeof id.reviewHash !== 'string' ||
+      !view ||
+      typeof view !== 'object'
+    ) {
+      clearPendingProposal() // malformed entry — drop, stay null
+      return
+    }
+    pendingDraftRef.current = { draftId: id.draftId, revision: id.revision, reviewHash: id.reviewHash }
+    // setCard (NOT setCardState): the rehydrated card must be the flow's
+    // current card — cardRef.current drives acceptWorkstate's guard.
+    setCard({
+      adapter: obj.adapter as WorkstateAdapter,
+      phase: 'review',
+      ...(typeof view.adapter === 'string' ? { adapter: view.adapter as WorkstateAdapter } : {}),
+      ...(typeof view.summary === 'string' ? { summary: view.summary } : {}),
+      ...(Array.isArray(view.tabs) ? { tabs: view.tabs as WorkstateProposalCardState['tabs'] } : {}),
+      ...(Array.isArray(view.resolvedTerms) ? { resolvedTerms: view.resolvedTerms as WorkstateProposalCardState['resolvedTerms'] } : {}),
+      ...(Array.isArray(view.diagnostics) ? { diagnostics: view.diagnostics as WorkstateProposalCardState['diagnostics'] } : {}),
+      ...(Array.isArray(view.recordFields) ? { recordFields: view.recordFields as WorkstateProposalCardState['recordFields'] } : {}),
+      ...(view.chainCard && typeof view.chainCard === 'object' && !Array.isArray(view.chainCard)
+        ? { chainCard: view.chainCard as WorkstateProposalCardState['chainCard'] }
+        : {}),
+      ...(typeof view.draftId === 'string' ? { draftId: view.draftId } : {}),
+      ...(typeof view.revision === 'number' ? { revision: view.revision } : {}),
+    })
+  }, [clearPendingProposal, setCard])
+
   const proposeWorkstate = useCallback(
     async (adapter: WorkstateAdapter, intent: Record<string, unknown>, target?: { recordId: string }) => {
       const seq = compileSeqRef.current + 1
@@ -180,6 +275,16 @@ export function useWorkstateProposalFlow(): WorkstateProposalFlow {
           draftId: res.draftId,
           revision: res.revision,
         })
+        // u1persist: the pending identity + card view become DURABLE — but
+        // ONLY for the review phase. Rehydration restores the card at phase
+        // 'review'; persisting a blocked card would manufacture an accept
+        // control the server denied (the trust rule, unchanged). Any older
+        // entry is cleared either way (a new compile supersedes it).
+        if (cardRef.current !== null && cardRef.current.phase === 'review') {
+          persistPendingProposal({ adapter, identity: { draftId: res.draftId, revision: res.revision, reviewHash: res.reviewHash }, cardView: cardRef.current })
+        } else {
+          clearPendingProposal()
+        }
       } catch (error) {
         if (seq !== compileSeqRef.current) return // superseded — discard
         setCard({
@@ -187,9 +292,10 @@ export function useWorkstateProposalFlow(): WorkstateProposalFlow {
           phase: 'blocked',
           diagnostics: [{ message: error instanceof Error ? error.message : 'The compile failed — nothing was written.' }],
         })
+        clearPendingProposal() // a failed compile supersedes any older pending entry
       }
     },
-    [setCard],
+    [setCard, persistPendingProposal, clearPendingProposal],
   )
 
   // Accept = the actor-bound compiled draft through the single writer. The
@@ -212,6 +318,7 @@ export function useWorkstateProposalFlow(): WorkstateProposalFlow {
         // Spent card: controls disappear (no dead buttons). The accepted apply
         // pushes exactly once through useSessionSync's existing debounced effect.
         pendingDraftRef.current = null
+        clearPendingProposal() // the spend is durable — no resurrect on reload
         setCard({ ...current, phase: 'applied' })
         return
       }
@@ -228,15 +335,16 @@ export function useWorkstateProposalFlow(): WorkstateProposalFlow {
         diagnostics: [{ message: error instanceof Error ? error.message : 'Accept failed — nothing was written.' }],
       })
     }
-  }, [executor, setCard])
+  }, [executor, setCard, clearPendingProposal])
 
   // Reject = abandon. There is NO reject endpoint (PB-CH-2 §6): zero store
   // calls, zero fetches, the pending identity cleared.
   const rejectWorkstate = useCallback(() => {
     pendingDraftRef.current = null
+    clearPendingProposal() // abandon is durable too — the bar is gone on reload
     compileSeqRef.current += 1 // any in-flight compile is now superseded
     setCard(null)
-  }, [setCard])
+  }, [setCard, clearPendingProposal])
 
   const handleAgentAction = useCallback(
     (action: AiAgentActionEnvelope): string | undefined => {

@@ -1,8 +1,9 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { parse } from 'yaml';
 import { loadMaterialProfileRegistry } from './MaterialProfileRegistry.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -18,6 +19,7 @@ describe('MaterialProfileRegistry', () => {
       'single_active_formulation',
       'sample',
       'other',
+      'vendor-product',
     ]);
     expect(registry.get('chemical')?.fields.find((field) => field.path === 'status')).toMatchObject({
       control: 'app-owned',
@@ -139,5 +141,38 @@ profiles:
     // Honest absent: null, and the policy object carries NO candidateRanking key.
     expect(registry.candidateRanking()).toBeNull();
     expect(registry.clarificationPolicy()).not.toHaveProperty('candidateRanking');
+  });
+
+  it('vendor-product profile is declared and every field path matches the schema (drift guard)', () => {
+    const registry = loadMaterialProfileRegistry(REGISTRY_PATH);
+    const schemaPath = resolve(__dirname, '../../../schema/lab/vendor-product.schema.yaml');
+    const schema = parse(readFileSync(schemaPath, 'utf8')) as { properties?: Record<string, unknown> };
+    const schemaProps = new Set(Object.keys(schema.properties || {}));
+
+    // (a) profile exists and has a label
+    const profile = registry.get('vendor-product');
+    expect(profile).not.toBeNull();
+    expect(profile!.label).toBeTruthy();
+
+    // (b) layers list and field layers are consistent
+    expect(profile!.layers).toEqual(['vendor-product']);
+    for (const field of profile!.fields) {
+      expect(profile!.layers).toContain(field.layer);
+    }
+
+    // (c) drift guard: every declared path is a property in the schema
+    for (const field of profile!.fields) {
+      expect(schemaProps).toContain(field.path);
+    }
+
+    // (d) no only/default/selection/policy field
+    const forbiddenPaths = ['only', 'default', 'selection', 'selected', 'policy'];
+    for (const field of profile!.fields) {
+      expect(forbiddenPaths).not.toContain(field.path);
+    }
+
+    // (e) existing lookups are unaffected
+    expect(registry.lookup({ domain: 'media', formulationKind: 'complex_composition' }).id).toBe('media_composition');
+    expect(registry.lookup({ domain: 'chemical' }).id).toBe('chemical');
   });
 });

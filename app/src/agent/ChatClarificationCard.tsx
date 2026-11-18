@@ -37,6 +37,7 @@ import { ParameterAnswerInput } from '../event-editor/right-pane/ai/ParameterAns
 // Submit, no change to `allAnswered`.
 import { ClarifyAssumedChip } from './ClarifyAssumedChip'
 import { ClarifyWellTargetSlot } from './ClarifyWellTargetSlot'
+import { journeyDoorHref, journeyDoorLabel, useJourneyDoorSurfaces } from './journeyDoorHref'
 
 export interface ChatClarificationCardProps {
   /** The unresolved facts for ONE sentence (the message), in wire order. */
@@ -102,6 +103,12 @@ export function ChatClarificationCard({
   // The one pick per slot, keyed by the request's OWN identity (the same
   // request.id the picker + the panel use). Never prefilled (never-guess).
   const [picks, setPicks] = useState<Record<string, AiClarificationAnswer>>({})
+  // The DECLARED surface registry (the authority for door routes), loaded only
+  // when this card actually renders a journey door. Undefined until loaded: the
+  // href builder falls back to the documented material route.
+  const surfaceRegistry = useJourneyDoorSurfaces(
+    requests.some((request) => request.journey !== undefined && request.journey.doors.length > 0),
+  )
 
   // The panel's turnKey staleness argument, verbatim: a new fold replaces the
   // card, so a fresh turnKey clears the prior fold's picks (never a stale
@@ -158,6 +165,17 @@ export function ChatClarificationCard({
       {requests.map((request) => {
         const options = request.options ?? []
         const hasPicker = requestHasPicker(request)
+        // L2-P1-CREATE-DOOR-1 (unit absdoor): the DECLARED ABSENCE (server/src/
+        // ai/clarifications.ts emits `absence` when a binding blocker named a
+        // noun this lab's records do not hold and offered NO candidates). It is
+        // a branch AHEAD of the picker/options/typed fallback — and ahead of
+        // `hasPicker` ON PURPOSE: a labware miss still carries kind 'labware'
+        // (menuProvider '/l'), so `hasPicker` is true and the picker's
+        // search-then-mint surface would otherwise shadow the named miss with a
+        // box that finds nothing (a miss read as "nothing to see").
+        // (context §2.7: identity is a record id, never a name — a miss is a
+        // named unresolved slot, not an empty option list.)
+        const absence = request.absence
         // BGATE-FIX D3 (the single-request arm's rule, ChatLog.tsx
         // shownPrompts) — for the GROUPED card the host passes an EMPTY seed
         // (advc-c3 D2, fix3): the card OWNS its prompts and the dedupe is
@@ -191,11 +209,68 @@ export function ChatClarificationCard({
               <p className="chat-clarification-card__prompt">{request.prompt}</p>
             ) : null}
             {/* Exactly ONE answer surface per slot (spec item 2): the DECLARED
-                slot control first (TARGET-1: the assumed-value quantity chip /
-                the target-well slot, both riding `record`), then the picker
-                (the same per-slot picker identity law the panel documents),
-                else the numbered options, else the typed parameter box. */}
-            {controlKind === 'quantity' && request.clarifyControl ? (
+                ABSENCE first (CREATE-DOOR-1: the server's named miss + the ONE
+                create row to the existing /lab/labware/new surface — an ANCHOR,
+                never a write: the card mints nothing and posts nothing on
+                click; the door's own accept is the only writer), then the
+                DECLARED slot control (TARGET-1: the assumed-value quantity
+                chip / the target-well slot, both riding `record`), then the
+                picker (the same per-slot picker identity law the panel
+                documents), else the numbered options, else the typed
+                parameter box. */}
+            {absence && options.length === 0 ? (
+              <div className="chat-clarification-card__absent">
+                <p className="chat-clarification-card__absent-reason">{absence.reason}</p>
+                {/* L2-NOUN-CREATION-JOURNEY-1 (unit u1journey): an unbound
+                    MATERIAL noun is created through the DECLARED journey —
+                    ONE door per `journey.doors[]` alternative, read from
+                    config/journey/declarations/noun-create.yaml. The card
+                    holds no door list: rename an alternative_id in the
+                    declaration and this row changes (pinned by the server
+                    test). A labware miss (no journey) keeps the single
+                    existing create anchor byte-identically. The door is an
+                    ANCHOR, never a write: it carries the noun as a CANDIDATE
+                    plus the declaration's surface/door/journey/checkpoint in
+                    the URL, and the target surface's own governed accept is
+                    the only writer. */}
+                {request.journey !== undefined && request.journey.doors.length > 0 ? (
+                  <ul
+                    className="chat-clarification-card__journey-doors"
+                    data-testid="chat-clarification-journey-doors"
+                  >
+                    {request.journey.doors.map((door) => {
+                      const href = journeyDoorHref(
+                        { ...door, candidateLabel: door.candidateLabel || request.journey!.candidateLabel },
+                        request.journey!,
+                        surfaceRegistry,
+                      )
+                      return (
+                      <li key={door.id}>
+                        <a
+                          className="chat-clarification-card__journey-door"
+                          data-testid={`chat-clarification-door-${door.id}`}
+                          data-surface={door.surface}
+                          {...(href !== null ? { href } : {})}
+                          aria-disabled={href === null ? true : undefined}
+                          title={href !== null ? door.summary : `${door.summary} (no declared route is available)`}
+                        >
+                          {journeyDoorLabel(door.id)}
+                        </a>
+                      </li>
+                      )
+                    })}
+                  </ul>
+                ) : (
+                  <a
+                    className="chat-clarification-card__absent-create"
+                    data-testid="chat-clarification-absent-create"
+                    href={`/lab/labware/new?prefillName=${encodeURIComponent(absence.mention)}`}
+                  >
+                    Create this record
+                  </a>
+                )}
+              </div>
+            ) : controlKind === 'quantity' && request.clarifyControl ? (
               <ClarifyAssumedChip
                 requestId={request.id}
                 control={request.clarifyControl}

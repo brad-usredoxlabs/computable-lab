@@ -9,6 +9,7 @@ import {
   listVerbs,
   _resetRegistryForTest,
   makeEventId,
+  requireExpander,
   type BiologyVerbExpander,
   type PlateEventPrimitive,
 } from './BiologyVerbExpander.js';
@@ -291,5 +292,32 @@ describe('shake expander', () => {
   it('uses default rpm and duration when not provided', () => {
     const events = shakeExpander.expand({ verb: 'shake', params: {} });
     expect(events[0].details).toMatchObject({ rpm: 600, duration: 'PT5M' });
+  });
+});
+
+describe('requireExpander', () => {
+  beforeEach(() => {
+    _resetRegistryForTest();
+  });
+
+  it('returns the same expander as getExpander for a registered verb', () => {
+    registerVerbExpander({ verb: 'seed', expand: () => [] });
+    const reqResult = requireExpander('seed');
+    const getExpanderResult = getExpander('seed');
+    expect(reqResult).toEqual({ ok: true, expander: getExpanderResult });
+    expect(reqResult.ok).toBe(true);
+    if (reqResult.ok) {
+      expect(reqResult.expander).toBe(getExpanderResult);
+    }
+  });
+
+  it('returns NO_EXPANDER for an unregistered verb', () => {
+    const result = requireExpander('unknown_verb');
+    expect(result).toEqual({ ok: false, code: 'NO_EXPANDER', verb: 'unknown_verb' });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.code).toBe('NO_EXPANDER');
+      expect(result.verb).toBe('unknown_verb');
+    }
   });
 });

@@ -47,6 +47,16 @@ function renderAt(path: string) {
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route
+          path="/ingestion"
+          element={
+            <ThemeProvider>
+              <OpenTabsProvider>
+                <IngestionPage />
+              </OpenTabsProvider>
+            </ThemeProvider>
+          }
+        />
+        <Route
           path="/ingestion/:tab"
           element={
             <ThemeProvider>
@@ -101,6 +111,24 @@ describe('IngestionPage', () => {
     renderAt('/ingestion/sequences')
     expect(screen.getByTestId('ingestion-body-sequences')).toBeDefined()
     expect(await screen.findByTestId('sequence-search')).toBeDefined()
+  })
+
+  // ---- journey door landing (L2-NOUN-CREATION-JOURNEY-1, advc c2 D1) ----
+  it('shows the candidate a declared door carried in ?prefillName=', () => {
+    renderAt('/ingestion?prefillName=DMEM%20medium%20X')
+    expect(screen.getByTestId('ingestion-candidate-name').textContent).toBe('DMEM medium X')
+  })
+
+  it('shows the candidate again after a RELOAD of the same door URL', () => {
+    const first = renderAt('/ingestion?prefillName=DMEM%20medium%20X')
+    first.unmount()
+    renderAt('/ingestion?prefillName=DMEM%20medium%20X')
+    expect(screen.getByTestId('ingestion-candidate-name').textContent).toBe('DMEM medium X')
+  })
+
+  it('shows nothing on a plain ingestion visit', () => {
+    renderAt('/ingestion')
+    expect(screen.queryByTestId('ingestion-candidate')).toBeNull()
   })
 })
 

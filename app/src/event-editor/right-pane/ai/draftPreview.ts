@@ -11,6 +11,7 @@ import type { EventEditorPlacement, PlacementLocation } from '../../types'
 import type { PlateEvent } from '../../../types/events'
 import { expandEventWells } from '../../lib/wellRange'
 import {
+  labwareDefinitionRecordToEditorLabware,
   labwareDefinitionRecordToPayload,
   labwareRecordToEditorLabware,
   type Labware,
@@ -76,11 +77,42 @@ function nextPreviewPlacementId(): string {
   return `pl-preview-${Date.now().toString(36)}-${previewPlacementCounter.toString(36)}`
 }
 
+/**
+ * L2-P1-PLACE-AND-MINT-1 u2: the placement identity of a vessel a resolved
+ * DEFINITION offer places. The definition record id may back MANY vessels
+ * (it names the GEOMETRY); the placement needs its OWN identity so a second
+ * "place a plate" request is not read as "already there" by the placement
+ * dedupe in the shared loop below. The record identity stays where the mint
+ * reads it: sourceRecordId (the chosen store record) + definitionId
+ * (the geometry) — the three identities keep their distinct truths.
+ */
+function nextPlacementIdentity(): string {
+  return `lbw-placed-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+/**
+ * THE DISCRIMINATOR (u2): does the resolved offer's record hydrate through
+ * the definition mapper — i.e. carry topology+capacity (a labware-definition
+ * record)? That is the RECORD-level truth, and it is deliberately NOT the
+ * ghost's `definitionSource`: a vessel ghost ALSO reads 'registry' once its
+ * legacy type resolves through the registry (labwareDefinition.ts BY_LEGACY
+ * TYPE), which is exactly why the D5 vessel must NOT be re-keyed.
+ *
+ * A DEFINITION record names GEOMETRY and may back many vessels => the ghost
+ * gets its OWN placement identity (nextPlacementIdentity). A VESSEL record
+ * has exactly ONE placement => keep the record-id key and let the dedupe
+ * below reuse it (L2-SUITE-A-uifix1 D5).
+ */
+function isDefinitionRecordPayload(record: LabwareRecordPayload): boolean {
+  return labwareDefinitionRecordToEditorLabware(record, record.recordId) != null
+}
+
 export interface BuildPreviewArgs {
   platform: PlatformManifest | null | undefined
   variant: PlatformVariantManifest | null | undefined
   events: PlateEvent[]
   labwareAdditions: AiLabwareAddition[]
+  labwareRecords?: Record<string, LabwareRecordPayload>
   labwareRequirements: AiLabwareRequirement[]
   /** Hints the compile resolved against REAL inventory records — offered as
    *  PLACEMENTS of the existing records (never authored; see the resolved arm
@@ -253,6 +285,7 @@ export function buildPreviewFromDraft({
   variant,
   events,
   labwareAdditions,
+  labwareRecords = {},
   labwareRequirements,
   resolvedLabwares = [],
   equipmentRequirements = [],
@@ -292,25 +325,43 @@ export function buildPreviewFromDraft({
     ...labwareAdditions.map((addition) => ({
       label: addition.recordId,
       deckSlot: addition.deckSlot,
-      labware: labwareRecordToEditorLabware(labwarePayloadForAddition(addition)),
+      labware: labwareRecordToEditorLabware(labwareRecords[addition.recordId] ?? labwarePayloadForAddition(addition)),
     })),
     // The RESOLVED arm: a hint bound against a REAL inventory record is a
     // PLACEMENT of the record the lab already owns, never a re-creation
     // (submitSuggestionTool.ts:311). labwareRecordToEditorLabware keys the
-    // editor labware BY THE RECORD ID (labwareId/sourceRecordId === recordId)
-    // and never sets proposedRecord — authoring lives ONLY in the
-    // recordCreations arm below. Payload stays the same honest best-effort the
-    // additions arm ships (definition catalog, else fallback geometry); the
-    // title rides as the name so the ghost shows the record's REAL title
-    // (conditional spread — exactOptionalPropertyTypes, never name: undefined).
-    ...resolvedLabwares.map((resolved) => ({
-      label: resolved.recordId,
-      deckSlot: resolved.deckSlot,
-      labware: labwareRecordToEditorLabware({
-        ...labwarePayloadForAddition(resolved),
+    // editor labware BY THE RECORD ID and never sets proposedRecord —
+    // authoring lives ONLY in the recordCreations arm below.
+    //
+    // L2-P1-PLACE-AND-MINT-1 u2: the record id may name a DEFINITION (it
+    // names the GEOMETRY and may back many vessels) or a VESSEL (exactly
+    // one placement). isDefinitionRecordPayload (the record-level gate —
+    // topology+capacity, NOT the ghost's definitionSource) keys a
+    // definition-backed ghost by its OWN placement identity (the mint reads
+    // the record identity from sourceRecordId/definitionId —
+    // labwareInstanceMint.ts resolution), so the placement dedupe below
+    // compares PLACEMENT identity, never definition id. Vessel offers keep
+    // the record-id key and reuse their existing placement (L2-SUITE-A-uifix1 D5).
+    // Payload stays the same honest best-effort the additions arm ships
+    // (definition catalog, else fallback geometry); the title rides as the
+    // name so the ghost shows the record's REAL title (conditional spread —
+    // exactOptionalPropertyTypes, never name: undefined).
+    ...resolvedLabwares.map((resolved) => {
+      const payload: LabwareRecordPayload = {
+        ...(labwareRecords[resolved.recordId] ?? labwarePayloadForAddition(resolved)),
         ...(resolved.title ? { name: resolved.title } : {}),
-      }),
-    })),
+      }
+      const vessel = labwareRecordToEditorLabware(payload)
+      return {
+        label: resolved.recordId,
+        deckSlot: resolved.deckSlot,
+        // A definition offer places a NEW vessel (own placement identity);
+        // a vessel offer reuses its record-id placement (D5 dedupe).
+        labware: isDefinitionRecordPayload(payload)
+          ? { ...vessel, labwareId: nextPlacementIdentity() }
+          : vessel,
+      }
+    }),
   ]
 
   for (let index = 0; index < proposedLabware.length; index += 1) {

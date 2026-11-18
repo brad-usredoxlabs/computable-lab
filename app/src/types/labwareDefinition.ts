@@ -120,18 +120,6 @@ export const LABWARE_DEFINITIONS: LabwareDefinition[] = [
     ],
   },
   {
-    ...gridDefinition('opentrons/nest_96_wellplate_2ml_deep@v1', 'NEST 96 Well Plate 2 mL Deep', ['deepwell_96'], 8, 12, 2000, 9, 'plate'),
-    vendor: 'Opentrons',
-    source: 'opentrons',
-    specificity: 'concrete',
-    read_only: true,
-    physical_geometry: { overall_dimensions_mm: { length: 127, width: 85 } },
-    platform_aliases: [
-      { platform: 'opentrons_ot2', alias: 'nest_96_wellplate_2ml_deep' },
-      { platform: 'opentrons_flex', alias: 'nest_96_wellplate_2ml_deep' },
-    ],
-  },
-  {
     id: 'opentrons/nest_12_reservoir_22ml@v1',
     display_name: '12-Channel Reservoir',
     vendor: 'Opentrons',

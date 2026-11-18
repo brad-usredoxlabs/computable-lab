@@ -454,6 +454,9 @@ $defs:
       labwareId:
         type: string
         description: "Unique identifier for this labware instance."
+      instanceRecordId:
+        type: string
+        description: "Record ID of the backing labware-instance; that record references the labware definition."
       labwareType:
         type: string
         description: "Type of labware (e.g., 'plate_96', 'reservoir_12', 'tube')."

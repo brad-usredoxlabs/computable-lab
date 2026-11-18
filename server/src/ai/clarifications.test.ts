@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { clarificationRequestsFromGaps, parseClarificationAnswers, parseClarificationRequests } from './clarifications.js';
+import {
+  clarificationRequestsFromAssurance,
+  clarificationRequestsFromGaps,
+  parseClarificationAnswers,
+  parseClarificationRequests,
+} from './clarifications.js';
 
 
 describe('clarification request helpers', () => {
@@ -50,5 +55,32 @@ describe('clarification request helpers', () => {
     ])).toEqual([
       expect.objectContaining({ requestId: 'cells', optionId: 'MAT-HEPG2' }),
     ]);
+  });
+
+  // L2-P1-CREATE-DOOR-1 (unit absdoor): a binding blocker with NO candidates is
+  // a NAMED unresolved slot — the request declares the absence (the blocker's
+  // mention + one server-side reason), never an empty option list read as
+  // "nothing to see". The reason wording is the shipped slash-menu diagnostic
+  // (resolvers.ts:568, "Not in this lab's records") — one source, server-side.
+  it('declares a named absence for an un-bindable noun (no candidates)', () => {
+    const blocker = {
+      code: 'AMBIGUOUS_BINDING',
+      mention: 'a-noun-the-lab-does-not-hold',
+      message: 'This lab has no such record; choose what it is.',
+      candidateIds: [] as string[],
+    };
+    const [request] = clarificationRequestsFromAssurance([blocker]);
+    expect(request).toBeTruthy();
+    // The options stay empty (nothing bindable) — the miss is declared, not
+    // papered over with a fake candidate (identity-by-name trap).
+    expect(request!.options).toEqual([]);
+    // The absence is NAMED after the blocker's mention, with a server-supplied
+    // reason — not an absence:undefined hole, not a client-composed sentence.
+    expect(request!.absence).toBeDefined();
+    expect(request!.absence!.mention).toBe(blocker.mention);
+    expect(request!.absence!.reason.length).toBeGreaterThan(0);
+    expect(request!.absence!.reason).toBe(`Not in this lab's records: ${blocker.mention}`);
+    // The request still carries the prompt (the blocker's message).
+    expect(request!.prompt).toBe(blocker.message);
   });
 });

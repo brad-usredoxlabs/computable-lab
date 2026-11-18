@@ -54,6 +54,26 @@ export function getExpander(verb: string): BiologyVerbExpander | undefined {
 }
 
 /**
+ * Result of a verb-expander lookup — named error, never a silent drop;
+ * the caller decides whether an unexpanded step is fatal.
+ */
+export type ExpanderLookupResult =
+  | { ok: true; expander: BiologyVerbExpander }
+  | { ok: false; code: 'NO_EXPANDER'; verb: string };
+
+/**
+ * Require an expander for the given verb. Returns a typed result:
+ * a hit yields `{ ok, expander }`, a miss yields `{ ok: false, code: 'NO_EXPANDER', verb }`.
+ */
+export function requireExpander(verb: string): ExpanderLookupResult {
+  const expander = _registry.get(verb);
+  if (expander) {
+    return { ok: true, expander };
+  }
+  return { ok: false, code: 'NO_EXPANDER', verb };
+}
+
+/**
  * List all registered verb names, sorted alphabetically.
  */
 export function listVerbs(): string[] {

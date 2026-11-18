@@ -91,6 +91,32 @@ describe('labware-definition record parity', () => {
     });
   }
 
+  // Gate g3 D1: the 25 mL single-trough reservoir lives in the registry tier
+  // only, so the record-store path (listRecordsByKind('labware-definition'))
+  // could not see it. Pin it as a record-store definition.
+  describe('single-trough 25 mL reservoir record', () => {
+    const recordId = 'lbw-def-generic-single-trough-25ml-reservoir';
+
+    it('record store serves it as a labware-definition', () => {
+      const record = loadRecord(recordId);
+      expect(record.kind).toBe('labware-definition');
+      expect(record.type).toBe('labware_definition');
+      expect(record.recordId).toBe(recordId);
+      expect(record.id).toBe('reservoir_25ml_single');
+      expect((record.topology as { addressing?: string }).addressing).toBe('single');
+      expect((record.capacity as { max_well_volume_uL?: number }).max_well_volume_uL).toBe(25000);
+    });
+
+    it('matches the vendored registry copy (no divergence)', () => {
+      const registryPath = resolve(repoRoot, 'schema', 'registry', 'labware-definitions', 'single-trough-25ml-reservoir.yaml');
+      const registry = yamlLoad(readFileSync(registryPath, 'utf8')) as Yaml;
+      const record = loadRecord(recordId);
+      for (const field of ['id', 'display_name', 'source', 'platform_aliases', 'topology', 'capacity', 'aspiration_hints', 'render_hints']) {
+        expect(record[field], `${field} diverges from registry copy`).toEqual(registry[field]);
+      }
+    });
+  });
+
   it('covers every spec-012 tube rack legacy type', () => {
     const required = [
       'tubeset_6x15ml',

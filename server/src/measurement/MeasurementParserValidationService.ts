@@ -1,6 +1,7 @@
 import type { AppContext } from '../server.js';
 import { ParserRegistry } from './parsers/ParserRegistry.js';
 import { MeasurementServiceError } from './MeasurementService.js';
+import { resolveRawFile } from './rawFileResolver.js';
 
 export class MeasurementParserValidationService {
   private readonly ctx: AppContext;
@@ -13,7 +14,8 @@ export class MeasurementParserValidationService {
 
   async validate(input: { parserId: string; path: string }): Promise<Record<string, unknown>> {
     const parser = this.parsers.resolve(input.parserId);
-    const file = await this.ctx.repoAdapter.getFile(input.path);
+    // git worktree first, then the device blob store (safeSegment for uploads); one seam for both.
+    const file = await resolveRawFile(this.ctx, input.path);
     if (!file) {
       throw new MeasurementServiceError('NOT_FOUND', `Raw data file not found: ${input.path}`, 404);
     }
@@ -31,6 +33,19 @@ export class MeasurementParserValidationService {
       },
       data: parsed.data,
       preview: parsed.data.slice(0, 12),
+      // D3 (L2-GC-TRACE-PERSIST-1): echo the trace SUMMARY so validate output
+      // matches ingest (the same single trace source — no re-parse, and NO
+      // copy of the sampling interval: exactly one such field in the output).
+      // Omitted entirely when the parser declares no trace.
+      ...(parsed.trace !== undefined
+        ? {
+            trace: {
+              channelId: parsed.trace.channelId,
+              points: parsed.trace.values.length,
+              samplingIntervalSeconds: parsed.trace.samplingIntervalSeconds,
+            },
+          }
+        : {}),
     };
   }
 }

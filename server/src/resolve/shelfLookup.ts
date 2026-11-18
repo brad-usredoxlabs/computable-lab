@@ -29,7 +29,7 @@ import { createRecordProvider } from './providers/records.js';
 import type { ProviderHit } from './types.js';
 
 /** Referent level of a shelf line (inventory layer, never concept/spec). */
-export type ShelfReferentLevel = 'instance' | 'lot' | 'aliquot';
+export type ShelfReferentLevel = 'instance' | 'lot' | 'aliquot' | 'labware-instance';
 
 /** How the line joined to the resolved concept(s) — recorded as data. */
 export type ShelfJoinPath =
@@ -37,12 +37,15 @@ export type ShelfJoinPath =
   | 'direct-material-ref'
   | 'parent-instance'
   | 'source-lot'
+  | 'labware-definition'
   | 'unknown-provenance';
 
 /** A concept the term resolved to (tier-1 local material records). */
 export interface ShelfConcept {
   recordId: string;
   label: string;
+  /** Source kind: 'material' or 'labware-definition'. */
+  sourceKind?: 'material' | 'labware-definition';
 }
 
 /** One recorded-material line on the shelf. */
@@ -55,6 +58,8 @@ export interface ShelfEntry {
   vendor?: string;
   /** Lot string (vendor_lot / lot_number) when present. */
   lot?: string;
+  /** Location label from the instance (labware-instance only). */
+  location?: string;
   joinedVia: ShelfJoinPath;
 }
 
@@ -85,9 +90,23 @@ const KIND_LEVEL: Record<string, ShelfReferentLevel> = {
   'material-instance': 'instance',
   'material-lot': 'lot',
   aliquot: 'aliquot',
+  'labware-instance': 'labware-instance',
 };
 
-/** Cap on concept hits per query (mirrors the spine's default candidate limit). */
+/**
+ * Concept record kinds for the shelf's labware arm. The store holds TWO
+ * merged labware record families that both mean "a labware concept":
+ * records/seed/labware/* declares `kind: labware`, while
+ * records/seed/labware-definition/* declares `kind: labware-definition`.
+ * Read BOTH (the provider lists by record kind); the reported sourceKind
+ * stays 'labware-definition' for either family.
+ */
+const LABWARE_CONCEPT_KINDS = ['labware', 'labware-definition'];
+
+/**
+ * Cap on concept hits per query (mirrors the spine's default candidate limit).
+ * This is the cap on the MERGED labware concept list, not a per-family grant.
+ */
 const CONCEPT_LIMIT = 20;
 
 function payloadOf(record: RecordEnvelope): Record<string, unknown> {
@@ -141,7 +160,34 @@ async function listKind(store: RecordStore, kind: string): Promise<RecordEnvelop
   }
 }
 
-const LEVEL_ORDER: Record<ShelfReferentLevel, number> = { instance: 0, lot: 1, aliquot: 2 };
+/**
+ * Merge per-family concept hits under ONE shared cap without starvation.
+ *
+ * Each family first takes up to an equal share (CEIL of the cap / families);
+ * the leftover slots are then backfilled in family order. So a family with
+ * plenty of matches can never consume the whole budget and erase a family
+ * that matches the term less often (advc probe P2: 20 `labware` hits used to
+ * leave zero `labware-definition` concepts). Within-family order is kept, so
+ * the merged list stays deterministic.
+ */
+function mergeFamiliesFairly(perFamily: ProviderHit[][], limit: number): ProviderHit[] {
+  const share = Math.ceil(limit / Math.max(perFamily.length, 1));
+  const merged: ProviderHit[] = [];
+  const leftovers: ProviderHit[][] = [];
+  for (const hits of perFamily) {
+    merged.push(...hits.slice(0, share));
+    leftovers.push(hits.slice(share));
+  }
+  for (const rest of leftovers) {
+    for (const hit of rest) {
+      if (merged.length >= limit) return merged;
+      merged.push(hit);
+    }
+  }
+  return merged.slice(0, limit);
+}
+
+const LEVEL_ORDER: Record<ShelfReferentLevel, number> = { instance: 0, lot: 1, aliquot: 2, 'labware-instance': 3 };
 
 /**
  * Build a read-only shelf lookup over the given store. store.list ONLY —
@@ -165,8 +211,37 @@ export function createShelfLookup(store: RecordStore): ShelfLookup {
       const concepts: ShelfConcept[] = hits.map((hit) => ({
         recordId: hit.curie.startsWith('local:') ? hit.curie.slice('local:'.length) : hit.curie,
         label: hit.label,
+        sourceKind: 'material' as const,
       }));
       const conceptIds = new Set(concepts.map((c) => c.recordId));
+
+      // 1b. Labware concepts from BOTH merged record families (kind `labware`
+      //     and kind `labware-definition`; see LABWARE_CONCEPT_KINDS). One
+      //     provider call per family so the shared cap is applied AFTER the
+      //     merge by mergeFamiliesFairly — a single call over both kinds would
+      //     let the first family's 20 hits starve the second (advc P2).
+      const lwHits = mergeFamiliesFairly(
+        await Promise.all(
+          LABWARE_CONCEPT_KINDS.map(async (kind) => {
+            try {
+              return await createRecordProvider(store, [kind])(term, CONCEPT_LIMIT, controller.signal);
+            } catch {
+              return [] as ProviderHit[];
+            }
+          }),
+        ),
+        CONCEPT_LIMIT,
+      );
+      const labwareDefIds = new Set<string>();
+      for (const hit of lwHits) {
+        const id = hit.curie.startsWith('local:') ? hit.curie.slice('local:'.length) : hit.curie;
+        labwareDefIds.add(id);
+        concepts.push({
+          recordId: id,
+          label: hit.label,
+          sourceKind: 'labware-definition' as const,
+        });
+      }
 
       // 2. Load inventory kinds (filter in code — no query index beyond kind).
       const vendorProducts = await listKind(store, 'vendor-product');
@@ -183,6 +258,7 @@ export function createShelfLookup(store: RecordStore): ShelfLookup {
         joinedVia: ShelfJoinPath,
         vendor?: string,
         lot?: string,
+        location?: string,
       ): ShelfEntry => {
         const payload = payloadOf(record);
         const level = KIND_LEVEL[String(payload.kind ?? '')] ?? 'instance';
@@ -193,6 +269,7 @@ export function createShelfLookup(store: RecordStore): ShelfLookup {
           level,
           ...(vendor ? { vendor } : {}),
           ...(lot ? { lot } : {}),
+          ...(location ? { location } : {}),
           joinedVia,
         };
       };
@@ -284,7 +361,27 @@ export function createShelfLookup(store: RecordStore): ShelfLookup {
         ));
       }
 
-      // 6. Group recorded material by vendor/lot (deterministic order).
+      // 6. Labware instances: join via labwareId -> labware-definition.
+      const labwareInstances = await listKind(store, 'labware-instance');
+      for (const record of labwareInstances) {
+        const payload = payloadOf(record);
+        const lwId = typeof payload.labwareId === 'string' ? payload.labwareId : undefined;
+        // Location label from instance's location block
+        const locBlock = payload.location;
+        const locLabel = locBlock && typeof locBlock === 'object'
+          ? firstString((locBlock as Record<string, unknown>).label)
+          : undefined;
+        if (lwId && labwareDefIds.has(lwId)) {
+          entries.push(makeEntry(record, 'labware-definition', undefined, undefined, locLabel));
+          continue;
+        }
+        // Missing link but lexically matched: visible, no provenance claim.
+        if (lexicallyMatches(payload, needle)) {
+          entries.push(makeEntry(record, 'unknown-provenance', undefined, undefined, locLabel));
+        }
+      }
+
+      // 7. Group recorded material by vendor/lot (deterministic order).
       const groupKey = (e: ShelfEntry): string => `${e.vendor ?? ''}\u0000${e.lot ?? ''}`;
       const groupsByVendorLot = new Map<string, ShelfGroup>();
       for (const entry of entries) {

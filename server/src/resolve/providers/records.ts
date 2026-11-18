@@ -20,6 +20,7 @@ const DEFAULT_KINDS = [
   'aliquot',
   'vendor-product',
   'labware',
+  'labware-definition',
 ];
 
 const KIND_LEVEL: Record<string, MaterialLevel> = {
@@ -33,7 +34,10 @@ const KIND_LEVEL: Record<string, MaterialLevel> = {
 
 function matchableStrings(payload: Record<string, unknown>): string[] {
   const out: string[] = [];
-  for (const key of ['name', 'title', 'label'] as const) {
+  // `display_name` (snake_case) is the served labware-definition field: seeded
+  // labware-definition records carry it and NO name/title/label, so the tier-1
+  // law must match on it (g3 D2). It extends the set after name/title/label.
+  for (const key of ['name', 'title', 'label', 'display_name'] as const) {
     const v = payload[key];
     if (typeof v === 'string' && v) out.push(v.toLowerCase());
   }
@@ -85,7 +89,7 @@ export function createRecordProvider(store: RecordStore, kinds: string[] = DEFAU
         const payload = record.payload as Record<string, unknown>;
         const fields = matchableStrings(payload);
         if (!fields.some((f) => f.includes(needle))) continue;
-        const label = String(payload.name ?? payload.title ?? payload.label ?? record.recordId);
+        const label = String(payload.name ?? payload.title ?? payload.label ?? payload.display_name ?? record.recordId);
         const definition = firstString(payload.definition, payload.description);
         const iri = firstString(payload.iri, payload.uri);
         hits.push({
@@ -95,6 +99,9 @@ export function createRecordProvider(store: RecordStore, kinds: string[] = DEFAU
           level: KIND_LEVEL[kind] ?? 'unknown',
           ...(definition ? { definition } : {}),
           ...(iri ? { uri: iri } : {}),
+          // L2-P1-AMBIGUITY-TIER-RULE-1 u1: the record kind rides the existing
+          // termKind field for the declared candidatePrecedence rule (absent, never undefined).
+          ...(kind ? { termKind: kind } : {}),
           ...(declaresFormulation(payload) ? { formulationDeclared: true } : {}),
         });
         if (hits.length >= limit) return hits;

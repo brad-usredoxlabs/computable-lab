@@ -169,11 +169,13 @@ def do_workspace_reset(api_base):
 
 
 def do_verify_workspace(api_base):
-    """GET workspace and assert every tab is declared."""
+    """GET workspace and assert declared == actual (tabs, activeTabId, rightPaneMode)."""
     board = load_board_yaml()
     ws = board["workspace"]
     study_id = ws["studyId"]
     declared_ids = set(t["id"] for t in ws["tabs"])
+    declared_active = ws.get("activeTabId")
+    declared_pane = ws.get("rightPaneMode")
 
     st, body = api_call(api_base, "GET",
                         f"/api/studies/{study_id}/workspace")
@@ -181,15 +183,30 @@ def do_verify_workspace(api_base):
         print(f"workspace: GET failed HTTP {st}", file=sys.stderr)
         sys.exit(1)
     state = body["state"]
+    actual_ids = set(t["id"] for t in state["tabs"])
     ok = True
-    for tab in state["tabs"]:
-        tid = tab["id"]
+
+    # UNDECLARED: actual has tabs not in declared
+    for tid in actual_ids:
         if tid not in declared_ids:
             print(f"workspace: UNDECLARED tab id={tid}", file=sys.stderr)
             ok = False
+    # MISSING: declared tabs not present in actual
+    for tid in declared_ids:
+        if tid not in actual_ids:
+            print(f"workspace: MISSING declared tab id={tid}", file=sys.stderr)
+            ok = False
+    # activeTabId must match
+    if declared_active is not None and state.get("activeTabId") != declared_active:
+        print(f"workspace: activeTabId mismatch — expected {declared_active}, got {state.get('activeTabId')}", file=sys.stderr)
+        ok = False
+    # rightPaneMode must match
+    if declared_pane is not None and state.get("rightPaneMode") != declared_pane:
+        print(f"workspace: rightPaneMode mismatch — expected {declared_pane}, got {state.get('rightPaneMode')}", file=sys.stderr)
+        ok = False
     if not ok:
         sys.exit(1)
-    print(f"workspace: {len(state['tabs'])} tabs, activeTabId={state['activeTabId']} — all declared")
+    print(f"workspace: {len(state['tabs'])} tabs, activeTabId={state['activeTabId']}, rightPaneMode={state['rightPaneMode']} — all declared")
 
 def do_reset(api_base):
     """Delete then re-seed the fixture."""

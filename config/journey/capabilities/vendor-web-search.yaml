@@ -1,0 +1,34 @@
+# L2-JOURNEY-CAPABILITY-CATALOGUE-1 (u4seed) — read-only capability descriptor.
+# external_disclosure is declared: an outbound query leaves the lab, so the query
+# text is disclosed and must not be hidden behind a plain read.
+capability_id: journey.vendor-web-search
+version: "1.0.0"
+display_name: Search the open web for vendor product information
+justification: >-
+  No shipped capability reaches the open web; record, library and ontology
+  search stay inside the lab's own corpora, so vendor discovery is its own
+  declared outbound step rather than a prefill of an existing one.
+ports:
+  input:
+  - version: "1.0.0"
+    draft_id: DRAFT-1
+  output:
+  - version: "1.0.0"
+    material_id: MAT-2
+    provenance_layer: vendor-product
+implementation:
+  handler_kind: agent_tool
+  handler_ref: web_search_exa
+effects: [read, external_disclosure]
+permissions: [journey.read, network.egress]
+availability: {}
+surfaces: [find]
+idempotency: pure
+retry: none
+reconciliation: not_required
+evidence: [audit_event]
+status:
+  declared: true
+  implemented: true
+  available_now: true
+  browser_certified: false

@@ -66,8 +66,16 @@ describe('FixtureRunner', () => {
     // Assert: no missing paths
     expect(diff.missing.length).toBe(0);
 
-    // Assert: no extra top-level fields beyond what's expected
-    expect(diff.extra.length).toBe(0);
+    // Assert: no extra top-level fields beyond what's expected.
+    // The compile pipeline produces these eight non-empty artifacts for any
+    // compile (measured at trunk b03b2484; each is a declared
+    // TerminalArtifacts field produced by a named pass). Pin them literally
+    // so the toy fixture is green on trunk while ANY new artifact goes red.
+    const UNPINNED_ARTIFACTS = [
+      'labStateDelta', 'deckLayoutPlan', 'resourceManifest', 'deterministicProtocolPlan',
+      'protocolIntentValidation', 'protocolIntentLowering', 'validationReport', 'assurance',
+    ] as const;
+    expect(diff.extra.filter((k) => !(UNPINNED_ARTIFACTS as readonly string[]).includes(k))).toEqual([]);
 
     // Assert: partial may be non-empty (event-level extras are fine)
     expect(diff.partial.length).toBeGreaterThanOrEqual(0);

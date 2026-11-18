@@ -1,0 +1,33 @@
+$schema: https://computable-lab.com/schema/computable-lab/analysis-engine.schema.yaml
+kind: analysis-engine
+id: ENG-CALIBFIT-1
+title: GC-8 calibration-curve fitting engine (stdlib)
+description: >-
+  Shipped GC-8 calibration module (computable_lab_analysis.calibration_fit,
+  spec 2026-10-28_GC-8-calibration-revision): weighted least squares via the normal equations on
+  stdlib floats (linear, linear-through-origin, quadratic), declared
+  weightings (none, 1/x, 1/x^2, 1/y^2, per-level weights), the ISTD
+  combination applied as the ONLY division by an ISTD area. Stdlib-only.
+  It consumes GC-7 peak tables; it does NOT detect or integrate peaks, so no
+  peak/detection capability terms are declared.
+implementation:
+  adapter: python-entry-script
+  entry: 'run(ctx)'
+  module: computable_lab_analysis
+version_constraints:
+  python: '>=3.13'
+  packages: []
+capabilities:
+  declared:
+    - { capability: curve_fitting, support: supported }
+    - { capability: weighted_regression, support: supported }
+availability:
+  available: true
+  note: >-
+    Probed 2026-11-14 (lane worktree): last-resort interpreter
+    /usr/bin/python3 (Python 3.14.7) imports computable_lab_analysis from
+    server/python-executor-service/src; stdlib-only module.
+runtime_requirements:
+  interpreter: system
+lifecycleId: registry-ops
+state: draft

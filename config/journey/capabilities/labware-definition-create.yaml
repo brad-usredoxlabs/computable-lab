@@ -1,0 +1,35 @@
+# L2-JOURNEY-LABWARE-DEF-1 (u2acap2) — governed-write capability descriptor.
+# A new plate or tip-box definition that does not exist yet is minted through
+# the registered governed write (governed-writes.yaml -> records.create ->
+# POST /records), so the definition record carries a receipt. This unit adds
+# the declaration only: status.implemented is false — no write leg yet.
+capability_id: journey.labware-definition-create
+version: "1.0.0"
+display_name: Create a new labware definition with a declared geometry
+justification: >-
+  Library search only returns catalogue records and nothing in it mints a
+  geometry-bearing definition, so a plate type that does not exist yet needs a
+  distinct governed-write capability rather than a prefill of the search.
+ports:
+  input: []
+  output:
+  - version: "1.0.0"
+    record_id: LAB-DEF-1
+    record_type: labware
+    receipt_id: RCPT-LAB-DEF-1
+implementation:
+  handler_kind: governed_write
+  handler_ref: records.create
+effects: [domain_mutation]
+permissions: [journey.write]
+availability: {}
+surfaces: [run-design]
+idempotency: non_idempotent
+retry: none
+reconciliation: receipt_required
+evidence: [governed_write_receipt]
+status:
+  declared: true
+  implemented: false
+  available_now: false
+  browser_certified: false

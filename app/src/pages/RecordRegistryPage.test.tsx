@@ -64,6 +64,9 @@ vi.mock('../shared/api/client', () => ({
     getLifecycleTerminalStates: mocked.mockGetLifecycleTerminalStates,
     createSignature: vi.fn(),
     listRecordRevisions: vi.fn().mockResolvedValue({ records: [] }),
+    // L2-GC-PEAK-NAMING-1 (u4surface): the Compounds tab lists the
+    // compound-class registry, not record kinds.
+    getCompoundClasses: vi.fn().mockResolvedValue({ classes: [] }),
     // EDITOR-9 fix-1: the page resolves tab kind -> schema $id from the
     // schema registry endpoint. Empty list = no resolution (old behaviour).
     getSchemas: vi.fn().mockResolvedValue([]),
@@ -809,5 +812,25 @@ describe('RecordRegistryPage — Documents tab (QMS-6)', () => {
     const draftBtn = await screen.findByRole('button', { name: 'Create draft revision' })
     expect(draftBtn).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Save$/ })).toBeNull()
+  })
+
+  it('u5searchfix D1: the Compounds tab (registrySource, no kinds) renders NO search combobox; kinds-backed tabs keep it', async () => {
+    // The Compounds tab declares registrySource with kinds: [] — a search
+    // combobox there is dead chrome (gate r3 D1: it accepted typing but
+    // fired zero /api/search requests). The panel is its content; kinds-
+    // backed tabs (People) must keep the combobox unchanged.
+    renderPage()
+    // Default tab is People (kinds-backed) — combobox present.
+    expect(screen.getByTestId('record-search-combobox')).toBeTruthy()
+    expect(screen.getByTestId('search-input')).toHaveAttribute('placeholder', 'Search people...')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compounds' }))
+    // The compound-class registry still renders through the panel (empty).
+    expect(await screen.findByTestId('compound-panel')).toBeTruthy()
+    expect(screen.getByTestId('compound-panel')).toHaveTextContent('No compound classes registered')
+    // No dead chrome: no combobox and no search input on this tab.
+    expect(screen.queryByTestId('record-search-combobox')).toBeNull()
+    expect(screen.queryByTestId('search-input')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Search Local' })).toBeNull()
   })
 })

@@ -1,0 +1,36 @@
+# L2-JOURNEY-CAPABILITY-CATALOGUE-1 (u4seed) — read-only capability descriptor.
+# implementation.handler_ref names a tool that ships in AGENT_ALLOWED_TOOLS
+# (server/src/ai/ToolBridge.ts); admission refuses any other id.
+capability_id: journey.material-library-search
+version: "1.0.0"
+display_name: Find addable vendor materials for a committed spec
+justification: >-
+  Library search returns catalogue entries, but nothing resolves, for a
+  committed material spec, which vendor products are addable without creating a
+  material record.
+ports:
+  input:
+  - version: "1.0.0"
+    record_id: REC-2
+    record_type: material-spec
+    receipt_id: RCPT-2
+  output:
+  - version: "1.0.0"
+    material_id: MAT-1
+    provenance_layer: vendor-product
+implementation:
+  handler_kind: agent_tool
+  handler_ref: materials_search_addable
+effects: [read]
+permissions: [journey.read]
+availability: {}
+surfaces: [find]
+idempotency: pure
+retry: none
+reconciliation: not_required
+evidence: [audit_event]
+status:
+  declared: true
+  implemented: true
+  available_now: true
+  browser_certified: false

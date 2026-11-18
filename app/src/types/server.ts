@@ -11,6 +11,17 @@ export interface ServerMetaResponse {
     uptime: string
     uptimeMs: number
   }
+  /**
+   * Serving-tree identity (L2-P1-BUILDINFO-1 buildinfo): derived on the server
+   * from git at process start. OPTIONAL — responses from pre-existing servers
+   * (and fixtures) carry no `build` key.
+   */
+  build?: {
+    /** 40-char hex sha of the serving tree's HEAD, or 'unknown'. */
+    sha: string
+    /** ISO timestamp of when the revision was resolved. */
+    builtAt: string
+  }
   repository?: {
     id: string
     url: string

@@ -199,8 +199,13 @@ function normalizeLabwareDefinition(value: LabwareDefinitionWithPhysicalGeometry
   if (value.kind !== 'labware-definition') {
     throw new Error('labware definition kind must be labware-definition');
   }
-  if (!value.recordId || !value.display_name || !value.topology || !value.capacity) {
-    throw new Error('labware definition is missing recordId, display_name, topology, or capacity');
+  const missing: string[] = [];
+  if (!value.recordId) missing.push('recordId');
+  if (!value.display_name) missing.push('display_name');
+  if (!value.topology) missing.push('topology');
+  if (!value.capacity) missing.push('capacity');
+  if (missing.length > 0) {
+    throw new Error(`labware definition is missing ${missing.join(', ')}`);
   }
   return value;
 }

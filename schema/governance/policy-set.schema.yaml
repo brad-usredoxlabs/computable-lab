@@ -1,0 +1,84 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: https://computable-lab.com/schema/computable-lab/policy-set.schema.yaml
+title: Policy set
+description: "Closed, self-contained DECLARED policy set: versioned rules matching (capability, effect kind, record kind, regulated status, actor role, provenance completeness, environment) with deny-wins combination, obligations, and a restrictive default for unclassified work. Deliberately self-contained — no $ref into common.schema.yaml (relative-ref resolution risk under strict:true node validation; unrelated to this seam). Does not replace the level-based policy bundles, which remain the settings authority."
+type: object
+additionalProperties: false
+required: [kind, id, label, version, effective_from, scope, rules, defaults, conflict]
+$defs:
+  effect_kind:
+    type: string
+    enum: [read, external_disclosure, workflow_state_change, domain_mutation, compute_submission, deployment]
+  match:
+    type: object
+    additionalProperties: false
+    properties:
+      capability: { type: string, minLength: 1 }
+      effect_kind: { $ref: '#/$defs/effect_kind' }
+      record_kind: { type: string, minLength: 1 }
+      regulated: { type: boolean }
+      actor_role: { type: string, minLength: 1 }
+      provenance_completeness: { type: string, minLength: 1 }
+      environment: { type: string, minLength: 1 }
+  approval:
+    type: object
+    additionalProperties: false
+    required: [roles, approvers, meaning, separation_of_duties]
+    properties:
+      roles: { type: array, minItems: 1, items: { type: string, minLength: 1 } }
+      approvers: { type: integer, minimum: 1 }
+      meaning: { type: string, minLength: 1 }
+      separation_of_duties: { type: boolean }
+  obligation:
+    type: string
+    enum: [record-evidence, notify-stakeholders, hold-until-approved, require-justification, retain-provenance]
+  rule:
+    type: object
+    additionalProperties: false
+    required: [rule_id, match, proposal, execution]
+    properties:
+      rule_id: { type: string, minLength: 1 }
+      match: { $ref: '#/$defs/match' }
+      proposal: { type: string, enum: [allow, confirm, deny] }
+      execution: { type: string, enum: [allow, confirm, deny] }
+      approval: { $ref: '#/$defs/approval' }
+      obligations: { type: array, items: { $ref: '#/$defs/obligation' } }
+      evidence_retention: { type: string }
+    # A regulated allow must be approvable before any evaluator exists:
+    # match.regulated == true AND execution == allow requires approval.
+    if:
+      type: object
+      properties:
+        match: { type: object, required: [regulated], properties: { regulated: { const: true } } }
+        execution: { const: allow }
+    then:
+      type: object
+      required: [approval]
+      properties:
+        approval: { $ref: '#/$defs/approval' }
+properties:
+  kind: { const: policy-set }
+  id: { type: string, pattern: '^PSET-[A-Z0-9][A-Z0-9_-]*$' }
+  label: { type: string, minLength: 1 }
+  version: { type: integer, minimum: 1 }
+  effective_from: { type: string, format: date-time }
+  scope:
+    type: object
+    additionalProperties: false
+    required: [lab, project]
+    properties:
+      lab: { type: string, minLength: 1 }
+      project: { type: string, minLength: 1 }
+  rules: { type: array, minItems: 1, items: { $ref: '#/$defs/rule' } }
+  defaults:
+    type: object
+    additionalProperties: false
+    required: [unclassified]
+    properties:
+      unclassified: { type: string, enum: [allow, confirm, deny] }
+  conflict:
+    type: object
+    additionalProperties: false
+    required: [deny_wins]
+    properties:
+      deny_wins: { const: true }

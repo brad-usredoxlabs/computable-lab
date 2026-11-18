@@ -34,9 +34,11 @@ import {
   aggregateComponentTokens,
   isCompositionLabel,
   materialCandidates,
+  applySelectionPolicies,
   type CandidateRankingPolicy,
+  type SelectionPolicy,
 } from './clarifyPickerRanking'
-import { getCandidateRankingPolicy } from './policy'
+import { getCandidateRankingPolicy, getMaterialSelectionPolicies } from './policy'
 // L2-TERM-1 (UC-D4): the badge/vocabulary tier words live in ONE declarative
 // table (tokens.ts) — every surface reads them from there, never re-spells
 // them as scattered string branches.
@@ -113,7 +115,11 @@ export const resolveMaterial: SlashResolver = async (query, ctx) => {
   // once (module cache; null when the registry declares none — no fallback
   // table). The PURE comparator applies it; a null policy keeps the
   // resolver-emitted order (byte-stable).
-  const policy = await getCandidateRankingPolicy()
+  // L2-MATERIAL-SELECTION-POLICY-1: fetch selection policies alongside ranking.
+  const [policy, selPolicies] = await Promise.all([
+    getCandidateRankingPolicy(),
+    getMaterialSelectionPolicies(),
+  ])
   const workspace = materialSuggestions(
     materialRes.items,
     formulations,
@@ -121,15 +127,21 @@ export const resolveMaterial: SlashResolver = async (query, ctx) => {
     policy,
     q,
     ctx.pickerRows === true,
+    selPolicies,
   )
   const initial = workspace.slice(0, MATERIAL_PAGE)
   const seen = new Set(initial.map((s) => s.key))
+
+  // u2fix3: detect if the resolver already collapsed the list via an `only`
+  // policy — one predicate gates both mint suppression and streaming skip.
+  const policyCollapsed = initial.some((r) => r.policyCollapsed === true)
 
   // The funnel's floor (creation-entry-points spec §6): minting a new
   // local-namespace term is always offered, always last, never the
   // keyboard default. Selecting it creates a draft material record
   // server-side, then inserts the pill — tier-1 finds it next search.
-  if (q) {
+  // u2fix3: suppressed when the policy already narrowed to exactly one row.
+  if (q && !policyCollapsed) {
     initial.push({
       key: `mint:${q}`,
       label: mintLocalTermLabel(q),
@@ -163,12 +175,13 @@ export const resolveMaterial: SlashResolver = async (query, ctx) => {
   // and the remote OLS4 tier lands as the third. Each call only emits
   // additions that aren't already on screen — the menu rebuilds in
   // strictly additive order. Aborts when the user keeps typing.
-  if (q && ctx.onUpdate) {
+  // u2fix3: skip streaming when the policy already narrowed to one row.
+  if (q && ctx.onUpdate && !policyCollapsed) {
     // MENU-CANDIDATES-1 Fix B: an aggregate label (the card prefills the full
     // fact label) fires one extra search per component token so the store's
     // per-component records surface. Delimiter-free queries get an empty token
     // list and behave byte-identically to before.
-    appendComponentHits(aggregateComponentTokens(q), seen, menuSeenLabels, ctx, policy)
+    appendComponentHits(aggregateComponentTokens(q), seen, menuSeenLabels, ctx, policy, selPolicies)
     void (async () => {
       try {
         const localRes = await apiClient.resolve({
@@ -221,8 +234,11 @@ async function resolveFormulationLayer(
   abortIfNeeded(ctx)
   // L2-CLARIFY-PICKER-1 (P1): the data-declared ranking applies to the scoped
   // /m layer too (the ClarificationPicker cards set materialLayer).
-  const policy = await getCandidateRankingPolicy()
-  return materialSuggestions([], formulations, undefined, policy, query.trim(), ctx.pickerRows === true)
+  const [policy, selPolicies] = await Promise.all([
+    getCandidateRankingPolicy(),
+    getMaterialSelectionPolicies(),
+  ])
+  return materialSuggestions([], formulations, undefined, policy, query.trim(), ctx.pickerRows === true, selPolicies)
 }
 
 /**
@@ -244,11 +260,14 @@ async function resolveInstanceLayer(
     category: layer === 'aliquot' ? 'prepared-material' : 'saved-stock',
     subtitle: layer === 'aliquot' ? 'a specific aliquot in the lab' : 'a specific preparation in the lab',
   }))
-  const policy = await getCandidateRankingPolicy()
-  return materialSuggestions(items, [], undefined, policy, query.trim(), ctx.pickerRows === true)
+  const [policy, selPolicies] = await Promise.all([
+    getCandidateRankingPolicy(),
+    getMaterialSelectionPolicies(),
+  ])
+  return materialSuggestions(items, [], undefined, policy, query.trim(), ctx.pickerRows === true, selPolicies)
 }
 
-/** "Which catalog item?" — vendor products ONLY (a catalog identity is its own layer). */
+/** "Which catalog item? — vendor products ONLY (a catalog identity is its own layer). */
 async function resolveVendorLayer(
   query: string,
   ctx: SlashResolverContext,
@@ -263,8 +282,11 @@ async function resolveVendorLayer(
     category: 'vendor-reagent',
     subtitle: [hit.vendor, hit.catalogNumber].filter(Boolean).join(' '),
   }))
-  const policy = await getCandidateRankingPolicy()
-  return materialSuggestions(items, [], undefined, policy, query.trim(), ctx.pickerRows === true)
+  const [policy, selPolicies] = await Promise.all([
+    getCandidateRankingPolicy(),
+    getMaterialSelectionPolicies(),
+  ])
+  return materialSuggestions(items, [], undefined, policy, query.trim(), ctx.pickerRows === true, selPolicies)
 }
 
 function appendOntologyHits(
@@ -305,6 +327,7 @@ function appendComponentHits(
   seenLabels: Set<string>,
   ctx: SlashResolverContext,
   policy: CandidateRankingPolicy | null,
+  selPolicies: SelectionPolicy[] = [],
 ): void {
   const onUpdate = ctx.onUpdate
   if (!onUpdate) return
@@ -324,7 +347,7 @@ function appendComponentHits(
       // screen from repeating. Each token's page is ranked against its OWN
       // component noun (the data-declared policy; null keeps emitted order).
       const tokenNoun = tokens[i] ?? ''
-      for (const s of materialSuggestions(items, [], seenLabels, policy, tokenNoun, ctx.pickerRows === true)) {
+      for (const s of materialSuggestions(items, [], seenLabels, policy, tokenNoun, ctx.pickerRows === true, selPolicies)) {
         if (seenKeys.has(s.key)) continue
         seenKeys.add(s.key)
         merged.push(s)
@@ -425,6 +448,7 @@ const RESOLVE_SOURCE_LABEL: Record<ResolveCandidate['source'], string> = {
   'local-record': 'Workspace record (this lab)',
   oak: 'On-box ontology snapshot (OAK)',
   ols4: 'EBI Ontology Lookup Service (remote)',
+  'local-obo': 'Local OBO ontology snapshot (this appliance)',
   vendor: 'Vendor / Exa web',
   mint: 'New local term',
 }
@@ -488,11 +512,17 @@ export const resolveLabware: SlashResolver = async (query, ctx) => {
   // registry) in parallel. Records first so user-curated workspace plates
   // win the order; definitions fill in when the workspace is bare (fresh
   // appliance) or no record matches the query.
-  const [recordRes, defRes] = await Promise.all([
+  const [recordRes, defRes, defRecordRes] = await Promise.all([
     searchJsonLd({ q: q || undefined, type: 'labware', limit: PAGE }),
     apiClient
       .searchLabwareDefinitions({ q, limit: PAGE })
       .catch(() => ({ hits: [] as Array<{ recordId: string; label: string }>, total: 0 })),
+    // L2-P1-BIND-ID-1 recbyid: this lab's labware-definition recordIds, ONE
+    // call per resolve (never one GET per row). A records-API miss must not
+    // fail the menu, so a throw collapses to null (see the split below).
+    apiClient
+      .listRecordsByKind('labware-definition', 200)
+      .catch(() => null),
   ])
   abortIfNeeded(ctx)
 
@@ -510,11 +540,45 @@ export const resolveLabware: SlashResolver = async (query, ctx) => {
     mention: { type: 'labware', id: hit.recordId, label: hit.label },
   }))
   const seen = new Set(records.map((s) => s.key))
+  // L2-P1-BIND-ID-1 recbyid: the answer channel carries ONE identity end to
+  // end — identity is a record id, never a name. A Definition row is offered
+  // ONLY when this lab's record store actually holds that recordId (the
+  // vendored registry and the lab's records are distinct authorities; the
+  // registry copy `lbw-def-generic-96-well-deepwell-plate` GETs 404 while the
+  // lab holds `lbw-def-generic-96-well-deep-plate`, same display_name).
+  // `defRecordRes === null` means the records list failed (or resolved
+  // nothing fetchable) → keep today's behaviour (offer the rows) and do not
+  // fail the menu.
+  const heldDefinitionIds = new Set(
+    (defRecordRes?.records ?? []).map((r) => r.recordId),
+  )
+  let unavailableDiagnostic: SlashSuggestion | null = null
   const defs: SlashSuggestion[] = []
   for (const hit of defRes.hits) {
     const key = `labware:${hit.recordId}`
     if (seen.has(key)) continue
     seen.add(key)
+    if (defRecordRes !== null && !heldDefinitionIds.has(hit.recordId)) {
+      // recordId absent from this lab's records → NO selectable row (a
+      // mention would point at an id no record has). Surface ONE disabled
+      // diagnostic naming the missing id instead of silently dropping it.
+      if (unavailableDiagnostic === null) {
+        unavailableDiagnostic = {
+          key: `${key}:unavailable`,
+          label: `Not in this lab's records: ${hit.label}`,
+          badge: 'Unavailable',
+          subtitle: hit.recordId,
+          disabled: true,
+          detail: {
+            source: 'Labware definition registry (on-box)',
+            id: hit.recordId,
+            extra: [{ label: 'Kind', value: 'labware definition' }],
+          },
+          mention: { type: 'labware', id: hit.recordId, label: hit.label },
+        }
+      }
+      continue
+    }
     defs.push({
       key,
       label: hit.label,
@@ -527,6 +591,9 @@ export const resolveLabware: SlashResolver = async (query, ctx) => {
       },
       mention: { type: 'labware', id: hit.recordId, label: hit.label },
     })
+  }
+  if (unavailableDiagnostic !== null) {
+    defs.push(unavailableDiagnostic)
   }
   // Exa web vendor-product tier — streams after local records + definitions so
   // a fresh appliance can still discover vendor labware off the web.
@@ -744,6 +811,7 @@ function materialSuggestions(
   policy: CandidateRankingPolicy | null = null,
   noun = '',
   pickerRows = false,
+  selectionPolicies: SelectionPolicy[] = [],
 ): SlashSuggestion[] {
   const formulationItems: MaterialSearchItem[] = formulations.map((summary) => ({
     recordId: summary.outputSpec.id,
@@ -776,10 +844,24 @@ function materialSuggestions(
     itemById.set(item.recordId, item)
   }
   const ranked = materialCandidates(allItems, noun, policy)
+  // L2-MATERIAL-SELECTION-POLICY-1: apply declared selection policies.
+  // `only` collapses to one row, `default` marks preselected, `alternative`
+  // has no picker effect. Fail-open: if the vendor product isn't in the rows
+  // or two `only` policies target the same concept, leave unchanged.
+  // D4: the COLLAPSE is a PICKER behaviour only — the doc-editor /m path
+  // (`pickerRows=false`) must never call it; its list stays byte-identical to
+  // the no-policy list (bait 6).
+  const withPolicies = pickerRows
+    ? applySelectionPolicies(ranked, selectionPolicies)
+    : ranked
+  // u2fix3: one predicate — true when the declared selection policy
+  // collapsed the ranked list to exactly one row (an `only` policy hit).
+  // Used to gate the collapse flag, mint suppression, and streaming skip.
+  const collapsedToSingle = pickerRows && ranked.length > 1 && withPolicies.length === 1
 
   const labelKeys = seenLabels ?? new Set<string>()
   const rows: SlashSuggestion[] = []
-  for (const row of ranked) {
+  for (const row of withPolicies) {
     const item = itemById.get(row.recordId)
     // MENU-CANDIDATES-1 Fix A: display-label dedup, kept DOWNSTREAM of the
     // comparator so the survivor is the first in the comparator's order (the
@@ -847,6 +929,8 @@ function materialSuggestions(
       ...(pickerRows && row.canBeDefault !== undefined ? { canBeDefault: row.canBeDefault } : {}),
       ...(pickerRows && row.consequence ? { consequence: row.consequence } : {}),
       ...(pickerRows && row.sectionLabel ? { sectionLabel: row.sectionLabel } : {}),
+      ...(pickerRows && row.preselected === true ? { preselected: true } : {}),
+      ...(collapsedToSingle ? { policyCollapsed: true } : {}),
     }
     rows.push(suggestion)
   }

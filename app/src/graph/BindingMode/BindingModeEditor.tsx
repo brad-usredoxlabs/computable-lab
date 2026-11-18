@@ -2,7 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api/client'
 import type { RecordEnvelope } from '../../types/kernel'
-import type { Labware } from '../../types/labware'
+import {
+  labwareRecordToEditorLabware,
+  type Labware,
+  type LabwareRecordPayload,
+} from '../../types/labware'
 import { usePlatformRegistry } from '../../shared/hooks/usePlatformRegistry'
 import { DeckVisualizationPanel, type DeckPlacement } from '../labware/DeckVisualizationPanel'
 import { DeckPickerSelect } from './DeckPickerSelect'
@@ -34,8 +38,11 @@ interface PlannedRunPayload {
 
 interface LocalProtocolPayload {
   kind: 'local-protocol'
-  labwareRoles?: Array<{ roleId: string; roleType?: string }>
-  materialRoles?: Array<{ roleId: string; roleType?: string }>
+  roles?: {
+    labwareRoles?: Array<{ roleId: string }>
+    materialRoles?: Array<{ roleId: string }>
+  }
+  inherits_from?: { id?: string }
   notes?: string
 }
 
@@ -44,6 +51,21 @@ interface LabContextFromNotes {
   plateCount?: number
   sampleCount?: number
   equipmentOverrides?: unknown[]
+}
+
+/**
+ * Collapse a planned-run title that already begins with its own "Plan:" label.
+ *
+ * The bindings heading renders `Plan: {title}`; when the stored title is itself
+ * `Plan: 2026-09-06 Run template` the page stutters. This strips only an
+ * anchored `plan:` prefix (case/space-insensitive) at render time — the record
+ * title is never written, renamed or trimmed in storage. A title that merely
+ * contains the word Plan is left verbatim, and an empty remainder falls back to
+ * the original so the heading never loses its title.
+ */
+export function planHeadingTitle(title: string): string {
+  const stripped = title.replace(/^\s*plan\s*:\s*/i, '')
+  return stripped.trim() ? stripped : title
 }
 
 /**
@@ -72,14 +94,35 @@ interface BindingChange {
   deckPlatformId?: string
 }
 
+/**
+ * Merge one incoming `BindingChange` into the pending debounce accumulator.
+ * `labware` / `materials` merge per-role (last write for a role wins), so edits
+ * made inside one debounce window accumulate instead of replacing each other;
+ * `deckPlatformId` is the scalar field of the same object, so a later value
+ * wins. The server keeps its own per-role merge — this only stops the client
+ * from dropping edits it made itself.
+ */
+function mergeBindingChange(prev: BindingChange | null, next: BindingChange): BindingChange {
+  const merged: BindingChange = prev ?? {}
+  const mergeRoleList = <T extends { roleId: string }>(keptList: T[] | undefined, incoming: T[] | undefined): T[] | undefined => {
+    if (!incoming) return keptList
+    const kept = (keptList ?? []).filter((entry) => !incoming.some((c) => c.roleId === entry.roleId))
+    return [...kept, ...incoming]
+  }
+  merged.labware = mergeRoleList(merged.labware, next.labware)
+  merged.materials = mergeRoleList(merged.materials, next.materials)
+  if (next.deckPlatformId !== undefined) merged.deckPlatformId = next.deckPlatformId
+  return merged
+}
+
 export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
   const { runId: routeId } = useParams<{ runId: string }>()
   const id = (plannedRunId || routeId)!
 
   const [plannedRun, setPlannedRun] = useState<RecordEnvelope | null>(null)
   const [localProtocol, setLocalProtocol] = useState<RecordEnvelope | null>(null)
-  const [labwareInstances, setLabwareInstances] = useState<RecordEnvelope[]>([])
-  const [materialInstances, setMaterialInstances] = useState<RecordEnvelope[]>([])
+  const [labwareUniverse, setLabwareUniverse] = useState<RecordEnvelope[]>([])
+  const [materialUniverse, setMaterialUniverse] = useState<RecordEnvelope[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'success' | 'error'>('idle')
@@ -105,8 +148,10 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
 
     const loadData = async () => {
       try {
-        const pr = await apiClient.getRecord(id)
+        const prResp = await apiClient.getRecordWithUI(id)
         if (!active) return
+        const pr = prResp.record
+        if (!pr) throw new Error(`planned-run not found: ${id}`)
         setPlannedRun(pr)
 
         const prPayload = pr.payload as unknown as PlannedRunPayload
@@ -116,25 +161,28 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
 
         if (prPayload.localProtocolRef?.id) {
           try {
-            const lp = await apiClient.getRecord(prPayload.localProtocolRef.id)
-            if (active) setLocalProtocol(lp)
+            const lp = (await apiClient.getRecordWithUI(prPayload.localProtocolRef.id)).record
+            if (active && lp) setLocalProtocol(lp)
           } catch {
             // local-protocol not found — continue without it
           }
         }
 
         try {
-          const lwResp = await apiClient.listRecordsByKind('labware-instance', 500)
-          if (active) setLabwareInstances(lwResp.records)
+          // Seam candidate universe: `labware` / `material` records — the kinds
+          // the role-binding proposals endpoint names. The pickers are fed from
+          // here; the `*-instance` kinds serve no records and are no longer fetched.
+          const lwResp = await apiClient.listRecordsByKind('labware', 500)
+          if (active) setLabwareUniverse(lwResp.records)
         } catch {
-          // No labware instances
+          // No labware records
         }
 
         try {
-          const matResp = await apiClient.listRecordsByKind('material-instance', 500)
-          if (active) setMaterialInstances(matResp.records)
+          const matResp = await apiClient.listRecordsByKind('material', 500)
+          if (active) setMaterialUniverse(matResp.records)
         } catch {
-          // No material instances
+          // No material records
         }
       } catch (err) {
         if (!active) return
@@ -168,15 +216,65 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
     return bindings
   }, [plannedRun])
 
-  // Roles from local-protocol
-  const labwareRoles = useMemo(
-    () => ((localProtocol?.payload as unknown as LocalProtocolPayload)?.labwareRoles ?? []),
-    [localProtocol],
-  )
-  const materialRoles = useMemo(
-    () => ((localProtocol?.payload as unknown as LocalProtocolPayload)?.materialRoles ?? []),
-    [localProtocol],
-  )
+  // Roles resolved from local protocol (prefers local roles, falls back to universal via inherits_from)
+  const [labwareRoles, setLabwareRoles] = useState<Array<{ roleId: string; roleType: string }>>([])
+  const [materialRoles, setMaterialRoles] = useState<Array<{ roleId: string; roleType: string }>>([])
+
+  // Resolve roles: local payload.roles first, else fetch universal via inherits_from.id
+  useEffect(() => {
+    if (!localProtocol) {
+      setLabwareRoles([])
+      setMaterialRoles([])
+      return
+    }
+    let active = true
+
+    const resolveRoles = async () => {
+      const lpPayload = localProtocol.payload as unknown as LocalProtocolPayload
+      const localRoles = lpPayload.roles
+
+      if (localRoles && ((localRoles.labwareRoles ?? []).length > 0 || (localRoles.materialRoles ?? []).length > 0)) {
+        if (active) {
+          setLabwareRoles((localRoles.labwareRoles ?? []).map(r => ({ roleId: r.roleId, roleType: 'labware' })))
+          setMaterialRoles((localRoles.materialRoles ?? []).map(r => ({ roleId: r.roleId, roleType: 'material' })))
+        }
+        return
+      }
+
+      // No local roles — fetch universal protocol via inherits_from
+      const universalId = lpPayload.inherits_from?.id
+      if (!universalId) {
+        if (active) {
+          setLabwareRoles([])
+          setMaterialRoles([])
+        }
+        return
+      }
+
+      try {
+        const universalResp = await apiClient.getRecordWithUI(universalId)
+        if (!active) return
+        const universalPayload = universalResp.record?.payload as Record<string, unknown> | undefined
+        const universalRoles = universalPayload?.roles as Record<string, unknown> | undefined
+
+        if (active) {
+          const uLabwareRoles = Array.isArray(universalRoles?.labwareRoles) ? universalRoles.labwareRoles : []
+          const uMaterialRoles = Array.isArray(universalRoles?.materialRoles) ? universalRoles.materialRoles : []
+          setLabwareRoles(uLabwareRoles.map((r: Record<string, unknown>) => ({ roleId: String(r.roleId), roleType: 'labware' })))
+          setMaterialRoles(uMaterialRoles.map((r: Record<string, unknown>) => ({ roleId: String(r.roleId), roleType: 'material' })))
+        }
+      } catch {
+        // Universal protocol not found — degrade to empty roles
+        if (active) {
+          setLabwareRoles([])
+          setMaterialRoles([])
+        }
+      }
+    }
+
+    void resolveRoles()
+    return () => { active = false }
+  }, [localProtocol])
 
   // Debounced save
   const flushBindings = useCallback(
@@ -198,7 +296,7 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
 
   const scheduleSave = useCallback(
     (changes: BindingChange) => {
-      pendingChangesRef.current = changes
+      pendingChangesRef.current = mergeBindingChange(pendingChangesRef.current, changes)
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current)
       }
@@ -260,23 +358,41 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
     return () => clearTimeout(handle)
   }, [lastEditAt, id])
 
-  // Build deck placements from current bindings
+  // Build deck placements from current bindings — LABWARE roles only. The
+  // deck panel's contract is "placements are labware": material bindings are
+  // a different record kind and must never be presented as deck objects.
   const deckPlacements = useMemo<DeckPlacement[]>(() => {
     const placements: DeckPlacement[] = []
     for (const [roleId, binding] of Object.entries(currentBindings)) {
+      if (!labwareRoles.some((r) => r.roleId === roleId)) continue
       placements.push({ slotId: `role:${roleId}`, labwareId: binding.instanceRef })
     }
     return placements
-  }, [currentBindings])
+  }, [currentBindings, labwareRoles])
 
-  // Build labware list for DeckVisualizationPanel
-  const deckLabwares = useMemo(() => {
-    const labwares: Array<{ labwareId: string; name: string }> = []
+  // Build the labware list for DeckVisualizationPanel from the SAME
+  // labware-only view. Each bound record is a full `Labware` object built by
+  // the canonical record mapper: a persisted record's `labwareType` is the
+  // schema CATEGORY ('plate', 'reservoir', …) while the panel needs the render
+  // type + real addressing/geometry, which only the mapper derives from
+  // `format`. A record missing from the universe is skipped — never stubbed.
+  const deckLabwares = useMemo<Labware[]>(() => {
+    const labwares: Labware[] = []
     for (const [roleId, binding] of Object.entries(currentBindings)) {
-      labwares.push({ labwareId: binding.instanceRef, name: roleId })
+      if (!labwareRoles.some((r) => r.roleId === roleId)) continue
+      const record = labwareUniverse.find((r) => r.recordId === binding.instanceRef)
+      const payload = record?.payload as LabwareRecordPayload | undefined
+      if (!record || !payload) continue
+      const mapped = labwareRecordToEditorLabware({ ...payload, recordId: record.recordId })
+      labwares.push({
+        ...mapped,
+        labwareId: binding.instanceRef,
+        recordId: binding.instanceRef,
+        name: roleId,
+      })
     }
     return labwares
-  }, [currentBindings])
+  }, [currentBindings, labwareRoles, labwareUniverse])
 
   if (loading) return <div className="binding-mode-editor">Loading planned-run...</div>
   if (error) return <div className="binding-mode-editor binding-mode-editor--error">{error}</div>
@@ -296,7 +412,7 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
 
       {/* Header */}
       <div className="binding-mode-editor__header">
-        <h2 className="binding-mode-editor__title">Plan: {title}</h2>
+        <h2 className="binding-mode-editor__title">Plan: {planHeadingTitle(title)}</h2>
         <div className="binding-mode-editor__controls">
           <DeckPickerSelect
             platforms={platforms}
@@ -319,8 +435,8 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
             labwareRoles={labwareRoles.map(r => ({ ...r, roleType: r.roleType ?? '' }))}
             materialRoles={materialRoles.map(r => ({ ...r, roleType: r.roleType ?? '' }))}
             currentBindings={currentBindings}
-            labwareInstances={labwareInstances}
-            materialInstances={materialInstances}
+            labwareUniverse={labwareUniverse}
+            materialUniverse={materialUniverse}
             onBindingChange={handleBindingChange}
             diagnostics={compileResult?.diagnostics ?? []}
           />
@@ -339,7 +455,7 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
               platform={currentPlatformId}
               variant=""
               platforms={platforms}
-              labwares={deckLabwares as Labware[]}
+              labwares={deckLabwares}
               placements={deckPlacements}
               onPlatformChange={handlePlatformChange}
               onVariantChange={() => {}}

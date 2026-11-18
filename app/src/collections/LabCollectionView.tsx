@@ -19,16 +19,22 @@ import { CollectionSearchSort } from '../shared/components/CollectionSearchSort'
 import { apiClient } from '../shared/api/client'
 import { VisibilityBadge } from '../shared/sharing/VisibilityBadge'
 import { useRecordVisibilities } from '../shared/sharing/useRecordVisibility'
+import { LabwareInstanceCreateModal } from './LabwareInstanceCreateModal'
+import { VendorProductCreateModal } from './VendorProductCreateModal'
+import { LabShelfLookup } from './LabShelfLookup'
+import { MaterialReceivingDoor } from './MaterialReceivingDoor'
 import type { RecordEnvelope } from '../types/kernel'
 import './LabCollectionView.css'
 
-type LabCategory = 'protocols' | 'materials' | 'labware' | 'equipment' | 'people' | 'documents' | 'vendor-pdfs' | 'sequences'
+type LabCategory = 'protocols' | 'materials' | 'labware' | 'labware-instances' | 'material-instances' | 'equipment' | 'people' | 'documents' | 'vendor-pdfs' | 'sequences'
 
 const CATEGORIES: { id: LabCategory; label: string; kind: string }[] = [
   { id: 'protocols', label: 'Protocols', kind: 'protocol' },
   { id: 'sequences', label: 'Sequences & assays', kind: 'sequence' },
   { id: 'materials', label: 'Materials', kind: 'material' },
   { id: 'labware', label: 'Labware', kind: 'labware' },
+  { id: 'labware-instances', label: 'Labware instances', kind: 'labware-instance' },
+  { id: 'material-instances', label: 'Material instances', kind: 'material-instance' },
   { id: 'equipment', label: 'Equipment', kind: 'equipment' },
   { id: 'people', label: 'People', kind: 'person' },
   { id: 'documents', label: 'Documents', kind: 'controlled-document' },
@@ -37,10 +43,15 @@ const CATEGORIES: { id: LabCategory; label: string; kind: string }[] = [
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Best-effort display name: title > name > recordId */
-function extractName(payload: Record<string, unknown>, fallback: string): string {
+/** Best-effort display name: title > name > (labware-instance label) > recordId */
+function extractName(kind: string, payload: Record<string, unknown>, fallback: string): string {
   if (typeof payload.title === 'string' && payload.title) return payload.title as string
   if (typeof payload.name === 'string' && payload.name) return payload.name as string
+  // A labware INSTANCE carries no title/name — its identity is `label`. Gated on
+  // kind: widening this arm to the other categories would silently retitle records.
+  if (kind === 'labware-instance' && typeof payload.label === 'string' && payload.label) {
+    return payload.label
+  }
   return fallback
 }
 
@@ -124,6 +135,29 @@ function extractHelperTokens(
       break
     }
 
+    case 'labware-instance': {
+      if (typeof p.label === 'string' && p.label) tokens.push({ text: p.label })
+      if (typeof p.labwareId === 'string' && p.labwareId) tokens.push({ text: p.labwareId })
+      if (typeof p.barcode === 'string' && p.barcode) tokens.push({ text: `📊 ${p.barcode}` })
+      const loc = p.location as { label?: string; kind?: string } | undefined
+      if (loc?.kind) tokens.push({ text: `📍 ${loc.kind}${loc.label ? ` ${loc.label}` : ''}` })
+      if (typeof p.state === 'string' && p.state) tokens.push({ text: p.state, tag: statusVariant(p.state) })
+      break
+    }
+
+    case 'material-instance': {
+      const lot = p.lot as { lot_number?: string; vendor?: string } | undefined
+      if (lot?.lot_number) {
+        const lotText = lot.vendor ? `${lot.lot_number} (${lot.vendor})` : lot.lot_number
+        tokens.push({ text: lotText })
+      }
+      const vpRef = p.vendor_product_ref as { id?: string } | undefined
+      if (vpRef?.id) tokens.push({ text: vpRef.id })
+      const storage = p.storage as { location?: string } | undefined
+      if (storage?.location) tokens.push({ text: `📍 ${storage.location}` })
+      break
+    }
+
     case 'equipment': {
       // QMS8-C (D3/D8): the domain status token is retired with the field —
       // the record's lifecycle state is shown by the control bar's state pill.
@@ -203,6 +237,21 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
   const [searchQuery, setSearchQuery] = useState('')
   const openTabs = useOptionalOpenTabs()
 
+  // Labware-instance create modal state
+  const [showInstanceModal, setShowInstanceModal] = useState(false)
+  // Vendor-product create door state (labware category): writes a labware-kind
+  // record carrying the manufacturer block + definitionRecordId pointer.
+  const [showProductModal, setShowProductModal] = useState(false)
+  const [productDefinitions, setProductDefinitions] = useState<RecordEnvelope[]>([])
+  // Receive-a-lot door state (materials category) — stages a receiving draft only
+  const [showReceiveModal, setShowReceiveModal] = useState(false)
+  // Discard cue (L2-LABINV-discardfix): the door reports a staged-draft
+  // discard through onDiscard; the cue is visible AFTER the door is gone and
+  // stays until dismissed (it also survives a reopen — the draft really was
+  // discarded, so the cue is still true).
+  const [receiveDiscarded, setReceiveDiscarded] = useState(false)
+  const [labwareDefinitions, setLabwareDefinitions] = useState<RecordEnvelope[]>([])
+
   const activeKind = CATEGORIES.find((c) => c.id === activeCategory)?.kind ?? 'protocol'
 
   const fetchRecords = useCallback(async (kind: string) => {
@@ -222,18 +271,53 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
     void fetchRecords(activeKind)
   }, [activeKind, fetchRecords])
 
+  // Load labware definitions when the instance create modal opens
+  useEffect(() => {
+    if (showInstanceModal) {
+      void apiClient.listRecordsByKind('labware-definition', 200).then((r) => setLabwareDefinitions(r.records))
+    }
+  }, [showInstanceModal])
+
+  // Load labware records when the product door opens — the definition select
+  // lists BOTH definition stores: legacy kind='labware' rows and the
+  // kind='labware-definition' records that /lab/labware/new saves. Deduped by
+  // recordId so a record reachable through both stores renders once.
+  useEffect(() => {
+    if (showProductModal) {
+      void Promise.all([
+        apiClient.listRecordsByKind('labware', 200),
+        apiClient.listRecordsByKind('labware-definition', 200),
+      ]).then(([labware, definitions]) => {
+        const seen = new Set<string>()
+        const merged = [...labware.records, ...definitions.records].filter((record) => {
+          if (seen.has(record.recordId)) return false
+          seen.add(record.recordId)
+          return true
+        })
+        setProductDefinitions(merged)
+      })
+    }
+  }, [showProductModal])
+
   // Filter by search query, then sort
   const query = searchQuery.toLowerCase().trim()
   const filteredRecords = query
     ? records.filter((record) => {
         const payload = record.payload as Record<string, unknown>
-        const name = extractName(payload, record.recordId).toLowerCase()
+        const name = extractName(activeKind, payload, record.recordId).toLowerCase()
         const cls = payload.class as Array<{ id?: string; label?: string }> | undefined
         const curies = cls?.map((c) => `${c.id ?? ''} ${c.label ?? ''}`.toLowerCase()).join(' ') ?? ''
         const def = (typeof payload.definition === 'string' ? payload.definition : '').toLowerCase()
         const desc = (typeof payload.description === 'string' ? payload.description : '').toLowerCase()
         const synonyms = Array.isArray(payload.synonyms) ? payload.synonyms.join(' ').toLowerCase() : ''
-        const searchable = `${name} ${curies} ${def} ${desc} ${synonyms}`
+        // Same per-kind extraction the cards render — one source, two consumers.
+        const tokenText = extractHelperTokens(activeKind, payload)
+          .map((t) => t.text)
+          .join(' ')
+          .toLowerCase()
+        // recordId is part of today's match set (it used to arrive via the name
+        // fallback) — keep it so search stays monotonic.
+        const searchable = `${name} ${record.recordId.toLowerCase()} ${tokenText} ${curies} ${def} ${desc} ${synonyms}`
         return searchable.includes(query)
       })
     : records
@@ -246,8 +330,8 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
     let comparison = 0
     switch (sortField) {
       case 'name': {
-        const nameA = extractName(payloadA, a.recordId).toLowerCase()
-        const nameB = extractName(payloadB, b.recordId).toLowerCase()
+        const nameA = extractName(activeKind, payloadA, a.recordId).toLowerCase()
+        const nameB = extractName(activeKind, payloadB, b.recordId).toLowerCase()
         comparison = nameA.localeCompare(nameB)
         break
       }
@@ -303,6 +387,18 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
         {sortControls}
       </header>
 
+      {/* Discard cue (L2-LABINV-discardfix): the receiving door reports a
+          staged-draft discard through onDiscard; the cue stays on the page
+          after the door is gone and until dismissed. Purely local — nothing
+          was committed. */}
+      {activeCategory === 'materials' && receiveDiscarded && (
+        <p className="lab-collection__hint" data-testid="material-receiving-discarded">
+          Staged draft discarded.{' '}
+          <button type="button" onClick={() => setReceiveDiscarded(false)}>Dismiss</button>
+        </p>
+      )}
+
+      {activeCategory === 'materials' && <LabShelfLookup />}
       <div className="lab-collection__body">
         <nav className="lab-collection__categories" role="navigation">
           {CATEGORIES.map((cat) => (
@@ -330,6 +426,59 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
               + New PDF
             </button>
           )}
+          {activeCategory === 'materials' && (
+            <button
+              type="button"
+              className="lab-collection__category lab-collection__category--new"
+              data-testid="lab-category-new-material"
+              onClick={() => navigate('/lab/materials/new')}
+            >
+              + New material
+            </button>
+          )}
+          {activeCategory === 'materials' && (
+            <button
+              type="button"
+              className="lab-collection__category lab-collection__category--new"
+              data-testid="lab-category-receive-lot"
+              onClick={() => {
+                setReceiveDiscarded(false)
+                setShowReceiveModal(true)
+              }}
+            >
+              + Receive a lot
+            </button>
+          )}
+          {activeCategory === 'labware' && (
+            <button
+              type="button"
+              className="lab-collection__category lab-collection__category--new"
+              data-testid="lab-category-new-labware"
+              onClick={() => navigate('/lab/labware/new')}
+            >
+              + New labware
+            </button>
+          )}
+          {activeCategory === 'labware' && (
+            <button
+              type="button"
+              className="lab-collection__category lab-collection__category--new"
+              data-testid="lab-category-new-product"
+              onClick={() => setShowProductModal(true)}
+            >
+              + New product
+            </button>
+          )}
+          {activeCategory === 'labware-instances' && (
+            <button
+              type="button"
+              className="lab-collection__category lab-collection__category--new"
+              data-testid="lab-category-new-labware-instance"
+              onClick={() => setShowInstanceModal(true)}
+            >
+              + New instance
+            </button>
+          )}
         </nav>
 
         {error ? (
@@ -344,7 +493,7 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
           <ul className="lab-collection__list">
             {sortedRecords.map((record) => {
               const payload = record.payload as Record<string, unknown>
-              const displayName = extractName(payload, record.recordId)
+              const displayName = extractName(activeKind, payload, record.recordId)
               const helperTokens = extractHelperTokens(activeKind, payload)
 
               return (
@@ -436,12 +585,37 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
 
   if (embedded) return collectionContent
 
+  // The dialogs use the shared .lab-modal__* styles built on var(--cl-*)
+  // tokens, which are scoped to .cl-app. Mount them inside the leftPane tree
+  // (not as AppShell siblings) or they render unpainted. children is dropped
+  // on layout="workspace", so leftPane is the only in-scope slot.
   return (
     <AppShell
       brand="Lab"
       layout="workspace"
       topbarTabs={<WorkspaceTabStrip />}
-      leftPane={collectionContent}
+      leftPane={
+        <>
+          {collectionContent}
+          <LabwareInstanceCreateModal
+            definitions={labwareDefinitions}
+            isOpen={showInstanceModal}
+            onClose={() => setShowInstanceModal(false)}
+            onSuccess={() => void fetchRecords('labware-instance')}
+          />
+          <VendorProductCreateModal
+            definitions={productDefinitions}
+            isOpen={showProductModal}
+            onClose={() => setShowProductModal(false)}
+            onSuccess={() => void fetchRecords('labware')}
+          />
+          <MaterialReceivingDoor
+            isOpen={showReceiveModal}
+            onClose={() => setShowReceiveModal(false)}
+            onDiscard={() => setReceiveDiscarded(true)}
+          />
+        </>
+      }
     />
   )
 }

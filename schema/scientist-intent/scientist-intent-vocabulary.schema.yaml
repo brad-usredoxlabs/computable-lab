@@ -451,6 +451,36 @@ properties:
             description: >-
               Same-label collapse policy; ordered survivor ids, each pass fail-safe; ABSENT means
               no collapse. The closed enums are the never-guess wall (no fuzzy predicate can declare).
+          defaultBindings:
+            type: array
+            description: >-
+              Explicit defaults for unqualified labels in a particular action slot.
+              Only an eligible, existing local candidate with this recordId may bind.
+              Labels match exactly, ignoring case and repeated whitespace.
+            items:
+              type: object
+              additionalProperties: false
+              required: [verb, argument, labels, recordId]
+              properties:
+                verb: { type: string, minLength: 1 }
+                argument: { type: string, minLength: 1 }
+                labels: { type: array, minItems: 1, uniqueItems: true, items: { type: string, minLength: 1 } }
+                recordId: { type: string, minLength: 1 }
+          candidatePrecedence:
+            type: array
+            description: >-
+              Declared candidate-tier precedence (L2-P1-AMBIGUITY-TIER-RULE-1 u1): the
+              supersededByKind candidate is INELIGIBLE when the OTHER whenKinds-named kind
+              matches the same normalized label at the same demanded referent role.
+              declaration_precedence is the generic interpreter; ABSENT = pre-fix bytes.
+            items:
+              type: object
+              additionalProperties: false
+              unevaluatedProperties: false
+              required: [whenKinds, supersededByKind]
+              properties:
+                whenKinds: { type: array, minItems: 2, uniqueItems: true, items: { type: string, minLength: 1 } }
+                supersededByKind: { type: string, minLength: 1 }
       hintAuthority:
         type: object
         additionalProperties: false

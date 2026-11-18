@@ -228,6 +228,25 @@ export const LABWARE_TYPE_LABELS: Record<LabwareType, string> = {
 }
 
 /**
+ * Display summary for a labware ROW (View changes, deck rows, …): the instance's
+ * own name plus the geometry it actually carries. Never a static capacity from
+ * LABWARE_TYPE_LABELS — those entries bake in capacities (e.g. plate_96 → "200 µL")
+ * that may not match the definition the vessel is bound to (gate r16 D2: a generic
+ * 96-well plate at 350 µL rendered as "200 µL"). A value the labware does not carry
+ * is left out, not invented.
+ */
+export function labwareGeometrySummary(lw: Pick<Labware, 'name' | 'addressing' | 'geometry'>): string {
+  const parts: string[] = [lw.name]
+  if (lw.addressing?.type === 'grid' && lw.addressing.rows && lw.addressing.columns) {
+    parts.push(`${lw.addressing.rows} × ${lw.addressing.columns}`)
+  }
+  if (typeof lw.geometry?.maxVolume_uL === 'number' && lw.geometry.maxVolume_uL > 0) {
+    parts.push(`${lw.geometry.maxVolume_uL} µL max`)
+  }
+  return parts.join(' · ')
+}
+
+/**
  * Labware type icons
  */
 export const LABWARE_TYPE_ICONS: Record<LabwareType, string> = {
@@ -390,6 +409,8 @@ export interface Labware {
    * draft proposed has none until Accept creates it — see `proposedRecord`.
    */
   recordId?: string
+  /** Durable labware-instance created on Apply; distinct from its definition. */
+  instanceRecordId?: string
   /** Type of labware */
   labwareType: LabwareType
   /** User-friendly name (e.g., "Source Plate", "Cell Plate 1") */
@@ -1367,6 +1388,13 @@ export interface LabwareDefinitionSearchHit {
   render_hints?: LabwareDefinition['render_hints']
   physical_geometry?: LabwareDefinition['physical_geometry']
   legacy_labware_types?: string[]
+  /** The SERVER's offerability decision, present exactly when the server
+   *  computed it (the search path always does). `offerable: false` marks a
+   *  non-stock catalogue reference; ABSENT = pre-marker wire shape (the
+   *  consumer fails open — see splitLabDbDeckRows). */
+  offerable?: boolean
+  /** Present exactly when `offerable` is false — the server's stated reason. */
+  offer_reason?: string
 }
 
 /** Runtime membership test against the legacy enum's config table. */
@@ -1443,6 +1471,58 @@ export function createLabwareFromDefinitionPayload(
     sourceRecordId: hit.recordId,
     ...(footprint ? { physicalFootprintMm: footprint } : {}),
   }
+}
+
+/**
+ * A labware-definition RECORD payload as returned by GET /api/records
+ * (records/seed/labware-definition/*.yaml). Unlike LabwareRecordPayload it
+ * carries the definition's own topology/capacity — exactly what the legacy
+ * record mapper (labwareRecordToEditorLabware) collapses away through the
+ * first-wins legacy-type map.
+ */
+export interface LabwareDefinitionRecordPayload {
+  recordId?: string
+  id?: string
+  definitionId?: string
+  display_name?: string
+  name?: string
+  topology?: LabwareDefinition['topology']
+  capacity?: LabwareDefinition['capacity']
+  render_hints?: LabwareDefinition['render_hints']
+  physical_geometry?: LabwareDefinition['physical_geometry']
+  legacy_labware_types?: string[]
+}
+
+/**
+ * Spec decision 1 (topology-intact definition placement) for a resolved
+ * definition RECORD: place through createLabwareFromDefinitionPayload so the
+ * confirmed definition's own topology, capacity and definitionId survive —
+ * instead of resolving plate_96 through the legacy first-wins type map (which
+ * yields the first vendor plate, e.g. nest 200 uL, for every 96-well record).
+ *
+ * Returns null when the record is not topology-carrying; callers keep the
+ * existing legacy chain for those, unchanged.
+ */
+export function labwareDefinitionRecordToEditorLabware(
+  record: LabwareDefinitionRecordPayload | null | undefined,
+  fallbackRecordId?: string,
+): Labware | null {
+  if (!record?.topology || !record.capacity) return null
+  const definitionId = record.definitionId ?? record.id
+  const recordId = record.recordId ?? fallbackRecordId ?? definitionId
+  const label = record.display_name ?? record.name ?? definitionId ?? recordId
+  if (!recordId || !label) return null
+  return createLabwareFromDefinitionPayload({
+    recordId,
+    label,
+    kind: 'labware-definition',
+    ...(definitionId ? { definitionId } : {}),
+    topology: record.topology,
+    capacity: record.capacity,
+    ...(record.render_hints ? { render_hints: record.render_hints } : {}),
+    ...(record.physical_geometry ? { physical_geometry: record.physical_geometry } : {}),
+    ...(record.legacy_labware_types ? { legacy_labware_types: record.legacy_labware_types } : {}),
+  })
 }
 
 export function normalizeLabwareWithDefinition(labware: Labware): Labware {
@@ -1694,6 +1774,10 @@ export function labwareDefinitionRecordToPayload(recordId: string): LabwareRecor
 export function labwareRecordToEditorLabware(
   record: LabwareRecordPayload,
 ): Labware {
+  // A hydrated definition is authoritative. Routing it through a legacy
+  // rendering type would silently substitute the first vendor's geometry.
+  const definitionLabware = labwareDefinitionRecordToEditorLabware(record, record.recordId)
+  if (definitionLabware) return { ...definitionLabware, labwareId: record.recordId }
   const editorType = pickEditorLabwareType(record)
   // Delegate geometry/wells/etc. to the existing factory, then overwrite
   // name + a few metadata fields from the record.

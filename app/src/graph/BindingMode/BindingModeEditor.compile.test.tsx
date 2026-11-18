@@ -43,6 +43,7 @@ vi.mock('./SampleBindingPanel', () => ({
 vi.mock('../../shared/api/client', () => ({
   apiClient: {
     getRecord: vi.fn(),
+    getRecordWithUI: vi.fn(),
     listRecordsByKind: vi.fn(),
     updatePlannedRunBindings: vi.fn(),
     compileRunPlan: vi.fn(),
@@ -71,13 +72,15 @@ const mockLocalProtocol: RecordEnvelope = {
   meta: { kind: 'local-protocol' },
   payload: {
     kind: 'local-protocol',
-    labwareRoles: [
-      { roleId: 'plate', roleType: 'labware' },
-      { roleId: 'reservoir', roleType: 'labware' },
-    ],
-    materialRoles: [
-      { roleId: 'wash_buffer', roleType: 'material' },
-    ],
+    roles: {
+      labwareRoles: [
+        { roleId: 'plate' },
+        { roleId: 'reservoir' },
+      ],
+      materialRoles: [
+        { roleId: 'wash_buffer' },
+      ],
+    },
     notes: JSON.stringify({ labContext: { plateCount: 1, sampleCount: 96 } }),
   },
 }
@@ -124,6 +127,12 @@ describe('BindingModeEditor compile integration', () => {
     vi.mocked(apiClient.getRecord).mockImplementation(async (id: string) => {
       if (id === 'PLR-000001') return mockPlannedRun
       if (id === 'LPR-000001') return mockLocalProtocol
+      throw new Error('Not found')
+    })
+
+    vi.mocked(apiClient.getRecordWithUI).mockImplementation(async (id: string) => {
+      if (id === 'PLR-000001') return { record: mockPlannedRun, uiSpec: null, schema: null }
+      if (id === 'LPR-000001') return { record: mockLocalProtocol, uiSpec: null, schema: null }
       throw new Error('Not found')
     })
 

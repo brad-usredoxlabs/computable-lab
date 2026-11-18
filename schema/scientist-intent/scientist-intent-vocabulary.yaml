@@ -325,7 +325,7 @@ verbs:
       - name: labware
         kind: resolvable
         required: false
-        domain: labware
+        domain: [labware, labware-definition]
         hintEligible: true
       - name: source_name
         kind: scalar
@@ -1024,6 +1024,19 @@ policies:
       min: 0.7
       max: 1
     strategyRef: declaration_precedence  # Ruling 11a181c0 Q1
+    # A generic design can start a draft without identifying a purchased item.
+    # Qualifiers, vendor names, and catalog numbers do not match these aliases.
+    defaultBindings:
+      - verb: create_container
+        argument: labware
+        labels: [96-well plate, generic 96-well plate]
+        recordId: lbw-def-generic-96-well-plate
+    # L2-P1-AMBIGUITY-TIER-RULE-1 u1 (ruling DEFINITION-IDENTITY-UNIQUENESS):
+    # legacy labware INELIGIBLE where the labware-definition candidate matches the
+    # SAME normalized label at the same demanded referent role — DATA; declaration_precedence applies it.
+    candidatePrecedence:
+      - whenKinds: [labware, labware-definition]
+        supersededByKind: labware-definition
     # Identity policy l2t2030: same (normalized_label, candidate_level) is ONE identity — the
     # store may not carry two local terms for one entity. survivor is an ORDERED list of policy
     # ids; each pass is fail-safe (never empties the set). ABSENT => no collapse, pre-fix bytes.

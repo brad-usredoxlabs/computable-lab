@@ -320,9 +320,51 @@ describe('GcSectionChrome — C NAS attach (the per-entry GcAttachPanel slot)', 
       deviceId: 'gc-fid-nas',
       directoryKey: '2026-10-28/RES35077-4.D',
       entryRef: { kind: 'record', id: 'ISEN-C-2', type: 'instrument-sequence-entry' },
+      // D4 (u1passrun): the entry's OWN runRef (payload.runRef) rides the
+      // register body — the ACQP then names the run it was acquired under.
+      sourceRunRef: { kind: 'record', id: 'RUN-C-1', type: 'run' },
     })
     // onAttached: the section refetches so the ACQP ref shows in the table.
     await waitFor(() => expect(onEntryUpdated).toHaveBeenCalled())
+  })
+
+  // AC2 (u1passrun): no payload.runRef → NO sourceRunRef key in the register
+  // body (never `sourceRunRef: undefined`, never a conjured run id). The
+  // entry-scoped shape stays exactly deviceId + directoryKey + entryRef.
+  it('an entry with no payload.runRef registers WITHOUT a sourceRunRef field', async () => {
+    const entryNoRun: GcChromeEntry = {
+      recordId: 'ISEN-C-2',
+      payload: {
+        id: 'ISEN-C-2',
+        position: { vial: '102' },
+        sampleRef: { kind: 'record', id: 'SMP-C-2', type: 'sample' },
+        gcMethodRef: { kind: 'record', id: 'GCM-DEMO-AOAC-FAME', type: 'gc-method' },
+      },
+    }
+    render(
+      wrap(
+        <GcSectionChrome
+          entries={[entryNoRun]}
+          runId="RUN-C-1"
+          sequenceRef={SEQUENCE}
+          onEntryUpdated={vi.fn()}
+        />,
+      ),
+    )
+    fireEvent.click(screen.getByTestId('gc-chrome-toggle'))
+    fireEvent.click(screen.getByTestId('gc-attach-toggle-ISEN-C-2'))
+    const sel = (await screen.findByTestId('gc-attach-device-ISEN-C-2')) as HTMLSelectElement
+    fireEvent.change(sel, { target: { value: 'gc-fid-nas' } })
+    fireEvent.change(screen.getByTestId('gc-attach-key-ISEN-C-2'), { target: { value: 'X.D' } })
+    fireEvent.click(screen.getByTestId('gc-attach-register-ISEN-C-2'))
+    await waitFor(() => expect(apiClient.registerAcquisitionPackage).toHaveBeenCalledTimes(1))
+    const body = vi.mocked(apiClient.registerAcquisitionPackage).mock.calls[0][0] as Record<string, unknown>
+    expect(body).toEqual({
+      deviceId: 'gc-fid-nas',
+      directoryKey: 'X.D',
+      entryRef: { kind: 'record', id: 'ISEN-C-2', type: 'instrument-sequence-entry' },
+    })
+    expect('sourceRunRef' in body).toBe(false)
   })
 
   it('an entry WITH a package shows the attached ACQP id (no attach panel needed)', async () => {

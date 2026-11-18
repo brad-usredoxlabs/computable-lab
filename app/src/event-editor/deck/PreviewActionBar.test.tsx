@@ -49,6 +49,21 @@ vi.mock('./acceptedOntologyBindings', () => ({
   rewriteAcceptedOntologyRefs: mocks.rewriteAcceptedOntologyRefs,
 }))
 
+// u3ghostfix D4: the preview's placed labware is resolvable (recordId), so the
+// REAL mint creates one labware-instance via apiClient.createRecord. Stub the
+// network only — the mint's contract is pinned in labwareInstanceMint.test.ts.
+vi.mock('../../shared/api/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../shared/api/client')>()
+  return {
+    ...actual,
+    apiClient: {
+      ...actual.apiClient,
+      searchRecords: vi.fn(async () => ({ results: [] })),
+      createRecord: vi.fn(async () => ({ recordId: 'RECORDED' })),
+    },
+  }
+})
+
 const acceptedEvent: PlateEvent = {
   eventId: 'evt-accepted',
   event_type: 'add_material',
@@ -63,7 +78,11 @@ const previewEvent: PlateEvent = {
 
 const preview: EventEditorPreview = {
   previewLabwares: {
-    'plate-1': { labwareId: 'plate-1', type: 'plate_96', name: 'Plate 1' } as unknown as Labware,
+    // u3ghostfix D4: a RESOLVABLE preview — the vessel names its DEFINITION
+    // record id. A placed labware with no resolvable definition is refused by
+    // the ghost-gate (deckAdoption step 1b); these pins lock the accept
+    // ordering / error / double-click behaviour of a legitimate accept.
+    'plate-1': { labwareId: 'plate-1', type: 'plate_96', name: 'Plate 1', recordId: 'LBW-PLATE-1' } as unknown as Labware,
   },
   previewPlacements: [{
     placementId: 'pl-1',

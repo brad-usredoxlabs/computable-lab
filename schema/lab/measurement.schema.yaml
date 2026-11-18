@@ -58,6 +58,19 @@ properties:
         path: readEventRef
         graphPath: eventGraphRef
 
+  # L2-RUN-ATTACH-CAPABILITY-1 (RUN-IS-THE-PROVENANCE-RECORD): which material
+  # (material/aliquot record) went INTO the read this measurement came from.
+  # Plain record ref pinned to the material kinds — the same ref-slot precedent
+  # as equipmentRef above, minus the capability gate (no capability governs it).
+  materialRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { enum: [material, aliquot] }
+    description: "Which material (record) this measurement was taken from. Optional: legacy measurements predate the binding."
+
   labwareInstanceRef:
     $ref: "./datatypes/ref.schema.yaml"
     description: "Which plate was read."
@@ -76,7 +89,7 @@ properties:
 
   assayType:
     type: string
-    enum: [ qpcr, plate_reader, microscopy, gc_ms, flow, other ]
+    enum: [ qpcr, plate_reader, microscopy, gc_fid, gc_ms, flow, other ]
 
   channels:
     type: array
@@ -130,6 +143,12 @@ properties:
           type: number
         unit:
           type: string
+        timeMin:
+          type: number
+          description: >
+            Retention time in minutes, as the parser transcribed it (declared
+            on MeasurementRow; emitted by chromatographic parsers such as
+            agilent6890). Absent for non-chromatographic reads.
 
   artifacts:
     type: array
@@ -158,6 +177,50 @@ properties:
       parsedAt:
         type: string
         format: date-time
+      units:
+        type: object
+        description: >
+          The units the PARSER DECLARED for its read, transcribed from the
+          source file (e.g. the header's bracket tokens). A unit the parser
+          could not read is the literal 'unstated' — never a default; absent
+          entirely when the parser declares no units.
+        additionalProperties: false
+        required: [ time, intensity ]
+        properties:
+          time:
+            type: string
+          intensity:
+            type: string
+      metadata:
+        type: object
+        description: >
+          Preamble metadata the parser transcribed verbatim from the source
+          file (e.g. Instrument, Method, Injection Date) — what the file
+          said, not a default.
+        additionalProperties: { type: string }
+      # L2-GC-TRACE-PERSIST-1 (D3): the parser's OWN ordinate series — the
+      # single persisted trace truth for the render path (no re-parse at
+      # render, no second copy of the sampling interval). Absent entirely
+      # when the parser declares no trace (never an empty array, never
+      # undefined).
+      trace:
+        type: object
+        description: >
+          The chromatogram ordinate series the parser extracted from the
+          source file, in file order on a uniform sampling grid (the time of
+          point i is i * samplingIntervalSeconds). What the file said, not a
+          default.
+        additionalProperties: false
+        required: [ values, samplingIntervalSeconds ]
+        properties:
+          values:
+            type: array
+            description: "Ordinate samples in file order (the series itself)."
+            items:
+              type: number
+          samplingIntervalSeconds:
+            type: number
+            description: "Uniform grid spacing between consecutive samples (seconds), as the file declared it."
 
   notes:
     type: string

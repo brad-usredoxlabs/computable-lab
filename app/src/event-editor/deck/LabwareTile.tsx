@@ -3,6 +3,7 @@ import type { Labware } from '../../types/labware'
 import type { WellId } from '../../types/plate'
 import type { EventEditorPlacement, LabwareOrientation } from '../types'
 import { LabwareGlyph } from './LabwareGlyph'
+import { getLabwareDefinitionById } from '../../types/labwareDefinition'
 
 interface LabwareTileProps {
   labware: Labware
@@ -76,13 +77,25 @@ export function LabwareTile({
     event.dataTransfer.effectAllowed = 'move'
   }
 
-  const tileTitle = ghost
+  // L2-P1-DEFINITION-BIND-1 u2showdef (gate r10 defect 3): the tile shows WHICH
+  // labware-definition record it is bound to — a vessel in a RUN carries its own
+  // definition identity, visibly. Name from the registry context the app already
+  // uses (getLabwareDefinitionById); unresolvable without a new API call → show the definitionId (never a fabricated label).
+  const definitionName = labware.definitionId
+    ? getLabwareDefinitionById(labware.definitionId)?.display_name
+    : undefined
+  const definitionLine =
+    labware.definitionSource === 'registry' || labware.definitionId
+      ? `definition: ${definitionName || labware.definitionId}`
+      : null
+  const baseTitle = ghost
     ? `${labware.name} · proposed — click to drill in and inspect, then Accept to keep`
     : affected
       ? `${labware.name} · affected by preview — click to inspect`
       : (affectedWells?.size ?? 0) > 0
         ? `${labware.name} · affected by event — click to inspect`
         : `${labware.name} · ${labware.labwareType} (${orientation}) — click to focus`
+  const tileTitle = definitionLine ? `${baseTitle} · ${definitionLine}` : baseTitle
 
   return (
     <div
