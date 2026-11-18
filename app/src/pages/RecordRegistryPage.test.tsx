@@ -181,6 +181,8 @@ async function waitForPageReady() {
   })
 }
 
+
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -683,7 +685,6 @@ describe('RecordRegistryPage — Documents tab (QMS-6)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Documents' }))
     await act(async () => {
       await vi.dynamicImportSettled()
-      await new Promise((r) => setTimeout(r, 100))
     })
     // Seed the cache (simulating a later successful prime from another path).
     // The fix ensures page state was NOT committed with [], so the sync
@@ -691,6 +692,120 @@ describe('RecordRegistryPage — Documents tab (QMS-6)', () => {
     seedContentLockedStates('document-controlled-signing', ['approved', 'effective'])
     fireEvent.click(await screen.findByText('Demo SOP'))
     await screen.findByTestId('projection-taptab-editor')
+    const draftBtn = await screen.findByRole('button', { name: 'Create draft revision' })
+    expect(draftBtn).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Save$/ })).toBeNull()
+  })
+
+  it('records-identity change mid-flight re-issues content-locked prime (DEFECT 2 regression)', async () => {
+    // DEFECT 2: under the original code contentPending was derived from the
+    // terminal pending set. When terminal states had already settled (size 0),
+    // a subsequent records-identity change (tab switch) would not re-issue the
+    // content-locked prime. The fix: independent contentFetchedRef guard and
+    // contentPending derived from records, so the identity change triggers retry.
+    //
+    // Strategy: the first prime rejects (transient failure) which clears the
+    // cache inflight map. A records-identity change should trigger a re-prime.
+    // Under the defect the re-prime is never issued because contentPending
+    // derives from the now-empty terminal pending set.
+    __resetContentLockedStatesCache()
+    const approvedDoc = {
+      recordId: 'DOC-DEMO-SOP',
+      schemaId: 'controlled-document',
+      payload: {
+        kind: 'controlled-document',
+        recordId: 'DOC-DEMO-SOP',
+        schemaId: 'controlled-document',
+        title: 'Demo SOP',
+        lifecycleId: 'document-controlled-signing',
+        state: 'approved',
+      },
+    } as const
+    mocked.mockListRecordsByKind.mockImplementation(async (kind: string) => {
+      if (kind === 'controlled-document') return { records: [approvedDoc], total: 1 }
+      if (kind === 'training-record') return { records: [], total: 0 }
+      return { records: [], total: 0 }
+    })
+    // Terminal states resolve immediately (empty — terminal half settles first).
+    mocked.mockGetLifecycleTerminalStates.mockResolvedValue([])
+
+    // Content-locked states: reject on first call (clears inflight), then
+    // a deferred promise on the second call so we can assert the re-prime.
+    // Under the D2 defect, the second call never happens.
+    let contentLockedCallCount = 0
+    let resolveContentLocked = (() => {}) as () => void
+    mocked.mockGetLifecycleContentLockedStates.mockImplementation((_lifecycleId?: string) => {
+      contentLockedCallCount++
+      if (contentLockedCallCount === 1) {
+        return Promise.reject(new Error('Transient failure'))
+      }
+      // Second call: deferred promise — we resolve it after asserting the re-prime.
+      return new Promise<string[]>((resolve) => {
+        resolveContentLocked = () => resolve(['approved', 'effective'])
+      })
+    })
+    mocked.mockCreateDraftCopy.mockResolvedValue({
+      success: true,
+      record: {
+        recordId: 'DOC-NEWDRAFT',
+        schemaId: 'controlled-document',
+        payload: {
+          kind: 'controlled-document',
+          recordId: 'DOC-NEWDRAFT',
+          schemaId: 'controlled-document',
+          id: 'DOC-NEWDRAFT',
+          title: 'Demo SOP',
+          lifecycleId: 'document-controlled-signing',
+          state: 'draft',
+          derivedFromRevisionRef: { kind: 'record', type: 'record-revision', id: 'REV-7F7DC7390FD4C915341934A720BE634E' },
+        },
+      },
+    } as const)
+
+    renderPage()
+    // Click Documents — triggers listRecordsByKind + content prime #1 (which rejects).
+    fireEvent.click(await screen.findByRole('button', { name: 'Documents' }))
+    fireEvent.click(await screen.findByText('Demo SOP'))
+    await screen.findByTestId('projection-taptab-editor')
+
+    // Allow the rejection to settle (inflight map cleared, contentFetchedRef NOT marked).
+    await act(async () => {
+      await vi.dynamicImportSettled()
+    })
+
+    // The first prime was issued and rejected — exactly 1 in phase 1.
+    expect(contentLockedCallCount).toBe(1)
+
+    // Change records identity mid-flight WITHOUT resolving the deferred prime —
+    // switch to Training then back to Documents. This produces a new records
+    // array, triggering the useEffect re-run and a second content prime.
+    fireEvent.click(await screen.findByRole('button', { name: 'Training' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Documents' }))
+
+    // Re-select the record after tab switch (selection is lost on tab change).
+    fireEvent.click(await screen.findByText('Demo SOP'))
+
+    // Let the refresh + effect re-run settle.
+    await act(async () => {
+      await vi.dynamicImportSettled()
+    })
+
+    // The D2 fix re-issues the prime because contentFetchedRef has not been
+    // marked (the first prime rejected). Under the D2 defect, contentPending
+    // derives from the empty terminal pending set, so no re-prime is issued.
+    expect(contentLockedCallCount).toBe(2)
+
+    // Resolve the second deferred promise inside act().
+    await act(async () => {
+      resolveContentLocked!()
+    })
+
+    // Allow the state update to settle.
+    await act(async () => {
+      await vi.dynamicImportSettled()
+    })
+
+    // The locked affordance replaces Save.
     const draftBtn = await screen.findByRole('button', { name: 'Create draft revision' })
     expect(draftBtn).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Save$/ })).toBeNull()
